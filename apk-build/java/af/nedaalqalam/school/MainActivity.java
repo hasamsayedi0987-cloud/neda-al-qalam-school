@@ -117,20 +117,23 @@ public class MainActivity extends Activity {
         btn.setText("ورود به سیستم");
         btn.setTextColor(Color.WHITE);
         btn.setBackgroundColor(Color.rgb(4, 120, 87));
-        btn.setOnClickListener(v -> {
-            String u = startUrlInput.getText().toString().trim();
-            if (u.isEmpty()) {
-                Toast.makeText(this, "آدرس سرور را وارد کنید", Toast.LENGTH_SHORT).show();
-                return;
+        btn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String u = startUrlInput.getText().toString().trim();
+                if (u.isEmpty()) {
+                    Toast.makeText(MainActivity.this, "آدرس سرور را وارد کنید", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                if (!u.startsWith("http://") && !u.startsWith("https://")) u = "http://" + u;
+                u = u.replaceAll("/+$", "");
+                prefs.edit().putString(KEY_URL, u).apply();
+                serverUrl = u;
+                startLayout = null;
+                setContentView(new LinearLayout(MainActivity.this));
+                buildWebView();
+                webView.loadUrl(serverUrl);
             }
-            if (!u.startsWith("http://") && !u.startsWith("https://")) u = "http://" + u;
-            u = u.replaceAll("/+$", "");
-            prefs.edit().putString(KEY_URL, u).apply();
-            serverUrl = u;
-            startLayout = null;
-            setContentView(new LinearLayout(this));
-            buildWebView();
-            webView.loadUrl(serverUrl);
         });
         startLayout.addView(btn);
 
@@ -257,20 +260,26 @@ public class MainActivity extends Activity {
                 .setTitle("تغییر آدرس سرور")
                 .setMessage("آدرس فعلی: " + serverUrl)
                 .setView(input)
-                .setPositiveButton("ذخیره و بارگذاری", (d, w) -> {
-                    String u = input.getText().toString().trim();
-                    if (!u.isEmpty()) {
-                        if (!u.startsWith("http://") && !u.startsWith("https://")) u = "http://" + u;
-                        u = u.replaceAll("/+$", "");
-                        prefs.edit().putString(KEY_URL, u).apply();
-                        serverUrl = u;
-                        webView.loadUrl(serverUrl);
+                .setPositiveButton("ذخیره و بارگذاری", new android.content.DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(android.content.DialogInterface d, int w) {
+                        String u = input.getText().toString().trim();
+                        if (!u.isEmpty()) {
+                            if (!u.startsWith("http://") && !u.startsWith("https://")) u = "http://" + u;
+                            u = u.replaceAll("/+$", "");
+                            prefs.edit().putString(KEY_URL, u).apply();
+                            serverUrl = u;
+                            webView.loadUrl(serverUrl);
+                        }
                     }
                 })
-                .setNeutralButton("صفحهٔ ورود آدرس", (d, w) -> {
-                    webView = null;
-                    prefs.edit().remove(KEY_URL).apply();
-                    showStartScreen();
+                .setNeutralButton("صفحهٔ ورود آدرس", new android.content.DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(android.content.DialogInterface d, int w) {
+                        webView = null;
+                        prefs.edit().remove(KEY_URL).apply();
+                        showStartScreen();
+                    }
                 })
                 .setNegativeButton("انصراف", null)
                 .show();
@@ -298,7 +307,12 @@ public class MainActivity extends Activity {
             new AlertDialog.Builder(this)
                     .setTitle("خروج")
                     .setMessage("آیا می‌خواهید از برنامه خارج شوید؟")
-                    .setPositiveButton("بله", (d, w) -> finish())
+                    .setPositiveButton("بله", new android.content.DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(android.content.DialogInterface d, int w) {
+                            finish();
+                        }
+                    })
                     .setNegativeButton("خیر", null)
                     .show();
         } else {
