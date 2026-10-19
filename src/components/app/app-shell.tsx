@@ -116,7 +116,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
   const navContent = (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2.5 px-4 py-4 border-b">
-        <Image src="/logo.svg" alt="لوگو" width={42} height={42} />
+        <Image src="/logo.png" alt="لوگو" width={42} height={42} />
         <div className="min-w-0">
           <p className="font-bold text-emerald-800 text-sm leading-tight">مکتب خصوصی نداالقلم</p>
           <p className="text-[11px] text-muted-foreground">سیستم مدیریت تعلیمی</p>
@@ -168,7 +168,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
           </Sheet>
 
           <div className="flex items-center gap-2 min-w-0">
-            <Image src="/logo.svg" alt="لوگو" width={40} height={40} className="hidden sm:block" />
+            <Image src="/logo.png" alt="لوگو" width={40} height={40} className="hidden sm:block" />
             <div className="min-w-0">
               <p className="font-bold text-emerald-800 leading-tight truncate">مکتب خصوصی نداالقلم</p>
               <p className="text-[11px] text-muted-foreground truncate">{current?.label}</p>

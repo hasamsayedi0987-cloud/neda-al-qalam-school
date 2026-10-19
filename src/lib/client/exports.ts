@@ -37,7 +37,7 @@ function buildDocument(title: string, bodyHtml: string, withLogo = true): string
 <body>
   <div class="doc-header">
     <div class="logo-row">
-      ${withLogo ? `<img src="${typeof window !== 'undefined' ? window.location.origin : ''}/logo.svg" alt="لوگو" />` : ''}
+      ${withLogo ? `<img src="${typeof window !== 'undefined' ? window.location.origin : ''}/logo.png" alt="لوگو" />` : ''}
       <div>
         <h1>${schoolName}</h1>
         <h2>سیستم مدیریت مکتب — نسخهٔ دیجیتال</h2>

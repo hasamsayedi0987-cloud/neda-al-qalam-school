@@ -5,7 +5,7 @@
 const CACHE_NAME = 'noq-cache-v1';
 const APP_SHELL = [
   '/',
-  '/logo.svg',
+  '/logo.png',
   '/manifest.json',
   '/fonts/Vazirmatn-Regular.woff2',
   '/fonts/Vazirmatn-Medium.woff2',

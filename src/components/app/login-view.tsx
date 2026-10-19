@@ -42,7 +42,7 @@ export function LoginView({ onLoggedIn }: { onLoggedIn: () => void }) {
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center mb-6">
           <div className="relative h-24 w-24 mb-3 drop-shadow-md">
-            <Image src="/logo.svg" alt="لوگوی مکتب خصوصی نداالقلم" fill priority className="object-contain" />
+            <Image src="/logo.png" alt="لوگوی مکتب خصوصی نداالقلم" fill priority className="object-contain" />
           </div>
           <h1 className="text-2xl font-bold text-emerald-800">مکتب خصوصی نداالقلم</h1>
           <p className="text-sm text-muted-foreground mt-1">سیستم مدیریت تعلیمی — نمرات، حاضری، کتابخانه</p>
