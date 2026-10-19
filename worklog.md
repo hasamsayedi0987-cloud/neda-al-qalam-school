@@ -25,3 +25,20 @@ Stage Summary:
 - حساب‌ها: admin/admin123، sarallam، teacher، student، parent، library، staff (12345678)
 - یادآوری امنیتی: کاربر باید توکن گیت‌هاب را پس از پایان کار regenerate کند (توکن در چت و تاریخچهٔ bash باقی مانده)
 - apk-build/build.sh قابل اجرا مجدد؛ ecj.jar اگر نبود خودکار دانلود می‌شود
+
+---
+Task ID: final-2
+Agent: main (Z.ai)
+Task: بررسی نهایی و تحویل محصول پس از درخواست «بیار» کاربر
+
+Work Log:
+- بررسی وضعیت: سرور dev فعال (HTTP 200)، git پاک و push شده (کامیت f00277d)
+- تأیید مخزن گیت‌هاب: hasamsayedi0987-cloud/neda-al-qalam-school (public) + Release v1.0.0 با nedaalqalam-school.apk
+- تأیید APK محلی: /home/z/my-project/download/nedaalqalam-school.apk (226KB)
+- تست مرورگری مجدد با agent-browser: ورود admin/admin123 → داشبورد (آمار، حاضری امروز، تقویم میزان ۱۴۰۵) → جدول نتایج صنف هفتم (مکتسبه الف/ب/ج/هـ/تکرار، مجموع، اوسط، رتبه، نتیجه، دکمه‌های Excel/Word/چاپ) → دربارهٔ سازنده (عکس، تلفن، ایمیل)
+- خطاهای کنسول: صفر (فقط ۳ هشدار جزئی Next/Image — غیرمسدودکننده)
+- اسکرین‌شات‌های نهایی: download/screenshots/final-01..05
+
+Stage Summary:
+- محصول کامل: وب‌اپ + مخزن گیت‌هاب + APK اندروید — همه تأیید و آمادهٔ تحویل
+- بدون تغییر کد در این مرحله؛ فقط صحت‌سنجی و تحویل
