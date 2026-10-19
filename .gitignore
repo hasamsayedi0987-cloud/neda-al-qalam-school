@@ -38,3 +38,4 @@ download/
 scripts/shot-*.png
 apk-build/ecj.jar
 apk-build/build/
+scripts/*.png
