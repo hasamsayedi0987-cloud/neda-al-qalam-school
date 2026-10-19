@@ -116,21 +116,53 @@ APK ساخته‌شده در اولین اجرا **آدرس سرور مکتب** 
 
 ---
 
-## 🗂 ساختار پروژه
+## 🗂 ساختار پروژه (کامل)
 
+**تمام بخش‌های اپ در این مخزن موجود است** — ۱۷ ماژول رابط کاربری، ۱۸ API بک‌اند و همهٔ کتابخانه‌ها:
+
+### رابط کاربری — `src/components/app/`
+| فایل | بخش |
+|---|---|
+| `login-view.tsx` | صفحهٔ ورود با لوگوی مکتب |
+| `dashboard-view.tsx` | داشبورد: آمار زنده، حاضری امروز، تقویم شمسی |
+| `students-view.tsx` | ثبت و ویرایش شاگردان (صنف ۱ تا ۱۲) |
+| `teachers-view.tsx` | معلمان و کارمندان |
+| `classes-view.tsx` | صنف‌ها و تقسیم مضامین به معلمان |
+| `subjects-view.tsx` | مضامین درسی |
+| `attendance-view.tsx` | حاضری یومیه (حاضر/غایب/مریض/رخصت) + گزارش ماهانه |
+| `activities-view.tsx` | فعالیت شاگردان (کارخانگی، رفتار، شرکت) |
+| `grades-view.tsx` | ثبت نمرات چهارونیم‌ماهه و سالانه |
+| `results-view.tsx` | جدول نتایج و کارنامه (مجموع، اوسط، رتبه، مکتسبه) |
+| `library-view.tsx` | کتابخانه: کتاب‌ها، امانت، برگشت |
+| `users-view.tsx` | کاربران، دسترسی‌ها، غیرفعال‌سازی |
+| `tasks-view.tsx` | وظایف کارمندان |
+| `settings-view.tsx` | تنظیمات مکتب + پشتیبان‌گیری و بازیابی |
+| `about-view.tsx` | دربارهٔ اپ و سازنده (عکس، تلفن، ایمیل) |
+| `app-shell.tsx` | قاب اپ: منوی کنار، هدر، اعلان‌ها |
+| `ui-bits.tsx` | اجزای مشترک رابط |
+
+### API بک‌اند — `src/app/api/`
+`auth` · `users` · `students` · `teachers` · `classes` (+`assign`) · `subjects` · `attendance` · `activities` · `grades` · `results` · `library` · `notifications` · `tasks` · `settings` · `backup` · `dashboard`
+
+### کتابخانه‌ها — `src/lib/`
+| فایل | وظیفه |
+|---|---|
+| `jalali.ts` | تبدیل تاریخ میلادی ↔ شمسی (ماه‌های افغانی) |
+| `grading.ts` | منطق مکتسبه (الف تا هـ)، تکرار صنف، اوسط و رتبه‌بندی |
+| `auth.ts` | احراز هویت (کوکی امضاشده HMAC + scrypt) |
+| `db.ts` | اتصال Prisma/SQLite |
+| `client/api.ts` | لایهٔ شبکه با صف همگام‌سازی آفلاین |
+| `client/exports.ts` | چاپ/PDF، خروجی Word و Excel |
+| `types.ts` | انواع TypeScript |
+
+### سایر
 ```
 prisma/schema.prisma      # مدل‌های داده (کاربر، صنف، شاگرد، نمره، حاضری، کتابخانه...)
 scripts/seed.ts           # داده‌های اولیه
-apk-build/                # پروژهٔ APK اندروید (WebView + لوگو) و اسکریپت ساخت
-src/lib/jalali.ts         # تبدیل تاریخ میلادی ↔ شمسی
-src/lib/grading.ts        # منطق مکتسبه، نتیجه و رتبه‌بندی
-src/lib/auth.ts           # احراز هویت (کوکی امضاشده HMAC + scrypt)
-src/lib/client/api.ts     # لایهٔ شبکه با صف همگام‌سازی آفلاین
-src/lib/client/exports.ts # چاپ/PDF، خروجی Word و Excel
-src/app/api/*             # APIهای بک‌اند (auth, students, grades, results, library, ...)
-src/components/app/*      # رابط کاربری (ورود، داشبورد، نمرات، نتایج، کتابخانه، ...)
+apk-build/                # پروژهٔ کامل APK اندروید (WebView + لوگو + build.sh)
 public/manifest.json      # تنظیمات PWA
 public/sw.js              # Service Worker (کش آفلاین)
+public/logo.png           # لوگوی رسمی مکتب
 ```
 
 ---
