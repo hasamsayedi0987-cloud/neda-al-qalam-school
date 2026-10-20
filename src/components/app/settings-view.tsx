@@ -8,10 +8,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Separator } from '@/components/ui/separator';
 import { PageHeader, Field } from './ui-bits';
 import { apiGet, apiSend } from '@/lib/client/api';
+import { ghToken, setGhToken, ghConfigured } from '@/lib/client/gh';
 import { toPersianDigits } from '@/lib/jalali';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, AppSettings } from '@/lib/types';
-import { Download, Upload, Save, Settings as SettingsIcon, KeyRound, DatabaseBackup, AlertTriangle } from 'lucide-react';
+import { Download, Upload, Save, Settings as SettingsIcon, KeyRound, DatabaseBackup, AlertTriangle, CloudCog, CheckCircle2, XCircle } from 'lucide-react';
 
 const DEFAULTS: AppSettings = {
   schoolName: 'مکتب خصوصی نداالقلم',
@@ -31,6 +32,19 @@ export function SettingsView({ user }: { user: SessionUser }) {
   const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirm: '' });
   const [restoreConfirm, setRestoreConfirm] = useState(false);
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [tokenInput, setTokenInput] = useState('');
+  const [tokenOk, setTokenOk] = useState(ghConfigured());
+
+  const saveToken = () => {
+    setGhToken(tokenInput);
+    setTokenOk(ghConfigured());
+    setTokenInput('');
+    toast({
+      title: tokenOk ? 'اتصال ابری به‌روزرسانی شد' : 'اتصال ابری ذخیره شد',
+      description: 'برای اعمال کامل، صفحه تازه‌سازی می‌شود',
+    });
+    setTimeout(() => window.location.reload(), 1200);
+  };
 
   useEffect(() => {
     apiGet<{ settings: AppSettings }>('/api/settings')
@@ -71,9 +85,8 @@ export function SettingsView({ user }: { user: SessionUser }) {
 
   const downloadBackup = async () => {
     try {
-      const res = await fetch('/api/backup', { cache: 'no-store' });
-      if (!res.ok) throw new Error('دریافت فایل ناموفق بود');
-      const blob = await res.blob();
+      const backup = await apiGet<Record<string, unknown>>('/api/backup');
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json; charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -171,6 +184,41 @@ export function SettingsView({ user }: { user: SessionUser }) {
           </Button>
         </CardContent>
       </Card>
+
+      {/* اتصال ابری گیت‌هاب */}
+      {isAdmin && (
+        <Card className="border-emerald-100">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-emerald-900 flex items-center gap-2">
+              <CloudCog className="h-5 w-5" /> اتصال ابری (مخزن دادهٔ گیت‌هاب)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-2 text-sm">
+              {tokenOk ? (
+                <><CheckCircle2 className="h-4 w-4 text-emerald-600" /><span className="text-emerald-700">اتصال برقرار است — داده‌ها در مخزن خصوصی گیت‌هاب ذخیره می‌شود</span></>
+              ) : (
+                <><XCircle className="h-4 w-4 text-rose-600" /><span className="text-rose-700">اتصال پیکربندی نشده — توکن دسترسی مخزن داده را وارد کنید</span></>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground leading-5">
+              توکن باید دسترسی خواندن و نوشتن به مخزن <span dir="ltr" className="font-mono">nedaalqalam-school-data</span> داشته باشد.
+              پیشنهاد: از یک توکن Fine-grained محدود به همان مخزن استفاده کنید. توکن تنها در همین دستگاه ذخیره می‌شود.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Input
+                dir="ltr" className="text-left font-mono max-w-md" type="password"
+                placeholder="github_pat_... / ghp_..."
+                value={tokenInput}
+                onChange={(e) => setTokenInput(e.target.value)}
+              />
+              <Button variant="outline" className="border-emerald-300 text-emerald-800" disabled={tokenInput.trim().length < 20} onClick={saveToken}>
+                <Save className="h-4 w-4 ml-1" /> ذخیرهٔ توکن
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* پشتیبان‌گیری */}
       {isAdmin && (

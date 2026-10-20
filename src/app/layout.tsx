@@ -8,13 +8,13 @@ export const metadata: Metadata = {
     "سیستم جامع مدیریت مکتب خصوصی نداالقلم — ثبت نمرات، حاضری، فعالیت‌ها، کتابخانه و کارنامهٔ دیجیتال",
   keywords: ["مکتب", "نداالقلم", "مدیریت مکتب", "نمرات", "کارنامه", "حاضری"],
   authors: [{ name: "حسام الدین سیدی" }],
-  manifest: "/manifest.json",
+  manifest: "./manifest.json",
   icons: {
     icon: [
-      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
-      { url: "/logo.png", type: "image/png", sizes: "512x512" },
+      { url: "./favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "./logo.png", type: "image/png", sizes: "512x512" },
     ],
-    apple: "/apple-touch-icon.png",
+    apple: "./apple-touch-icon.png",
   },
   appleWebApp: {
     capable: true,

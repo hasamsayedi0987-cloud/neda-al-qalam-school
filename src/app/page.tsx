@@ -25,7 +25,7 @@ export default function Page() {
     queueMicrotask(loadSession);
     // ثبت Service Worker برای حالت آفلاین — فقط در نسخهٔ production
     if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
     }
   }, []);
 

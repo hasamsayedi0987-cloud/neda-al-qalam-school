@@ -7,8 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { apiSend } from '@/lib/client/api';
+import { ghConfigured, setGhToken } from '@/lib/client/gh';
 import { todayJalali, toPersianDigits } from '@/lib/jalali';
-import { BookOpenCheck, Eye, EyeOff, Lock, User, LogIn } from 'lucide-react';
+import { BookOpenCheck, CloudCog, Eye, EyeOff, Lock, User, LogIn } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export function LoginView({ onLoggedIn }: { onLoggedIn: () => void }) {
@@ -18,12 +19,18 @@ export function LoginView({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { toast } = useToast();
+  const [tokenInput, setTokenInput] = useState('');
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    const res = await apiSend('/api/auth', 'POST', { action: 'login', username, password });
+    if (!ghConfigured()) {
+      setLoading(false);
+      setError('اتصال ابری پیکربندی نشده است — توکن مخزن داده را در بخش زیر وارد کنید');
+      return;
+    }
+    const res = await apiSend('/api/auth', 'POST', { action: 'login', username, password }, { allowQueue: false });
     setLoading(false);
     if (res.error) {
       setError(res.error);
@@ -129,6 +136,38 @@ export function LoginView({ onLoggedIn }: { onLoggedIn: () => void }) {
             پس از اولین ورود، رمز عبور مدیر را از بخش تنظیمات تغییر دهید.
           </p>
         </div>
+
+        <details className="mt-3 rounded-xl border border-slate-200 bg-white p-3 text-xs">
+          <summary className="flex cursor-pointer items-center gap-1.5 text-slate-600 select-none">
+            <CloudCog className="h-3.5 w-3.5" /> اتصال ابری گیت‌هاب {ghConfigured() ? '(برقرار)' : '(پیکربندی نشده)'}
+          </summary>
+          <div className="mt-2 space-y-2">
+            <p className="text-[11px] leading-5 text-muted-foreground">
+              این اپ داده‌ها را در مخزن خصوصی <span dir="ltr" className="font-mono">nedaalqalam-school-data</span> ذخیره می‌کند.
+              اگر توکن در این دستگاه تنظیم نشده، آن را اینجا وارد کنید (فقط یک بار).
+            </p>
+            <div className="flex gap-2">
+              <input
+                dir="ltr" type="password" className="flex-1 rounded-md border border-input bg-background px-3 py-2 font-mono text-left"
+                placeholder="github token..."
+                value={tokenInput}
+                onChange={(e) => setTokenInput(e.target.value)}
+              />
+              <button
+                type="button"
+                className="rounded-md bg-emerald-600 px-3 py-2 font-semibold text-white disabled:opacity-50"
+                disabled={tokenInput.trim().length < 20}
+                onClick={() => {
+                  setGhToken(tokenInput);
+                  setTokenInput('');
+                  toast({ title: 'اتصال ابری ذخیره شد', description: 'حالا می‌توانید وارد شوید' });
+                }}
+              >
+                ذخیره
+              </button>
+            </div>
+          </div>
+        </details>
 
         <p className="text-center text-[11px] text-muted-foreground mt-4">
           توسعه‌دهنده: حسام الدین سیدی — 0791680632
