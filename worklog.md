@@ -109,3 +109,34 @@ Stage Summary:
 - «فایل آی‌پی» کاربر آمادهٔ توزیع است: PDF فارسی RTL دو صفحه‌ای با آدرس سایت، QR، سه گام ورود و جدول کامل حساب‌های کاربری
 - فایل TXT ساده هم برای کپی-پیست در گروه‌ها (واتساپ/تلگرام) ساخته شد
 - سایت منبع: GitHub Pages (همیشه روشن) — همان آدرس در PDF و TXT و QR یکسان است
+
+---
+Task ID: v12-1
+Agent: main (Z.ai)
+Task: نسخهٔ ۱.۲ — رفع ۸ مشکل گزارش‌شدهٔ کاربر (توکن، حساب‌های ابتدایی، نشست، سرعت، ویرایش، مقیاس نمرات، بخش‌های دلخواه، لوگو/عکس)
+
+Work Log:
+- تشخیص: معماری «گیت‌هاب به‌عنوان دیتابیس» عامل توکن اجباری + کندی بود → بازیابی معماری سرور از کامیت 8c1b699 (۲۱ API + Prisma/SQLite)
+- مهاجرت داده‌ها از مخزن ابری nedaalqalam-school-data به SQLite (scripts/migrate-from-github.mjs — ۷ کاربر، ۱۲ صنف، ۱۵ مضمون، ۴ شاگرد، صفر گم‌شده)
+- بازنشانی رمز حساب‌های پیش‌فرض به مقادیر مستند (hash قدیمی ناسازگار بود) — scripts/reset-default-passwords.mjs
+- auth: کوکی نشست بدون maxAge (خاتمه با بستن مرورگر/اپ) + setup_done در اولین ورود مدیر → مخفی‌شدن همیشگی حساب‌های ابتدایی
+- page.tsx: gate با sessionStorage (noq_alive_v1) — هر بازکردن اپ/سایت → صفحهٔ ورود؛ ریلود همان نشست سالم می‌ماند
+- api.ts: کش خواندن GET در localStorage برای آفلاین + ورود آفلاین PBKDF2 (saveOfflineCred/offlineLogin) + صف نوشتن (موجود)
+- login-view: حذف کامل جعبهٔ توکن گیت‌هاب؛ جعبهٔ حساب‌ها فقط با setupDone=false؛ پیام حالت آفلاین
+- grading.ts: GradeScaleEntry + parseScale + letterGrade(score, scale) + overallResult با حد قبولی متغیر؛ results route مقیاس را از Setting می‌خواند و برمی‌گرداند
+- settings route: کلیدهای gradeScale/aboutApp/aboutDev + سقف حجم عکس؛ settings-view: ویرایشگر مکتسبه‌ها (سطر افزون/حذف + پیش‌نمایش بازه‌ها)
+- about-view: کاملاً بازنویسی — خواندن از تنظیمات + ویرایش مدیر (نام، تماس، متن، نسخه، عکس با فشرده‌سازی canvas به dataURL)
+- مدل‌های جدید: CustomSection (فیلدهای JSON + viewRoles/writeRoles) و CustomEntry و CertificateTemplate — db:push
+- APIهای جدید: /api/custom-sections (CRUD، فیلتر نقش)، /api/custom-entries (CRUD با canWrite)، /api/certificates (CRUD قالب)
+- custom-view.tsx: بخش‌ساز (عنوان/آیکون/رنگ/فیلدساز/نقش‌ها) + جدول داینامیک + ثبت/ویرایش/حذف؛ app-shell: nav داینامیک بخش‌ها + nav «بخش‌های دلخواه» برای مدیر
+- certificate-view.tsx: پیش‌نمایش A4 زنده (رنگ پس‌زمینه/متن/تزئین، قاب ۵ استایل، فونت، اندازه‌ها، لوگو، تاریخ، امضا) + گیرنده (شاگرد/معلم/دستی) + متغیرهای {نام}{صنف}{علت} + چاپ A4 با CSS اختصاصی (globals.css)
+- README بازنویسی برای معماری ۱.۲؛ sw.js باهل v3
+- APK v1.2: MainActivity بازنویسی — پاک‌سازی کوکی در هر onCreate (ورود اجباری هر بار)، صفحهٔ خوش‌آمد یک‌باره فقط اگر DEFAULT_URL خالی باشد، تزریق URL از server-url.txt هنگام build، حذف assets/www (APK تمیز 226KB)؛ SDK دوباره نصب شد (build-tools 34 + platform 34)؛ رفع ecj: -cp به‌جای -bootclasspath
+- Release v1.2.0 با APK جدید: https://github.com/hasamsayedi0987-cloud/neda-al-qalam-school/releases/tag/v1.2.0
+- push: e9d77f8 + 4b21a47
+
+Stage Summary:
+- تست مرورگری کامل: ورود admin → داشبورد → تمام ۱۰ ویو محتوا دارد؛ تغییر مقیاس الف→۸۵ ذخیره و در results اعمال شد؛ تقدیرنامه‌ساز با لوگو کار می‌کند؛ بخش «امتحان ماهانه» ساخته شد + ثبت تست؛ منوی معلم درست فیلتر می‌شود؛ خروج → صفحهٔ ورود بدون جعبهٔ حساب‌ها؛ ورود آفلاین admin موفق (بج آفلاین)
+- همهٔ ۸ مشکل کاربر برطرف است؛ نشست: بستن/بازکردن → ورود اجباری، ریلود → ماندن
+- Release: v1.2.0 (nedaalqalam-school.apk — 226KB) | مخزن synced با main
+- یادآوری: APK بار اول (چون DEFAULT_URL خالی) صفحهٔ آدرس می‌پرسد — پس از تعیین هاست دائمی، server-url.txt پر و دوباره build شود تا هیچ سوالی نپرسد
