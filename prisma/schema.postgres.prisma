@@ -1,0 +1,305 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════ کاربران و احراز هویت ═══════════════
+
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String // scrypt hash
+  name      String
+  role      String // ADMIN | HEADTEACHER | TEACHER | STUDENT | GUARDIAN | STAFF | LIBRARIAN
+  active    Boolean  @default(true)
+  phone     String?
+  teacherId String? @unique // پیوند با معلم/کارمند
+  studentId String? // پیوند با شاگرد (برای والد/سرپرست)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  notifications Notification[]
+  teacherProfile Teacher?  @relation(fields: [teacherId], references: [id])
+  studentProfile Student?  @relation("StudentUsers", fields: [studentId], references: [id])
+}
+
+// ═══════════════ ساختار تعلیمی ═══════════════
+
+model Class {
+  id           String   @id @default(cuid())
+  grade        Int // ۱ تا ۱۲
+  name         String // صنف اول، صنف دوم ...
+  supervisorId String? // نگران صنف (معلم)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  supervisor    Teacher?       @relation("supervisor", fields: [supervisorId], references: [id])
+  students      Student[]
+  classSubjects ClassSubject[]
+}
+
+model Subject {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  classSubjects ClassSubject[]
+}
+
+// تقسیم مضامین به صنف و معلم
+model ClassSubject {
+  id        String   @id @default(cuid())
+  classId   String
+  subjectId String
+  teacherId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  class    Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject  Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher  Teacher? @relation(fields: [teacherId], references: [id])
+  grades   Grade[]
+
+  @@unique([classId, subjectId])
+}
+
+// ═══════════════ اشخاص ═══════════════
+
+model Teacher {
+  id         String   @id @default(cuid())
+  name       String
+  fatherName String?
+  position   String   @default("معلم") // معلم | سرمعلم | مدیر | ملازم | کارمند | کتابخانه‌دار
+  phone      String?
+  education  String?
+  hireDate   String? // تاریخ شمسی
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user             User?
+  supervised       Class[]        @relation("supervisor")
+  classSubjects    ClassSubject[]
+  attendances      StaffAttendance[]
+  tasks            StaffTask[]    @relation("assignedTo")
+  assignedTasks    StaffTask[]    @relation("assignedBy")
+}
+
+model Student {
+  id            String   @id @default(cuid())
+  firstName     String // اسم
+  lastName      String // شهرت/تخلص
+  fatherName    String // ولد
+  grandFather   String? // ولدیت
+  gender        String   @default("M") // M | F
+  birthDate     String? // تاریخ شمسی
+  idNumber      String? // نمبر تذکره
+  guardianName  String?
+  guardianPhone String?
+  address       String?
+  classId       String?
+  rollNo        Int? // شماره در جدول
+  status        String   @default("ACTIVE") // ACTIVE | LEFT | GRADUATED
+  enrolledYear  String? // سال شمولیت
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  class      Class?            @relation(fields: [classId], references: [id])
+  attendance AttendanceRecord[]
+  activities StudentActivity[]
+  grades     Grade[]
+  loans      BookLoan[]
+  users      User[] @relation("StudentUsers")
+}
+
+// ═══════════════ حاضری ═══════════════
+
+model AttendanceRecord {
+  id         String   @id @default(cuid())
+  studentId  String
+  classId    String
+  date       String // ISO یومیه: yyyy-mm-dd
+  status     String // PRESENT | ABSENT | SICK | LEAVE
+  recordedBy String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, date])
+  @@index([classId, date])
+}
+
+model StaffAttendance {
+  id        String   @id @default(cuid())
+  teacherId String
+  date      String // ISO
+  status    String // PRESENT | ABSENT | SICK | LEAVE
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, date])
+}
+
+// ═══════════════ فعالیت‌های شاگرد ═══════════════
+
+model StudentActivity {
+  id         String   @id @default(cuid())
+  studentId  String
+  date       String // ISO
+  type       String // HOMEWORK | BEHAVIOR | PARTICIPATION | OTHER
+  score      Int? // نمره یا امتیاز ۰-۱۰۰
+  note       String
+  recordedBy String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+}
+
+// ═══════════════ نمرات ═══════════════
+
+model Grade {
+  id             String   @id @default(cuid())
+  studentId      String
+  classSubjectId String
+  period         String // MIDTERM | ANNUAL
+  written        Float? // تحریری
+  oral           Float? // تقریری/عملی
+  homework       Float? // کارخانگی
+  activity       Float? // فعالیت صنفی
+  total          Float    @default(0) // مجموع محاسبه‌شده
+  approved       Boolean  @default(false)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classSubject ClassSubject @relation(fields: [classSubjectId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, classSubjectId, period])
+}
+
+// ═══════════════ کتابخانه ═══════════════
+
+model Book {
+  id        String   @id @default(cuid())
+  title     String
+  author    String?
+  category  String?
+  copies    Int      @default(1)
+  available Int      @default(1)
+  shelfNo   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  loans BookLoan[]
+}
+
+model BookLoan {
+  id           String   @id @default(cuid())
+  bookId       String
+  borrowerName String
+  borrowerType String   @default("STUDENT") // STUDENT | TEACHER | STAFF
+  studentId    String?
+  loanDate     String
+  dueDate      String
+  returnDate   String?
+  status       String   @default("LENT") // LENT | RETURNED
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  book    Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  student Student? @relation(fields: [studentId], references: [id])
+}
+
+// ═══════════════ اعلان‌ها ═══════════════
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  type      String   @default("INFO") // INFO | SUCCESS | WARNING | GRADE | ATTENDANCE
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ═══════════════ وظایف کارمندان ═══════════════
+
+model StaffTask {
+  id          String   @id @default(cuid())
+  staffId     String
+  title       String
+  description String?
+  dueDate     String?
+  status      String   @default("PENDING") // PENDING | IN_PROGRESS | DONE
+  assignedBy  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  staff      Teacher? @relation("assignedTo", fields: [staffId], references: [id])
+  assigner   Teacher? @relation("assignedBy", fields: [assignedBy], references: [id])
+}
+
+// ═══════════════ تنظیمات (کلید-مقدار) ═══════════════
+
+model Setting {
+  key   String @id
+  value String
+}
+
+// ═══════════════ بخش‌های دلخواه (ساخته‌شده توسط مدیر) ═══════════════
+
+model CustomSection {
+  id        String   @id @default(cuid())
+  title     String
+  icon      String   @default("Sparkles") // نام آیکون lucide
+  color     String   @default("emerald")
+  fields    String   @default("[]") // JSON: [{key,label,type,options,required}]
+  viewRoles String   @default("[\"ADMIN\",\"HEADTEACHER\",\"TEACHER\"]") // چه کسی می‌بیند
+  writeRoles String  @default("[\"ADMIN\",\"HEADTEACHER\",\"TEACHER\"]") // چه کسی ثبت می‌کند
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entries CustomEntry[]
+}
+
+model CustomEntry {
+  id        String   @id @default(cuid())
+  sectionId String
+  data      String   @default("{}") // JSON: مقادیر فیلدها
+  entryDate String? // تاریخ شمسی اختیاری
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  section CustomSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@index([sectionId])
+}
+
+// ═══════════════ قالب‌های تقدیرنامه ═══════════════
+
+model CertificateTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  config    String   @default("{}") // JSON: طراحی کامل
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

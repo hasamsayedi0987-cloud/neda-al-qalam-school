@@ -5,9 +5,11 @@ import {
   SESSION_COOKIE, requireUser, ApiError,
 } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
+import { ensureBootstrap } from '@/lib/bootstrap';
 
 export async function GET() {
   try {
+    await ensureBootstrap();
     const user = await getSessionUser();
     if (!user) {
       // آیا راه‌اندازی اولیه انجام شده؟ (نمایش حساب‌های ابتدایی فقط قبل از اولین ورود)
@@ -27,6 +29,7 @@ export async function POST(req: NextRequest) {
 
     // ─── ورود ───
     if (action === 'login') {
+      await ensureBootstrap();
       const username = str(body.username).toLowerCase();
       const password = str(body.password);
       if (!username || !password) throw new ApiError('نام کاربری و رمز عبور را وارد کنید');

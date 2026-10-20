@@ -29,14 +29,30 @@
 
 | مورد | توضیح |
 |---|---|
-| **وب‌سایت** | همان آدرسی که از پنل پیش‌نمایش باز می‌کنید — همیشه روشن |
+| **وب‌سایت (هاست دائمی)** | پس از استقرار روی Vercel — آدرس ثابت `https://neda-al-qalam-school.vercel.app` (راهنمای پایین) |
 | **مخزن کد** | https://github.com/hasamsayedi0987-cloud/neda-al-qalam-school |
-| **APK اندروید** | Release v1.0.0 (فایل nedaalqalam-school.apk) |
+| **APK اندروید** | Release v1.2.0 (nedaalqalam-school.apk) — پس از تعیین آدرس نهایی هاست، APK با آدرس ثابت بازسازی و در Release جدید گذاشته می‌شود |
 
 - **بدون آی‌پی و بدون سرور محلی** — هر جا اینترنت باشد، سیستم در دسترس است.
 - **همگام‌سازی کامل**: هر ثبت (نمره، حاضری، شاگرد، کتاب...) روی سرور ذخیره و برای همه یکسان دیده می‌شود.
 - **آفلاین**: آخرین داده‌ها روی دستگاه کش می‌شود؛ ثبت‌های آفلاین در صف می‌مانند و با وصل شدن اینترنت خودکار همگام می‌گردند.
 - **APK**: آدرس سرور فقط بار اول (در صورت نیاز) پرسیده می‌شود و برای همیشه ذخیره می‌گردد؛ سپس هر بار مستقیم صفحهٔ ورود باز می‌شود.
+
+## ☁️ استقرار روی هاست دائمی (Vercel) — سایت همیشه‌روشن با آدرس ثابت
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fhasamsayedi0987-cloud%2Fneda-al-qalam-school&project-name=neda-al-qalam-school)
+
+سیستم کاملاً برای Vercel آماده شده است: اسکیمای PostgreSQL، ساخت خودکار جدول‌ها، ثبت خودکار حساب‌های پیش‌فرض و پیام‌های خطای فارسی. فقط ۵ گام:
+
+1. روی دکمهٔ بالا کلیک کنید و با حساب گیت‌هاب وارد شوید → **Deploy** (۳۰ ثانیه؛ در این مرحله دیتابیس ندارد و فقط می‌سازد)
+2. در همان پروژه: تب **Storage** → **Create Database** → **Postgres (Neon)** → **Connect to Project** (رایگان است؛ DATABASE_URL خودکار تزریق می‌شود)
+3. تب **Deployments** → روی آخرین انتشار **⋯ → Redeploy** — این بار جدول‌ها ساخته و حساب‌های پیش‌فرض ثبت می‌شوند
+4. آدرس ثابت سایت شما: `https://neda-al-qalam-school.vercel.app` (قابل تغییر از تنظیمات دومین)
+5. با `admin / admin123` وارد شوید (همان حساب‌های جدول بالا)
+
+**انتقال داده‌های فعلی**: از سایت فعلی (پیش‌نمایش) با حساب مدیر **پشتیبان‌گیری** کنید (بخش تنظیمات → پشتیبان‌گیری، فایل JSON)؛ سپس در سایت Vercel با مدیر وارد شده و همان فایل را **بازیابی** کنید — همهٔ شاگردان، نمرات، حاضری و کتابخانه یکجا منتقل می‌شود. (فایل آماده: `download/nedaalqalam-backup-*.json`)
+
+**APK با آدرس ثابت**: پس از استقرار، آدرس vercel.app در `apk-build/server-url.txt` نوشته و `apk-build/build.sh` اجرا می‌شود — APK جدید هیچ سوالی نمی‌پرسد و مستقیم صفحهٔ ورود باز می‌شود.
 
 ## 🔐 حساب‌ها
 
@@ -58,7 +74,7 @@
 
 - **Next.js 16 + TypeScript + Tailwind + shadcn/ui** — رابط فارسی RTL با تقویم شمسی
 - **API Routes (۲۱ مسیر)**: auth، users، students، teachers، classes(+assign)، subjects، attendance، activities، grades، results، library، notifications، tasks، settings، dashboard، backup، custom-sections، custom-entries، certificates
-- **Prisma + SQLite** — دیتابیس سرور (db/custom.db)
+- **Prisma + SQLite (محلی) / PostgreSQL (ابری — Vercel/Neon)** — انتخاب اسکیما خودکار در زمان ساخت
 - **احراز هویت**: کوکی امضاشده HMAC + scrypt — نشست با بستن اپ/مرورگر خاتمه می‌یابد
 - **آفلاین**: کش خواندن در localStorage + صف نوشتن + ورود محلی (PBKDF2)
 - **PWA**: نصب روی موبایل + Service Worker

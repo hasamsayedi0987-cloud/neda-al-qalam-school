@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "node scripts/prisma-setup.mjs && npx next build",
+  "installCommand": "bun install",
+  "env": {
+    "DEPLOY_TARGET": "vercel",
+    "NEXT_TELEMETRY_DISABLED": "1"
+  }
+}
