@@ -169,3 +169,32 @@ Stage Summary:
 - هر معلم فقط شاگردان صنف‌های تحت تدریس/نگرانی خود را می‌بیند و فقط نمرات مضامین سپرده‌شده به خودش را ثبت/ویرایش/حذف می‌کند — حتی با تدریس چند مضمون در چند صنف
 - مدیر در «تنظیمات» با ۳ کلید کنترل می‌کند معلمان چه مجوزهایی داشته باشند (پیش‌فرض: همه فعال)
 - سرمعلم و مدیر مانند قبل به همه دسترسی دارند
+
+---
+Task ID: vercel-1
+Agent: main (Z.ai)
+Task: استقرار روی هاست دائمی (Vercel) — سایت همیشه‌روشن با آدرس ثابت + آماده‌سازی APK با آدرس ثابت
+
+Work Log:
+- تأیید قابل‌حمل‌بودن کامل کد: صفر کوئری وابسته به SQLite در ۲۱ API (فقط $transaction استاندارد)
+- ساخت prisma/schema.postgres.prisma (همان مدل‌ها با provider postgresql)
+- ساخت scripts/prisma-setup.mjs: در زمان Build اگر DATABASE_URL از نوع postgres بود → db push با اتصال مستقیم (UNPOOLED) → prisma generate → seed؛ در غیر این صورت مسیر SQLite محلی
+- ساخت scripts/seed-cloud.mjs: ثبت ۷ حساب پیش‌فرض (idempotent، غیرمسدودکننده)
+- ساخت src/lib/bootstrap.ts (ensureBootstrap): اولین درخواست → اگر جدول کاربران خالی بود، ۷ حساب پیش‌فرض ساخته می‌شود؛ اگر اتصال DB نبود → پیام فارسی روشن ۵۰۳ با راهنمای Storage
+- اتصال ensureBootstrap به GET و POST /api/auth
+- db.ts: یکسان‌سازی DATABASE_URL/POSTGRES_URL + sslmode=require + pgbouncer=true&connection_limit=1 برای pooler + حذف لاگ کوئری در production
+- next.config.ts: DEPLOY_TARGET=vercel → بدون output standalone (Vercel خودش می‌سازد)
+- vercel.json: buildCommand = node scripts/prisma-setup.mjs && npx next build + installCommand bun
+- .env.example + README: بخش «استقرار روی هاست دائمی» با دکمهٔ Deploy با Vercel و ۵ گام فارسی + انتقال داده با پشتیبان/بازیابی + ساخت مجدد APK
+- تست‌ها: (۱) شبیه‌سازی Build حالت Vercel (DEPLOY_TARGET=vercel) → موفق، هر ۱۹ API به‌صورت dynamic؛ (۲) تست واقعی bootstrap روی دیتابیس خالی تازه → ۷ حساب خودکار ساخته شد، ورود admin و teacher موفق، داشبورد سالم، رمز غلط پیام فارسی؛ (۳) generate اسکیمای postgres موفق (اعتبارسنجی)
+- سرور به دیتابیس اصلی برگردانده شد (HTTP 200، setupDone:true)
+- پشتیبان تازهٔ داده‌های واقعی: download/nedaalqalam-backup-2026-10-20.json (28KB)
+- commit 72b6214 → push به main (8e48ac0..72b6214)
+
+Stage Summary:
+- مخزن ۱۰۰٪ Vercel-ready است: کاربر فقط دکمهٔ Deploy (README) → Storage → Postgres (Neon) → Redeploy؛ حساب‌ها و جدول‌ها خودکار ساخته می‌شوند
+- آدرس ثابت نهایی: https://neda-al-qalam-school.vercel.app (پس از استقرار کاربر)
+- انتقال داده: فایل پشتیبان JSON آماده است (بازیابی در بخش تنظیمات سایت جدید)
+- APK ثابت: پس از دریافت آدرس vercel.app → نوشتن در apk-build/server-url.txt → build.sh → Release جدید (APK بدون هیچ سوالی)
+- یادآوری امنیتی قبلی پابرجاست: توکن گیت‌هاب کاربر باید regenerate شود
+
