@@ -59,3 +59,30 @@ Work Log:
 Stage Summary:
 - مخزن ۱۰۰٪ کامل و synced: https://github.com/hasamsayedi0987-cloud/neda-al-qalam-school (commit 8c1b699)
 - README حالا نقشهٔ کامل ماژول‌ها را نشان می‌دهد تا ابهام «ناقص بودن» رفع شود
+
+---
+Task ID: cloud-1
+Agent: main (Z.ai)
+Task: معماری ابری — سایت همیشه‌روشن + همگام‌سازی کامل + APK بدون آی‌پی (درخواست کاربر)
+
+Work Log:
+- کشف: دیتابیس SQLite بین جلسات پاک شده بود → تصمیم معماری: گیت‌هاب به‌عنوان دیتابیس ابری (GaaS)
+- مطالعهٔ کامل ۱۸ API سرور + seed + views؛ طراحی لایهٔ دادهٔ کلاینت با رابط ۱:۱ (apiGet/apiSend بدون تغییر ویوها)
+- ساخت ۴ فایل: client/gh.ts (Contents API + کش IDB + ETag + تضاد 409)، backend-common (scrypt-js سازگار با سرور + نشست)، handlers-core + handlers-data (همهٔ هندلرها)، api.ts (روتر + صف آفلاین)
+- حذف src/app/api + lib/db + lib/auth + api-helpers + seed.ts (تگ server-version حفظ شد)
+- مخزن دادهٔ خصوصی nedaalqalam-school-data ساخته و با ۱۵ کالکشن seed شد (scripts/seed-github.mjs)
+- Static export با basePath شرطی؛ تست شبیه‌سازی Pages با http.server → ورود و داده OK
+- مشکلات حل‌شده: push protection (توکن در باندل!) → سایت بدون توکن + بوت‌استرپ توکن در login-view + بخش اتصال ابری در settings-view؛ workflow scope نداشتن توکن → انتشار با شاخهٔ gh-pages (legacy) + scripts/deploy-gh-pages.sh؛ hardcoded distDir در build:static
+- Actions secret GH_DATA_TOKEN با libsodium sealed box ثبت شد (برای آینده اگر workflow scope بگیرند)
+- سایت زنده: hasamsayedi0987-cloud.github.io/neda-al-qalam-school — تست مرورگری کامل: بوت‌استرپ توکن → ورود → داشبورد → جدول نتایج (۹۱ دری) → همه OK
+- تست CRUD ابری در dev: ثبت شاگرد → commit «students: ثبت شاگرد نصرت سیدی» → حذف → ۲ کامیت → مخزن سالم
+- APK بازنویسی: MainActivity با asset interception (appassets.androidplatform.net) — UI جاسازی‌شده، صفر آی‌پی؛ build.sh با -A assets؛ SDK 34 دوباره نصب شد
+- دو واریانت APK: خصوصی (توکن داخلی، download/nedaalqalam-school.apk) و عمومی (بدون توکن، Release v1.1.0)
+- Release v1.1.0 با APK عمومی + README جدید + push main (3f3975a)
+
+Stage Summary:
+- سایت زنده: https://hasamsayedi0987-cloud.github.io/neda-al-qalam-school/ (HTTP 200، تست کامل OK)
+- مخزن داده: hasamsayedi0987-cloud/nedaalqalam-school-data (private، ۱۵ کالکشن، تاریخچهٔ commit فارسی)
+- APK خصوصی: /home/z/my-project/download/nedaalqalam-school.apk (۵.۶MB، صفر پیکربندی)
+- APK عمومی: Release v1.1.0 (توکن یک‌بار در اولین اجرا)
+- امنیت: توکن در repo/site عمومی نیست؛ رمزها scrypt؛ توکن اصلی کاربر باید regenerate شود
