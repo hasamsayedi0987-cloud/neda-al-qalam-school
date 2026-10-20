@@ -8,16 +8,34 @@ const POSITIONS = ['معلم', 'سرمعلم', 'مدیر', 'ملازم', 'کار
 export async function GET() {
   try {
     await requireUser();
-    const teachers = await db.teacher.findMany({
-      orderBy: { createdAt: 'asc' },
-      include: { user: { select: { username: true, active: true } } },
-    });
+    const [teachers, assignments] = await Promise.all([
+      db.teacher.findMany({
+        orderBy: { createdAt: 'asc' },
+        include: { user: { select: { username: true, active: true } } },
+      }),
+      // مضامین سپرده‌شدهٔ هر معلم (صنف + مضمون)
+      db.classSubject.findMany({
+        where: { teacherId: { not: null } },
+        include: {
+          subject: { select: { name: true } },
+          class: { select: { name: true } },
+        },
+      }),
+    ]);
+    const byTeacher = new Map<string, Array<{ className: string; subjectName: string }>>();
+    for (const cs of assignments) {
+      if (!cs.teacherId) continue;
+      const list = byTeacher.get(cs.teacherId) || [];
+      list.push({ className: cs.class.name, subjectName: cs.subject.name });
+      byTeacher.set(cs.teacherId, list);
+    }
     return NextResponse.json({
       teachers: teachers.map((t) => ({
         id: t.id, name: t.name, fatherName: t.fatherName, position: t.position,
         phone: t.phone, education: t.education, hireDate: t.hireDate, active: t.active,
         username: t.user?.username || null,
         userActive: t.user?.active ?? null,
+        assignments: byTeacher.get(t.id) || [],
       })),
     });
   } catch (e) {

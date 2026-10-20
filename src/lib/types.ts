@@ -17,6 +17,7 @@ export interface ClassInfo {
   supervisorId: string | null;
   supervisorName?: string | null;
   studentCount?: number;
+  classSubjects?: ClassSubjectInfo[]; // مضامین سپرده‌شدهٔ صنف
 }
 
 export interface SubjectInfo {
@@ -63,6 +64,7 @@ export interface TeacherInfo {
   active: boolean;
   username?: string | null;
   userActive?: boolean | null;
+  assignments?: Array<{ className: string; subjectName: string }>; // مضامین سپرده‌شده
 }
 
 export interface UserInfo {
@@ -153,6 +155,9 @@ export interface AppSettings {
   gradeScale?: string; // JSON: [{label,min}] — مکتسبه‌های قابل تنظیم
   aboutApp?: string; // JSON: متن دربارهٔ اپ + عکس
   aboutDev?: string; // JSON: معلومات سازنده + عکس
+  permTeacherGrades?: string; // '1' | '0' — مجوز ثبت/ویرایش نمرات مضامین خود
+  permTeacherGradeDelete?: string; // '1' | '0' — مجوز حذف نمرات
+  permTeacherStudents?: string; // '1' | '0' — مجوز ثبت/ویرایش شاگردان صنف خود
 }
 
 export interface ResultsRow {

@@ -11,8 +11,9 @@ import { apiGet, apiSend } from '@/lib/client/api';
 import { toPersianDigits } from '@/lib/jalali';
 import { DEFAULT_SCALE, scaleRangesText, type GradeScaleEntry } from '@/lib/grading';
 import { useToast } from '@/hooks/use-toast';
+import { Switch } from '@/components/ui/switch';
 import type { SessionUser, AppSettings } from '@/lib/types';
-import { Download, Upload, Save, Settings as SettingsIcon, KeyRound, DatabaseBackup, AlertTriangle, Plus, Trash2 } from 'lucide-react';
+import { Download, Upload, Save, Settings as SettingsIcon, KeyRound, DatabaseBackup, AlertTriangle, Plus, Trash2, ShieldCheck } from 'lucide-react';
 
 const DEFAULTS: AppSettings = {
   schoolName: 'مکتب خصوصی نداالقلم',
@@ -20,6 +21,7 @@ const DEFAULTS: AppSettings = {
   directorName: '', directorPhone: '', directorEmail: '',
   maxWritten: '40', maxOral: '20', maxHomework: '20', maxActivity: '20',
   resultNote: '',
+  permTeacherGrades: '1', permTeacherGradeDelete: '1', permTeacherStudents: '1',
 };
 
 export function SettingsView({ user }: { user: SessionUser }) {
@@ -204,6 +206,42 @@ export function SettingsView({ user }: { user: SessionUser }) {
             <Button variant="outline" size="sm" onClick={addScaleRow} className="gap-1.5 border-emerald-300 text-emerald-800">
               <Plus className="h-4 w-4" /> افزودن مکتسبه
             </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {isAdmin && (
+        <Card className="border-emerald-100">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-emerald-900 flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5" /> دسترسی معلمان — کنترل توسط مدیر
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-xs text-muted-foreground leading-5">
+              هر معلم فقط شاگردان صنف‌هایی را می‌بیند که مضمونی در آنها تدریس می‌کند یا نگران آن صنف است،
+              و فقط نمرات مضامین سپرده‌شده به خودش را می‌تواند ثبت یا ویرایش کند — حتی اگر در چند صنف و چند مضمون درس بدهد.
+              با کلیدهای زیر تعیین کنید معلمان چه مجوزهایی داشته باشند:
+            </p>
+            <div className="space-y-3">
+              {([
+                ['permTeacherGrades', 'ثبت و ویرایش نمرات مضامین خود', 'معلم بتواند نمرات تحریری، تقریری، کارخانگی و فعالیت هر شاگرد را در مضامین خود ثبت و ویرایش کند'],
+                ['permTeacherGradeDelete', 'حذف نمرات مضامین خود', 'معلم بتواند نمرهٔ ثبت‌شدهٔ هر شاگرد را حذف کند (با پاک‌کردن همهٔ اجزا یا دکمهٔ حذف)'],
+                ['permTeacherStudents', 'ثبت و ویرایش شاگردان صنف‌های خود', 'معلم بتواند شاگرد جدید در صنف‌های خود ثبت و معلومات شاگردان همان صنف‌ها را ویرایش کند'],
+              ] as const).map(([key, label, desc]) => (
+                <div key={key} className="flex items-start justify-between gap-3 rounded-lg border border-emerald-100 bg-emerald-50/40 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-emerald-900">{label}</p>
+                    <p className="text-xs text-muted-foreground leading-5 mt-0.5">{desc}</p>
+                  </div>
+                  <Switch
+                    checked={settings[key] !== '0'}
+                    onCheckedChange={(v) => set(key, v ? '1' : '0')}
+                    aria-label={label}
+                  />
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}

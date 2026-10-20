@@ -5,6 +5,7 @@ import { handleApiError, str } from '@/lib/api-helpers';
 import {
   finalScore, letterGrade, overallResult, computeRanks, round2, componentTotal, parseScale,
 } from '@/lib/grading';
+import { teacherClassIds, studentInTeacherScope } from '@/lib/teacher-scope';
 import type { ResultsRow } from '@/lib/types';
 
 /** جدول نتایج صنف و کارنامهٔ شاگرد — نمرات به‌صورت خودکار در جدول‌ها منعکس می‌شود */
@@ -32,6 +33,14 @@ export async function GET(req: NextRequest) {
 
       const classId = sp.get('classId') || '';
       if (!classId) throw new ApiError('صنف را انتخاب کنید');
+
+      // معلم: فقط جدول نتایج صنف‌های تحت اختیار خود
+      if (me.role === 'TEACHER') {
+        const scope = await teacherClassIds(me.teacherId || '');
+        if (!scope.includes(classId)) {
+          throw new ApiError('این صنف از صنف‌های تحت تدریس شما نیست', 403);
+        }
+      }
 
       const cls = await db.class.findUnique({ where: { id: classId } });
       if (!cls) throw new ApiError('صنف یافت نشد');
@@ -100,6 +109,10 @@ export async function GET(req: NextRequest) {
     // ─── کارنامهٔ شاگرد ───
     const studentId = me.role === 'STUDENT' || me.role === 'GUARDIAN' ? me.studentId : sp.get('studentId');
     if (!studentId) throw new ApiError('شناسهٔ شاگرد لازم است', 403);
+    // معلم: کارنامهٔ شاگردان صنف‌های خودش
+    if (me.role === 'TEACHER' && !(await studentInTeacherScope(me.teacherId || '', studentId))) {
+      throw new ApiError('این شاگرد در صنف‌های تحت تدریس شما نیست', 403);
+    }
     const student = await db.student.findUnique({
       where: { id: studentId },
       include: { class: true },

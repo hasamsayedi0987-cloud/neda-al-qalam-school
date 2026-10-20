@@ -14,7 +14,7 @@ import { letterGrade, letterColor, clampComponent, componentTotal, PERIOD_LABELS
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, ClassInfo, GradeCell } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import { ClipboardList, Save, BadgeCheck, RotateCcw } from 'lucide-react';
+import { ClipboardList, Save, BadgeCheck, RotateCcw, Trash2, BookOpen } from 'lucide-react';
 
 interface CSItem {
   id: string;
@@ -36,29 +36,65 @@ interface StudentRow {
 export function GradesView({ user }: { user: SessionUser }) {
   const { toast } = useToast();
   const canApprove = ['ADMIN', 'HEADTEACHER'].includes(user.role);
+  const isTeacher = user.role === 'TEACHER';
 
   const [classes, setClasses] = useState<ClassInfo[]>([]);
-  const [classId, setClassId] = useState('');
-  const [csId, setCsId] = useState('');
-  const [period, setPeriod] = useState<'MIDTERM' | 'ANNUAL'>('MIDTERM');
+  // لینک‌پذیری: مقدار اولیه از آدرس (?view=grades&class=...&cs=...&period=...)
+  const urlInit = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get('view') !== 'grades') return null;
+    return {
+      classId: sp.get('class') || '',
+      csId: sp.get('cs') || '',
+      period: (sp.get('period') === 'ANNUAL' ? 'ANNUAL' : 'MIDTERM') as 'MIDTERM' | 'ANNUAL',
+    };
+  }, []);
+  const [classId, setClassId] = useState(urlInit?.classId || '');
+  const [csId, setCsId] = useState(urlInit?.csId || '');
+  const [period, setPeriod] = useState<'MIDTERM' | 'ANNUAL'>(urlInit?.period || 'MIDTERM');
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [cells, setCells] = useState<Record<string, GradeCell>>({});
   const [weights, setWeights] = useState({ maxWritten: 40, maxOral: 20, maxHomework: 20, maxActivity: 20 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [allApproved, setAllApproved] = useState(false);
+  const [permGrades, setPermGrades] = useState(true); // مجوز ثبت/ویرایش نمرات برای معلم
+  const [permDelete, setPermDelete] = useState(true); // مجوز حذف نمرات برای معلم
 
   useEffect(() => {
     apiGet<{ classes: ClassInfo[] }>('/api/classes')
       .then((d) => setClasses(d.classes))
       .catch(() => {});
-  }, []);
+    if (isTeacher) {
+      apiGet<{ settings: Record<string, string> }>('/api/settings')
+        .then((d) => {
+          setPermGrades(d.settings.permTeacherGrades !== '0');
+          setPermDelete(d.settings.permTeacherGradeDelete !== '0');
+        })
+        .catch(() => {});
+    }
+  }, [isTeacher]);
 
   const currentClass = classes.find((c) => c.id === classId);
   // معلم فقط مضامین سپرده‌شده به خودش را می‌بیند
   const classSubjects: CSItem[] = (currentClass?.classSubjects || []).filter(
     (cs) => user.role !== 'TEACHER' || cs.teacherId === user.teacherId,
   );
+
+  // فهرست مضامین من برای بنر معلم — در همهٔ صنف‌هایی که تدریس می‌کند
+  const myAssignments = useMemo(() => {
+    if (!isTeacher) return [];
+    const list: Array<{ className: string; subjectName: string }> = [];
+    for (const c of classes) {
+      for (const cs of c.classSubjects || []) {
+        if (cs.teacherId === user.teacherId) {
+          list.push({ className: c.name, subjectName: cs.subject.name });
+        }
+      }
+    }
+    return list;
+  }, [classes, isTeacher, user.teacherId]);
 
   const loadGrades = useCallback(async () => {
     if (!csId) return;
@@ -111,7 +147,7 @@ export function GradesView({ user }: { user: SessionUser }) {
       studentId: s.id,
       ...(cells[s.id] || { written: null, oral: null, homework: null, activity: null }),
     }));
-    const res = await apiSend('/api/grades', 'POST', {
+    const res = await apiSend<{ saved?: number; blockedDeletes?: number }>('/api/grades', 'POST', {
       classSubjectId: csId, period, items,
     }, { queueLabel: 'ثبت نمرات' });
     setSaving(false);
@@ -119,13 +155,39 @@ export function GradesView({ user }: { user: SessionUser }) {
       toast({ title: 'خطا', description: res.error, variant: 'destructive' });
       return;
     }
-    toast({
-      title: res.queued ? 'در صف آفلاین ذخیره شد' : 'نمرات ثبت شد',
-      description: res.queued
-        ? 'پس از اتصال به شبکه به‌صورت خودکار همگام می‌شود'
-        : `نمرات ${toPersianDigits(items.length)} شاگرد در جدول نتایج صنف منعکس گردید`,
-    });
+    if (!res.queued && (res.data?.blockedDeletes || 0) > 0) {
+      toast({
+        title: 'حذف نمرات انجام نشد',
+        description: 'مدیر اجازهٔ حذف نمرات را به معلمان نداده است — فقط ویرایش‌ها ذخیره شد.',
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: res.queued ? 'در صف آفلاین ذخیره شد' : 'نمرات ثبت شد',
+        description: res.queued
+          ? 'پس از اتصال به شبکه به‌صورت خودکار همگام می‌شود'
+          : `نمرات ${toPersianDigits(items.length)} شاگرد در جدول نتایج صنف منعکس گردید`,
+      });
+    }
     if (!res.queued) loadGrades();
+  };
+
+  const deleteRow = async (s: StudentRow) => {
+    if (!csId) return;
+    if (!confirm(`حذف نمرات «${s.firstName} ${s.lastName}» در این دوره؟ این عمل قابل بازگشت نیست.`)) return;
+    const res = await apiSend<{ deleted?: number }>('/api/grades', 'POST', {
+      action: 'delete', classSubjectId: csId, period, studentIds: [s.id],
+    }, { queueLabel: 'حذف نمره' });
+    if (res.error) {
+      toast({ title: 'خطا', description: res.error, variant: 'destructive' });
+      return;
+    }
+    if (!res.queued) {
+      toast({ title: 'نمره حذف شد', description: `نمرات ${toPersianDigits(res.data?.deleted || 0)} رکورد حذف گردید` });
+      loadGrades();
+    } else {
+      toast({ title: 'در صف آفلاین ثبت شد' });
+    }
   };
 
   const toggleApprove = async (approved: boolean) => {
@@ -153,7 +215,8 @@ export function GradesView({ user }: { user: SessionUser }) {
     return { avg: Math.round(avg * 100) / 100, pass, fail: totals.length - pass, count: totals.length };
   })();
 
-  const teacherEditable = !allApproved || canApprove;
+  const teacherEditable = canApprove || (!allApproved && (!isTeacher || permGrades));
+  const canDelete = canApprove || (isTeacher && permDelete && !allApproved);
 
   if (loading && csId) return <LoadingBlock rows={5} />;
 
@@ -164,6 +227,36 @@ export function GradesView({ user }: { user: SessionUser }) {
         subtitle="تحریری، تقریری/عملی، کارخانگی و فعالیت صنفی — مجموع به‌صورت خودکار محاسبه می‌شود"
         icon={ClipboardList}
       />
+
+      {/* بنر مضامین معلم */}
+      {isTeacher && (
+        <div className="rounded-lg border border-sky-200 bg-sky-50/70 px-3.5 py-3 mb-4">
+          <p className="text-sm font-semibold text-sky-900 flex items-center gap-1.5">
+            <BookOpen className="h-4 w-4" /> مضامین سپرده‌شده به شما
+          </p>
+          {myAssignments.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {myAssignments.map((a, i) => (
+                <Badge key={i} variant="outline" className="border-sky-300 text-sky-800">
+                  {a.subjectName} — {a.className}
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-amber-700 mt-1">هنوز مضمونی به شما سپرده نشده است — از مدیر مکتب بخواهید در بخش «صنف‌ها و تقسیم مضامین» مضامین شما را ثبت کند.</p>
+          )}
+          {!permGrades && (
+            <p className="text-xs text-amber-700 mt-2">
+              در حال حاضر مدیر اجازهٔ ثبت و ویرایش نمرات را به معلمان نداده است — جدول فقط برای مشاهده است.
+            </p>
+          )}
+          {permGrades && !permDelete && (
+            <p className="text-xs text-amber-700 mt-1.5">
+              حذف نمرات توسط مدیر غیرفعال شده است — فقط می‌توانید نمرات را ثبت و ویرایش کنید.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-end gap-2 mb-4">
         <Field label="صنف">
@@ -223,6 +316,7 @@ export function GradesView({ user }: { user: SessionUser }) {
                       <TableHead className="min-w-[90px]">فعالیت صنفی <span className="text-[10px] text-muted-foreground">(از {toPersianDigits(weights.maxActivity)})</span></TableHead>
                       <TableHead className="min-w-[80px]">مجموع</TableHead>
                       <TableHead className="min-w-[70px]">مکتسبه</TableHead>
+                      {canDelete && <TableHead className="min-w-[60px] text-center">حذف</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -252,6 +346,17 @@ export function GradesView({ user }: { user: SessionUser }) {
                           <TableCell>
                             <span className={cn('text-sm', letterColor(total))}>{letterGrade(total)}</span>
                           </TableCell>
+                          {canDelete && (
+                            <TableCell className="text-center">
+                              <Button
+                                variant="ghost" size="icon" className="h-8 w-8"
+                                onClick={() => deleteRow(s)}
+                                aria-label={`حذف نمرات ${s.firstName} ${s.lastName}`}
+                              >
+                                <Trash2 className="h-4 w-4 text-rose-600" />
+                              </Button>
+                            </TableCell>
+                          )}
                         </TableRow>
                       );
                     })}

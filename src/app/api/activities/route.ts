@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireUser, requireRole, ApiError } from '@/lib/auth';
 import { handleApiError, optNum, str } from '@/lib/api-helpers';
+import { studentInTeacherScope, teacherClassIds } from '@/lib/teacher-scope';
 
 export async function GET(req: NextRequest) {
   try {
@@ -22,6 +23,16 @@ export async function GET(req: NextRequest) {
     const studentId = sp.get('studentId');
     const classId = sp.get('classId');
     if (!classId && !studentId) throw new ApiError('صنف یا شاگرد را انتخاب کنید');
+    // معلم: فقط فعالیت شاگردان صنف‌های خودش
+    if (me.role === 'TEACHER') {
+      const scope = await teacherClassIds(me.teacherId || '');
+      if (classId && !scope.includes(classId)) {
+        throw new ApiError('این صنف از صنف‌های تحت تدریس شما نیست', 403);
+      }
+      if (studentId && !(await studentInTeacherScope(me.teacherId || '', studentId))) {
+        throw new ApiError('این شاگرد در صنف‌های تحت تدریس شما نیست', 403);
+      }
+    }
     const where: Record<string, unknown> = studentId ? { studentId } : {};
     if (classId && !studentId) {
       const students = await db.student.findMany({
@@ -55,6 +66,10 @@ export async function POST(req: NextRequest) {
     if (!studentId || !note || !type) throw new ApiError('شاگرد، نوع فعالیت و ملاحظات لازم است');
     if (!['HOMEWORK', 'BEHAVIOR', 'PARTICIPATION', 'OTHER'].includes(type)) {
       throw new ApiError('نوع فعالیت نامعتبر است');
+    }
+    // معلم: فقط فعالیت شاگردان صنف‌های تحت تدریس خود
+    if (me.role === 'TEACHER' && !(await studentInTeacherScope(me.teacherId || '', studentId))) {
+      throw new ApiError('این شاگرد در صنف‌های تحت تدریس شما نیست', 403);
     }
     const activity = await db.studentActivity.create({
       data: {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireUser, requireRole, ApiError } from '@/lib/auth';
 import { handleApiError, optNum, str } from '@/lib/api-helpers';
+import { teacherClassIds, getTeacherPerms, studentInTeacherScope } from '@/lib/teacher-scope';
 
 export async function GET(req: NextRequest) {
   try {
@@ -23,7 +24,13 @@ export async function GET(req: NextRequest) {
     }
 
     const where: Record<string, unknown> = {};
-    if (classId) where.classId = classId;
+    // معلم فقط شاگردان صنف‌های تحت اختیار خود (تدریس یا نگرانی) را می‌بیند
+    if (me.role === 'TEACHER') {
+      const scope = await teacherClassIds(me.teacherId || '');
+      where.classId = scope.length > 0 ? { in: scope } : '__none__';
+    } else if (classId) {
+      where.classId = classId;
+    }
     if (search) {
       where.OR = [
         { firstName: { contains: search } },
@@ -46,7 +53,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireRole('ADMIN', 'HEADTEACHER', 'TEACHER');
+    const me = await requireRole('ADMIN', 'HEADTEACHER', 'TEACHER');
     const body = await req.json();
     const firstName = str(body.firstName);
     const lastName = str(body.lastName);
@@ -55,6 +62,17 @@ export async function POST(req: NextRequest) {
       throw new ApiError('اسم، شهرت و نام پدر ضروری است');
     }
     const classId = str(body.classId) || null;
+    // معلم باید مجوز مدیر داشته باشد و فقط در صنف‌های خودش شاگرد ثبت کند
+    if (me.role === 'TEACHER') {
+      const perms = await getTeacherPerms();
+      if (!perms.students) {
+        throw new ApiError('مدیر اجازهٔ ثبت و ویرایش شاگردان را به معلمان نداده است', 403);
+      }
+      const scope = await teacherClassIds(me.teacherId || '');
+      if (!classId || !scope.includes(classId)) {
+        throw new ApiError('شما فقط می‌توانید در صنف‌های تحت تدریس خود شاگرد ثبت کنید', 403);
+      }
+    }
     let rollNo: number | null = optNum(body.rollNo);
     if (classId && rollNo == null) {
       const count = await db.student.count({ where: { classId } });
@@ -84,16 +102,35 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    await requireRole('ADMIN', 'HEADTEACHER', 'TEACHER');
+    const me = await requireRole('ADMIN', 'HEADTEACHER', 'TEACHER');
     const body = await req.json();
     const id = str(body.id);
     if (!id) throw new ApiError('شناسهٔ شاگرد لازم است');
+    // معلم: مجوز مدیر + شاگرد باید در صنف‌های خودش باشد
+    if (me.role === 'TEACHER') {
+      const perms = await getTeacherPerms();
+      if (!perms.students) {
+        throw new ApiError('مدیر اجازهٔ ثبت و ویرایش شاگردان را به معلمان نداده است', 403);
+      }
+      if (!(await studentInTeacherScope(me.teacherId || '', id))) {
+        throw new ApiError('این شاگرد در صنف‌های تحت تدریس شما نیست', 403);
+      }
+    }
     const data: Record<string, unknown> = {};
     for (const key of ['firstName', 'lastName', 'fatherName', 'grandFather', 'birthDate', 'idNumber', 'guardianName', 'guardianPhone', 'address', 'enrolledYear']) {
       if (body[key] !== undefined) data[key] = str(body[key]) || null;
     }
     if (body.gender !== undefined) data.gender = str(body.gender) === 'F' ? 'F' : 'M';
-    if (body.classId !== undefined) data.classId = str(body.classId) || null;
+    if (body.classId !== undefined) {
+      const newClassId = str(body.classId) || null;
+      if (me.role === 'TEACHER') {
+        const scope = await teacherClassIds(me.teacherId || '');
+        if (newClassId && !scope.includes(newClassId)) {
+          throw new ApiError('شما فقط به صنف‌های تحت تدریس خود دسترسی دارید', 403);
+        }
+      }
+      data.classId = newClassId;
+    }
     if (body.rollNo !== undefined) data.rollNo = optNum(body.rollNo);
     if (body.status !== undefined && ['ACTIVE', 'LEFT', 'GRADUATED'].includes(str(body.status))) {
       data.status = str(body.status);

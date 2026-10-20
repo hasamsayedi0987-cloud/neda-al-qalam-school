@@ -8,6 +8,8 @@ const EDITABLE_KEYS = [
   'directorName', 'directorPhone', 'directorEmail',
   'maxWritten', 'maxOral', 'maxHomework', 'maxActivity', 'resultNote',
   'gradeScale', 'aboutApp', 'aboutDev',
+  // مجوزهای معلمان — قابل کنترل توسط مدیر
+  'permTeacherGrades', 'permTeacherGradeDelete', 'permTeacherStudents',
 ];
 
 export async function GET() {

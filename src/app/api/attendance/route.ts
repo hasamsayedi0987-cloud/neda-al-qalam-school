@@ -3,6 +3,16 @@ import { db } from '@/lib/db';
 import { requireUser, requireRole, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
 import { jalaliMonthRange } from '@/lib/jalali';
+import { teacherClassIds } from '@/lib/teacher-scope';
+
+/** بررسی دسترسی معلم به صنف — مدیر و سرمعلم همه صنف‌ها */
+async function assertClassScope(me: { role: string; teacherId: string | null }, classId: string) {
+  if (me.role !== 'TEACHER') return;
+  const scope = await teacherClassIds(me.teacherId || '');
+  if (!scope.includes(classId)) {
+    throw new ApiError('این صنف از صنف‌های تحت تدریس شما نیست', 403);
+  }
+}
 
 /** حاضری شاگردان — یومیه و گزارش ماهانه؛ و حاضری معلمان/کارمندان */
 export async function GET(req: NextRequest) {
@@ -38,6 +48,7 @@ export async function GET(req: NextRequest) {
       const classId = sp.get('classId') || '';
       const date = sp.get('date');
       if (!classId) throw new ApiError('صنف را انتخاب کنید');
+      await assertClassScope(me, classId);
       const cls = await db.class.findUnique({ where: { id: classId } });
       if (!cls) throw new ApiError('صنف یافت نشد');
 
@@ -84,6 +95,7 @@ export async function GET(req: NextRequest) {
 
       const classId = sp.get('classId') || '';
       if (!classId) throw new ApiError('صنف را انتخاب کنید');
+      await assertClassScope(me, classId);
 
       const students = await db.student.findMany({
         where: { classId, status: 'ACTIVE' },
@@ -133,6 +145,8 @@ export async function POST(req: NextRequest) {
     const classId = str(body.classId);
     const items = Array.isArray(body.items) ? body.items : [];
     if (!date || !classId) throw new ApiError('صنف و تاریخ لازم است');
+    // معلم: فقط حاضری صنف‌های تحت تدریس خود
+    await assertClassScope(me, classId);
 
     let saved = 0;
     const absentStudents: string[] = [];

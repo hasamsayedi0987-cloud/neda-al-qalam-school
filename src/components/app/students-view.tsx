@@ -14,7 +14,7 @@ import { apiGet, apiSend } from '@/lib/client/api';
 import { toPersianDigits } from '@/lib/jalali';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, StudentInfo, ClassInfo } from '@/lib/types';
-import { Plus, Pencil, Search, Trash2, Users, Phone, FilterX } from 'lucide-react';
+import { Plus, Pencil, Search, Trash2, Users, Phone, FilterX, BookOpen } from 'lucide-react';
 
 const EMPTY_FORM = {
   id: '', firstName: '', lastName: '', fatherName: '', grandFather: '',
@@ -30,9 +30,11 @@ export function StudentsView({ user }: { user: SessionUser }) {
   const [classFilter, setClassFilter] = useState('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [permStudents, setPermStudents] = useState(true); // مجوز ثبت/ویرایش شاگردان برای معلم
   const { toast } = useToast();
 
-  const canEdit = ['ADMIN', 'HEADTEACHER', 'TEACHER'].includes(user.role);
+  const isTeacher = user.role === 'TEACHER';
+  const canEdit = ['ADMIN', 'HEADTEACHER'].includes(user.role) || (isTeacher && permStudents);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,6 +52,14 @@ export function StudentsView({ user }: { user: SessionUser }) {
   }, [toast]);
 
   useEffect(() => { queueMicrotask(load); }, [load]);
+
+  // مجوزهای معلمان از تنظیمات — کلیدهایی که مدیر کنترل می‌کند
+  useEffect(() => {
+    if (user.role !== 'TEACHER') return;
+    apiGet<{ settings: Record<string, string> }>('/api/settings')
+      .then((d) => setPermStudents(d.settings.permTeacherStudents !== '0'))
+      .catch(() => {});
+  }, [user.role]);
 
   const filtered = useMemo(() => {
     let list = students;
@@ -117,7 +127,7 @@ export function StudentsView({ user }: { user: SessionUser }) {
     <div>
       <PageHeader
         title="شاگردان"
-        subtitle="ثبت‌نام، ویرایش و مدیریت شاگردان صنف‌ها"
+        subtitle={isTeacher ? 'شاگردان صنف‌های تحت تدریس شما' : 'ثبت‌نام، ویرایش و مدیریت شاگردان صنف‌ها'}
         icon={Users}
         actions={canEdit && (
           <Button onClick={openNew} className="gap-1.5">
@@ -125,6 +135,33 @@ export function StudentsView({ user }: { user: SessionUser }) {
           </Button>
         )}
       />
+
+      {/* بنر محدودهٔ معلم */}
+      {isTeacher && (
+        <div className="rounded-lg border border-sky-200 bg-sky-50/70 px-3.5 py-3 mb-4">
+          <p className="text-sm font-semibold text-sky-900 flex items-center gap-1.5">
+            <BookOpen className="h-4 w-4" /> صنف‌های شما
+          </p>
+          <p className="text-xs text-sky-800 leading-5 mt-1">
+            شما فقط شاگردان صنف‌هایی را می‌بینید که در آنها مضمون تدریس می‌کنید یا نگران آن صنف هستید.
+            {!permStudents && ' در حال حاضر مدیر اجازهٔ ثبت و ویرایش شاگردان را به معلمان نداده است — دسترسی شما فقط مشاهده است.'}
+          </p>
+          {classes.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {classes.map((c) => (
+                <Badge key={c.id} variant="outline" className="border-sky-300 text-sky-800">
+                  {c.name}
+                  {c.classSubjects?.some((cs) => cs.teacherId === user.teacherId) && (
+                    <span className="text-[10px] text-sky-600">
+                      {' '}({c.classSubjects.filter((cs) => cs.teacherId === user.teacherId).map((cs) => cs.subject.name).join('، ')})
+                    </span>
+                  )}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2 mb-4">
         <div className="relative flex-1 min-w-[200px]">

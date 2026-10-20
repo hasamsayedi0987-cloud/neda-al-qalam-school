@@ -13,7 +13,7 @@ import { PageHeader, LoadingBlock, EmptyState, Field } from './ui-bits';
 import { apiGet, apiSend } from '@/lib/client/api';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, TeacherInfo } from '@/lib/types';
-import { Plus, Pencil, Trash2, UserCog } from 'lucide-react';
+import { Plus, Pencil, Trash2, UserCog, BookOpen } from 'lucide-react';
 
 const POSITIONS = ['معلم', 'سرمعلم', 'مدیر', 'ملازم', 'کارمند', 'کتابخانه‌دار'];
 
@@ -110,6 +110,7 @@ export function TeachersView({ user }: { user: SessionUser }) {
                     <TableHead className="hidden md:table-cell">تحصیلات</TableHead>
                     <TableHead className="hidden md:table-cell">تماس</TableHead>
                     <TableHead className="hidden lg:table-cell">حساب کاربری</TableHead>
+                    <TableHead>مضامین سپرده‌شده</TableHead>
                     <TableHead>فعال</TableHead>
                     {canEdit && <TableHead className="text-left">عملیات</TableHead>}
                   </TableRow>
@@ -133,6 +134,25 @@ export function TeachersView({ user }: { user: SessionUser }) {
                             @{t.username}{t.userActive ? '' : ' (غیرفعال)'}
                           </span>
                         ) : 'بدون حساب'}
+                      </TableCell>
+                      <TableCell>
+                        {(t.assignments?.length || 0) === 0 ? (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1 max-w-[240px]">
+                            {t.assignments!.map((a, j) => (
+                              <Badge
+                                key={j}
+                                variant="outline"
+                                className="border-emerald-200 text-emerald-700 text-[10px] gap-0.5"
+                                title={`${a.subjectName} در ${a.className}`}
+                              >
+                                <BookOpen className="h-2.5 w-2.5" />
+                                {a.subjectName} — {a.className}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         {canEdit ? (

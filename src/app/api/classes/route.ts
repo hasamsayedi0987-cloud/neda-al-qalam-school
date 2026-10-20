@@ -2,11 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireUser, requireRole, ApiError } from '@/lib/auth';
 import { handleApiError, num, str } from '@/lib/api-helpers';
+import { teacherClassIds } from '@/lib/teacher-scope';
 
 export async function GET() {
   try {
-    await requireUser();
+    const me = await requireUser();
+    // معلم فقط صنف‌های تحت اختیار خود را می‌بیند (صنف‌هایی که در آنها تدریس می‌کند یا نگران آن است)
+    const scoped = me.role === 'TEACHER' ? await teacherClassIds(me.teacherId || '') : null;
     const classes = await db.class.findMany({
+      where: scoped ? { id: { in: scoped } } : undefined,
       orderBy: { grade: 'asc' },
       include: {
         supervisor: { select: { id: true, name: true } },

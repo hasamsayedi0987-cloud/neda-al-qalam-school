@@ -66,7 +66,21 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () => void }) {
-  const [view, setView] = useState('dashboard');
+  // لینک‌پذیری عمیق: بازشدن مستقیم یک بخش با پارامتر آدرس (?view=grades)
+  const [view, setViewRaw] = useState(() => {
+    if (typeof window === 'undefined') return 'dashboard';
+    const v = new URLSearchParams(window.location.search).get('view');
+    if (!v) return 'dashboard';
+    if (v.startsWith('custom:')) return v;
+    return NAV_ITEMS.some((n) => n.key === v && n.roles.includes(user.role)) ? v : 'dashboard';
+  });
+  const setView = (v: string) => {
+    setViewRaw(v);
+    // پاک‌کردن پارامترهای لینک هنگام جابه‌جایی منو
+    if (typeof window !== 'undefined' && window.location.search) {
+      window.history.replaceState(null, '', '/');
+    }
+  };
   const [navOpen, setNavOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationInfo[]>([]);
   const [unread, setUnread] = useState(0);

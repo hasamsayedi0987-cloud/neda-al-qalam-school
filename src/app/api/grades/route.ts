@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { requireUser, requireRole, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
 import { clampComponent, componentTotal } from '@/lib/grading';
+import { getTeacherPerms, ownsClassSubject } from '@/lib/teacher-scope';
 
 async function getWeights() {
   const settings = await db.setting.findMany({
@@ -139,6 +140,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    // ─── حذف نمرهٔ شاگرد/شاگردان از یک مضمون (با مجوز مدیر برای معلم) ───
+    if (action === 'delete') {
+      const classSubjectId = str(body.classSubjectId);
+      const period = str(body.period);
+      const studentIds: string[] = Array.isArray(body.studentIds) ? body.studentIds.map((x: unknown) => str(x)).filter(Boolean) : [];
+      if (!classSubjectId || !studentIds.length) throw new ApiError('مضمون و شاگرد را مشخص کنید');
+      if (me.role === 'TEACHER') {
+        const perms = await getTeacherPerms();
+        if (!perms.gradeDelete) {
+          throw new ApiError('مدیر اجازهٔ حذف نمرات را به معلمان نداده است', 403);
+        }
+        if (!(await ownsClassSubject(me.teacherId || '', classSubjectId))) {
+          throw new ApiError('این مضمون به شما سپرده نشده است', 403);
+        }
+      } else {
+        await requireRole('ADMIN', 'HEADTEACHER');
+      }
+      const del = await db.grade.deleteMany({
+        where: { classSubjectId, period, studentId: { in: studentIds } },
+      });
+      return NextResponse.json({ ok: true, deleted: del.count });
+    }
+
     // ─── ثبت/به‌روزرسانی نمرات (گروهی) ───
     await requireRole('ADMIN', 'HEADTEACHER', 'TEACHER');
     const classSubjectId = str(body.classSubjectId);
@@ -152,12 +176,19 @@ export async function POST(req: NextRequest) {
       include: { subject: true },
     });
     if (!cs) throw new ApiError('مضمون یافت نشد');
-    if (me.role === 'TEACHER' && cs.teacherId !== me.teacherId) {
-      throw new ApiError('این مضمون به شما سپرده نشده است', 403);
+    const teacherPerms = me.role === 'TEACHER' ? await getTeacherPerms() : null;
+    if (me.role === 'TEACHER') {
+      if (!teacherPerms?.grades) {
+        throw new ApiError('مدیر اجازهٔ ثبت و ویرایش نمرات را به معلمان نداده است', 403);
+      }
+      if (cs.teacherId !== me.teacherId) {
+        throw new ApiError('این مضمون به شما سپرده نشده است', 403);
+      }
     }
     const w = await getWeights();
 
     let saved = 0;
+    let blockedDeletes = 0; // حذف‌های مسدودشده به‌خاطر نداشتن مجوز مدیر
     for (const item of items) {
       const studentId = str(item.studentId);
       if (!studentId) continue;
@@ -176,6 +207,11 @@ export async function POST(req: NextRequest) {
       const hasAny = written != null || oral != null || homework != null || activity != null;
       if (!hasAny && !existing) continue;
       if (!hasAny && existing) {
+        // حذف نمره (پاک‌کردن همهٔ اجزا) — برای معلم نیازمند مجوز مدیر است
+        if (me.role === 'TEACHER' && !teacherPerms?.gradeDelete) {
+          blockedDeletes += 1;
+          continue;
+        }
         await db.grade.delete({ where: { id: existing.id } });
         saved += 1;
         continue;
@@ -196,7 +232,7 @@ export async function POST(req: NextRequest) {
       });
       saved += 1;
     }
-    return NextResponse.json({ ok: true, saved });
+    return NextResponse.json({ ok: true, saved, blockedDeletes });
   } catch (e) {
     return handleApiError(e);
   }
