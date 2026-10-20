@@ -86,3 +86,26 @@ Stage Summary:
 - APK خصوصی: /home/z/my-project/download/nedaalqalam-school.apk (۵.۶MB، صفر پیکربندی)
 - APK عمومی: Release v1.1.0 (توکن یک‌بار در اولین اجرا)
 - امنیت: توکن در repo/site عمومی نیست؛ رمزها scrypt؛ توکن اصلی کاربر باید regenerate شود
+
+---
+Task ID: guide-1
+Agent: main (Z.ai)
+Task: ساخت «فایل آی‌پی» قابل دانلود — راهنمای ورود برای کارمندان و معلمان (درخواست کاربر)
+
+Work Log:
+- تأیید سایت زنده: https://hasamsayedi0987-cloud.github.io/neda-al-qalam-school/ (HTTP 200، ۰.۳۶s)
+- استخراج حساب‌های اصلی از scripts/seed-github.mjs (۷ حساب: admin/sarallam/teacher/staff/library/student/parent)
+- مطالعهٔ کامل مهارت PDF: SKILL.md + briefs/creative-fixed-canvas.md + fonts.md + palette/overflow/fill-engine/geometry/pagination/typography
+- مسیر RTL: HTML دستی dir=rtl (bypass blueprint) + html2pdf-next.js --nopaged
+- فونت Vazirmatn (Regular/Bold/Black) از jsdelivr دانلود و به‌صورت base64 جاسازی شد؛ QR آدرس سایت با کتابخانهٔ qrcode تولید شد
+- قالب ۲ صفحه‌ای A4: صفحهٔ ۱ (آدرس+QR+سه گام+نوار «بدون نیاز به آی‌پی»)، صفحهٔ ۲ (جدول ۷ حساب+۴ نکته+کارت APK+تماس)
+- اعتبارسنجی poster_validate: ابتدا ۳ خطای FONT_NO_FALLBACK روی خود تعریف‌های @font-face (خطای کاذب) → انتقال @font-face به fonts.css خارجی برای نسخهٔ رندر → PASS
+- رفع سرریز عمودی با اسکریپت اندازه‌گیری Playwright (measure.js): صفحهٔ ۲ از ۱۲۰۰px به ۱۱۲۳px رسید → دقیقاً ۲ صفحه
+- pdf_qa.py: PASS کامل (فونت embed، بدون سرریز، بدون صفحهٔ خالی، حاشیه متقارن، پر بودن صفحات)؛ U+FFFD = صفر
+- متادیتا ثبت شد (Title/Author/Subject/Creator)
+- تحویلی‌ها در download/: راهنمای-ورود-به-سیستم.pdf (۲ صفحه، ۶۲۷KB) + .html خودکفا + پیش-نمایش-راهنما.png + آدرس-و-حساب-های-کاربری.txt
+
+Stage Summary:
+- «فایل آی‌پی» کاربر آمادهٔ توزیع است: PDF فارسی RTL دو صفحه‌ای با آدرس سایت، QR، سه گام ورود و جدول کامل حساب‌های کاربری
+- فایل TXT ساده هم برای کپی-پیست در گروه‌ها (واتساپ/تلگرام) ساخته شد
+- سایت منبع: GitHub Pages (همیشه روشن) — همان آدرس در PDF و TXT و QR یکسان است

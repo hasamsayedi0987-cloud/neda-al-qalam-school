@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>راهنمای ورود به سیستم — مکتب خصوصی نداالقلم</title>
+<style>
+/* ───────── فونت فارسی Vazirmatn (جاسازی‌شده) ───────── */
+@font-face { font-family:'Vazirmatn'; src:url(data:font/ttf;base64,__FONT_REG__) format('truetype'); font-weight:400; font-style:normal; font-display:swap; }
+@font-face { font-family:'Vazirmatn'; src:url(data:font/ttf;base64,__FONT_BOLD__) format('truetype'); font-weight:700; font-style:normal; font-display:swap; }
+@font-face { font-family:'Vazirmatn'; src:url(data:font/ttf;base64,__FONT_BLACK__) format('truetype'); font-weight:900; font-style:normal; font-display:swap; }
+
+/* ───────── صفحهٔ A4 تمام‌قاب — قواعد اجباری مهارت PDF ───────── */
+@page { size: 210mm 297mm; margin: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --navy-d:#14295E; --navy:#1B3C8C; --navy-mid:#3A4E75;
+  --tint:#F2F5FB; --line:#D8E0F0; --accent:#C87C08;
+  --text:#22283A; --muted:#5A6478;
+}
+html, body {
+  margin:0; padding:0; width:210mm; background:#ffffff;
+  font-family:'Vazirmatn', sans-serif; color:var(--text);
+  -webkit-print-color-adjust:exact; print-color-adjust:exact;
+  line-break:strict; word-break:normal; overflow-wrap:break-word;
+}
+.page { width:210mm; height:297mm; position:relative; background:#ffffff;
+  display:flex; flex-direction:column; break-after:page; page-break-after:always; }
+.page:last-child { break-after:auto; page-break-after:auto; }
+.inner { flex:1 0 auto; padding:7mm 12mm 6mm; display:flex; flex-direction:column; }
+p, td, li { line-break:strict; text-align:right; }
+
+/* پیش‌نمایش مرورگر — مقیاس خودکار (فقط صفحه‌نمایش) */
+@media screen {
+  html { height:auto; display:flex; justify-content:center; background:#e9edf5; }
+  body { transform-origin:top center; scale:min(1, calc(100vw / 794)); margin:0 auto;
+    box-shadow:0 0 46px rgba(20,41,94,.28); }
+}
+
+/* ───────── سربرگ صفحهٔ ۱ ───────── */
+.head { background:linear-gradient(135deg, #14295E 0%, #1B3C8C 100%);
+  color:#ffffff; padding:8mm 12mm 7mm; display:flex; align-items:center; gap:7mm; position:relative; }
+.head .deco { position:absolute; left:6mm; top:4mm; width:34mm; height:26mm; opacity:.9; }
+.head .logo { width:23mm; height:23mm; background:#ffffff; border-radius:50%;
+  padding:1.8mm; flex-shrink:0; position:relative; z-index:2; }
+.head .logo img { width:100%; height:100%; object-fit:contain; display:block; }
+.head .htext { position:relative; z-index:2; }
+.head .brand { font-size:18px; font-weight:900; line-height:1.5; }
+.head .sub { font-size:12.5px; color:rgba(255,255,255,.82); margin-top:1.2mm; }
+.head .badge { margin-inline-start:auto; position:relative; z-index:2; border:1px solid rgba(255,255,255,.45);
+  border-radius:999px; padding:2.2mm 4.6mm; font-size:12.5px; font-weight:700; white-space:nowrap; }
+
+/* ───────── عنوان و مقدمه ───────── */
+.titlewrap { margin-top:6.5mm; }
+.kicker { font-size:13px; font-weight:700; color:var(--accent); }
+h1 { font-size:32px; font-weight:900; color:var(--navy-d); line-height:1.4; margin-top:2mm; }
+.accent-line { width:26mm; height:1.4mm; border-radius:2mm; background:var(--accent); margin-top:3mm; }
+.lead { font-size:14px; line-height:1.85; color:var(--muted); margin-top:4mm; max-width:172mm; }
+.lead b { color:var(--text); }
+
+/* ───────── کارت آدرس سایت ───────── */
+.addr { margin-top:6.5mm; background:var(--tint); border:1px solid var(--line);
+  border-radius:4mm; padding:6.5mm; display:flex; align-items:center; gap:7mm; break-inside:avoid; }
+.addr .atext { flex:1 1 auto; min-width:0; }
+.addr .label { display:inline-block; font-size:12.5px; font-weight:700; color:#ffffff;
+  background:var(--navy-mid); border-radius:999px; padding:1.6mm 4.5mm; }
+.addr .url { direction:ltr; unicode-bidi:isolate; text-align:left; font-size:17px; font-weight:900;
+  color:var(--navy-d); margin-top:3.5mm; overflow-wrap:break-word; word-break:normal; line-height:1.55; }
+.addr .uhint { font-size:12.5px; color:var(--muted); margin-top:3mm; line-height:1.75; }
+.addr .chips { display:flex; flex-wrap:wrap; gap:2.4mm; margin-top:3.5mm; max-width:100%; }
+.chip { flex:0 1 auto; min-width:0; font-size:12px; font-weight:700; color:var(--navy);
+  background:#ffffff; border:1px solid var(--line); border-radius:999px; padding:1.6mm 3.8mm; }
+.qrbox { flex:0 0 auto; text-align:center; }
+.qrbox img { width:34mm; height:34mm; display:block; border:1.4mm solid #ffffff;
+  border-radius:2.5mm; box-shadow:0 0 0 1px var(--line); }
+.qrbox .cap { font-size:11.5px; color:var(--muted); margin-top:2.4mm; line-height:1.6; }
+
+/* ───────── سه گام ورود ───────── */
+.sec-title { display:flex; align-items:center; gap:4mm; margin-top:7mm; }
+.sec-title .num { font-size:15px; font-weight:900; color:var(--navy); }
+.sec-title h2 { font-size:24px; font-weight:900; color:var(--navy-d); }
+.sec-title .rule { flex:1 1 auto; height:1px; background:var(--line); }
+.steps { display:flex; flex-wrap:wrap; gap:5mm; margin-top:4.5mm; max-width:100%; }
+.step { flex:1 1 55mm; min-width:52mm; max-width:100%; background:#ffffff; border:1px solid var(--line);
+  border-top:1.2mm solid var(--navy); border-radius:3mm; padding:4.5mm 4.5mm; break-inside:avoid; }
+.step .n { width:9.5mm; height:9.5mm; border-radius:50%; background:var(--accent); color:#ffffff;
+  font-size:15px; font-weight:900; display:flex; align-items:center; justify-content:center; }
+.step h3 { font-size:15px; font-weight:900; color:var(--navy-d); margin-top:3mm; line-height:1.5; }
+.step p { font-size:13px; color:var(--muted); line-height:1.8; margin-top:1.8mm; }
+.step .ltr { direction:ltr; unicode-bidi:isolate; unicode-bidi:plaintext; }
+
+/* ───────── نوار یادآوری ───────── */
+.note { margin-top:6.5mm; background:#ffffff; border:1px solid var(--line);
+  border-inline-start:1.4mm solid var(--accent); border-radius:3mm; padding:4.2mm 5.5mm;
+  display:flex; align-items:flex-start; gap:4.5mm; break-inside:avoid; }
+.note .dot { flex:0 0 auto; width:4mm; height:4mm; border-radius:50%; background:var(--accent); margin-top:2.4mm; }
+.note p { font-size:14.5px; line-height:1.9; color:var(--text); }
+.note b { color:var(--navy-d); }
+
+/* ───────── پانوشت ───────── */
+.foot { flex-shrink:0; margin:0 12mm; border-top:1px solid var(--line); padding:2.5mm 0 4mm;
+  display:flex; align-items:center; justify-content:space-between; font-size:11.5px; color:var(--muted); }
+.foot .pg { font-weight:900; color:var(--navy); font-size:13px; }
+.foot .ltr { direction:ltr; unicode-bidi:isolate; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ صفحهٔ ۱ — راهنمای اتصال ═══════════ -->
+<div class="page">
+  <div class="head">
+    <svg class="deco" viewBox="0 0 130 100" fill="none" aria-hidden="true">
+      <circle cx="95" cy="45" r="34" stroke="#ffffff" stroke-width="0.6" opacity="0.16"/>
+      <circle cx="80" cy="55" r="26" stroke="#ffffff" stroke-width="0.5" opacity="0.22"/>
+      <circle cx="62" cy="30" r="4" fill="#ffffff" opacity="0.35"/>
+      <line x1="8" y1="88" x2="118" y2="88" stroke="#ffffff" stroke-width="0.5" opacity="0.18"/>
+    </svg>
+    <div class="logo"><img src="data:image/png;base64,__LOGO_B64__" alt="نشان مکتب"></div>
+    <div class="htext">
+      <div class="brand">مکتب خصوصی نداالقلم</div>
+      <div class="sub">ولایت بدخشان، ولسوالی بهارک &nbsp;|&nbsp; سال تحصیلی ۱۴۰۴</div>
+    </div>
+    <div class="badge">سیستم ابری — همیشه در دسترس</div>
+  </div>
+
+  <div class="inner">
+    <div class="titlewrap">
+      <div class="kicker">راهنمای کاربران — کارمندان، معلمان، شاگردان و سرپرستان</div>
+      <h1>ورود به سیستم مدیریت مکتب</h1>
+      <div class="accent-line"></div>
+      <p class="lead">این سیستم در <b>سایت</b> و <b>اپلیکیشن اندروید</b> یکی است؛ هر معلومی که در یکی ثبت شود، به‌صورت خودکار برای همهٔ کاربران در هر دستگاهی همگام می‌گردد. برای ورود، تنها به <b>نام کاربری</b> و <b>رمز عبور</b> خود نیاز دارید.</p>
+    </div>
+
+    <div class="addr">
+      <div class="atext">
+        <span class="label">آدرس سایت — لینک مستقیم</span>
+        <div class="url">https://hasamsayedi0987-cloud.github.io/neda-al-qalam-school/</div>
+        <div class="uhint">این آدرس را در مرورگر گوشی یا کمپیوتر (Chrome) باز کنید. سایت ۲۴ ساعته روشن است و به هیچ تنظیم و آدرس دیگری نیاز ندارد.</div>
+        <div class="chips">
+          <span class="chip">همیشه روشن — حتی با خاموش بودن گوشی مدیریت</span>
+          <span class="chip">بدون نیاز به آی‌پی</span>
+          <span class="chip">همگام‌سازی خودکار</span>
+        </div>
+      </div>
+      <div class="qrbox">
+        <img src="data:image/png;base64,__QR_B64__" alt="رمز QR آدرس سایت">
+        <div class="cap">برای بازکردن سریع در گوشی،<br>این رمز را با دوربین اسکن کنید</div>
+      </div>
+    </div>
+
+    <div class="sec-title">
+      <span class="num">۱</span>
+      <h2>سه گام سادهٔ ورود</h2>
+      <div class="rule"></div>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="n">۱</div>
+        <h3>سایت را باز کنید</h3>
+        <p>آدرس سایت را در مرورگر باز کنید یا رمز <span class="ltr">QR</span> را اسکن نمایید.</p>
+      </div>
+      <div class="step">
+        <div class="n">۲</div>
+        <h3>حساب خود را وارد کنید</h3>
+        <p>نام کاربری و رمز عبوری را که مدیریت به شما داده است، وارد کنید.</p>
+      </div>
+      <div class="step">
+        <div class="n">۳</div>
+        <h3>وارد شوید</h3>
+        <p>دکمهٔ «ورود به سیستم» را بزنید؛ بخش‌های مربوط به خود را خواهید دید.</p>
+      </div>
+    </div>
+
+    <div class="note">
+      <div class="dot"></div>
+      <p><b>هیچ‌گاه نیاز به نوشتن آی‌پی آدرس نیست.</b> هر زمان که سایت را باز کنید و نام کاربری و رمز عبور را وارد نمایید، وارد سیستم می‌شوید — برای شما و برای تمام کاربران مکتب به همین شکل است.</p>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>مکتب خصوصی نداالقلم — سیستم مدیریت مکتب</span>
+    <span class="ltr">0791680632&nbsp;|&nbsp;hasamsayedi0987@gmail.com</span>
+    <span class="pg">۱</span>
+  </div>
+</div>
+
+<style>
+/* ───────── صفحهٔ ۲ ───────── */
+.head2 { display:flex; align-items:center; gap:5mm; padding:4mm 12mm 3mm;
+  border-bottom:1px solid var(--line); }
+.head2 img { width:12mm; height:12mm; object-fit:contain; flex-shrink:0; }
+.head2 .t { font-size:15px; font-weight:900; color:var(--navy-d); }
+.head2 .s { font-size:11.5px; color:var(--muted); margin-top:.8mm; }
+.head2 .tag { margin-inline-start:auto; font-size:12px; font-weight:700; color:var(--navy);
+  background:var(--tint); border:1px solid var(--line); border-radius:999px; padding:1.8mm 4.2mm; white-space:nowrap; }
+
+.page2-title { margin-top:2.5mm; }
+h2.h2 { font-size:25px; font-weight:900; color:var(--navy-d); line-height:1.45; }
+.page2-sub { font-size:13px; color:var(--muted); line-height:1.75; margin-top:2mm; }
+
+table.accounts { width:100%; border-collapse:collapse; margin-top:3.5mm; break-inside:avoid; }
+table.accounts thead { display:table-header-group; }
+table.accounts th { background:var(--navy-mid); color:#ffffff; font-size:13.5px; font-weight:700;
+  padding:2.4mm 3mm; text-align:right; border:1px solid var(--navy-mid); }
+table.accounts td { font-size:14px; padding:1.9mm 3mm; border:1px solid var(--line); line-height:1.5;
+  vertical-align:middle; overflow-wrap:break-word; }
+table.accounts tbody tr:nth-child(odd) { background:var(--tint); }
+table.accounts tbody tr { break-inside:avoid; }
+table.accounts .c { direction:ltr; unicode-bidi:isolate; text-align:center; font-weight:700; color:var(--navy-d); letter-spacing:.2px; }
+table.accounts .role { font-weight:700; color:var(--text); }
+table.accounts .role small { display:block; font-weight:400; font-size:10px; color:var(--muted); margin-top:.3mm; }
+table.accounts tr.admin td { background:rgba(200,124,8,.10); border-top:1px solid var(--line); }
+table.accounts tr.admin td:first-child { border-inline-start:1.2mm solid var(--accent); }
+.tbl-hint { font-size:12.5px; color:var(--muted); line-height:1.7; margin-top:1.5mm; }
+.tbl-hint b { color:var(--navy-d); }
+
+.notes { margin-top:3.5mm; }
+.note-item { display:flex; align-items:flex-start; gap:4mm; padding:2mm 0;
+  border-bottom:1px dashed var(--line); break-inside:avoid; }
+.note-item:last-child { border-bottom:none; }
+.note-item .b { flex:0 0 auto; width:3.2mm; height:3.2mm; border-radius:50%; background:var(--navy); margin-top:2.6mm; }
+.note-item p { font-size:14px; line-height:1.62; color:var(--text); }
+.note-item b { color:var(--navy-d); }
+.note-item .ltr { direction:ltr; unicode-bidi:isolate; }
+
+.duo { display:flex; flex-wrap:wrap; gap:5mm; margin-top:3.5mm; max-width:100%; }
+.card { flex:1 1 80mm; min-width:75mm; max-width:100%; background:var(--tint); border:1px solid var(--line);
+  border-radius:3mm; padding:3.5mm 4mm; break-inside:avoid; }
+.card h3 { font-size:15px; font-weight:900; color:var(--navy-d); display:flex; align-items:center; gap:3mm; }
+.card h3 .ic { width:7.5mm; height:7.5mm; border-radius:2mm; background:var(--navy); color:#fff;
+  display:flex; align-items:center; justify-content:center; font-size:11.5px; flex-shrink:0; }
+.card p { font-size:12px; line-height:1.7; color:var(--muted); margin-top:2mm; }
+.card .ltr { direction:ltr; unicode-bidi:isolate; unicode-bidi:plaintext; text-align:right; display:inline-block;
+  font-weight:700; color:var(--navy); overflow-wrap:break-word; word-break:break-all; font-size:11px; }
+.card .v { display:inline-block; font-size:11.5px; font-weight:700; color:#fff; background:var(--accent);
+  border-radius:999px; padding:.8mm 3.4mm; margin-inline-start:2mm; }
+</style>
+
+<!-- ═══════════ صفحهٔ ۲ — حساب‌ها و نکات ═══════════ -->
+<div class="page">
+  <div class="head2">
+    <img src="data:image/png;base64,__LOGO_B64__" alt="نشان مکتب">
+    <div>
+      <div class="t">مکتب خصوصی نداالقلم</div>
+      <div class="s">راهنمای ورود به سیستم مدیریت مکتب — بخش دوم</div>
+    </div>
+    <span class="tag">حساب‌های کاربری</span>
+  </div>
+
+  <div class="inner">
+    <div class="page2-title">
+      <h2 class="h2">حساب‌های کاربری برای ورود</h2>
+      <p class="page2-sub">هر کارمند و معلم با حساب مربوط به خود وارد می‌شود؛ رمزها را در اختیار افراد خارج از مکتب قرار ندهید.</p>
+    </div>
+
+    <table class="accounts">
+      <thead>
+        <tr><th style="width:24%">بخش</th><th style="width:21%">نام کاربری</th><th style="width:19%">رمز عبور</th><th style="width:36%">نام کاربر</th></tr>
+      </thead>
+      <tbody>
+        <tr class="admin"><td class="role">مدیریت<small>دسترسی به همهٔ بخش‌ها</small></td><td class="c">admin</td><td class="c">admin123</td><td>حسام الدین سیدی</td></tr>
+        <tr><td class="role">سرمعلم<small>تأیید نمرات و گزارش‌ها</small></td><td class="c">sarallam</td><td class="c">12345678</td><td>عبدالبصیر نظری</td></tr>
+        <tr><td class="role">معلم<small>نمرات و حاضری صنف</small></td><td class="c">teacher</td><td class="c">12345678</td><td>فاطمه احمدی</td></tr>
+        <tr><td class="role">کارمند<small>اطلاعیه‌ها و وظایف</small></td><td class="c">staff</td><td class="c">12345678</td><td>علی جان نظربیک</td></tr>
+        <tr><td class="role">کتابخانه<small>کتاب‌ها و امانات</small></td><td class="c">library</td><td class="c">12345678</td><td>خدیجه صادقی</td></tr>
+        <tr><td class="role">شاگرد<small>دیدن نمرات و حاضری</small></td><td class="c">student</td><td class="c">12345678</td><td>احمد سیدی</td></tr>
+        <tr><td class="role">سرپرست<small>پیگیری وضعیت شاگرد</small></td><td class="c">parent</td><td class="c">12345678</td><td>سرپرست احمد سیدی</td></tr>
+      </tbody>
+    </table>
+    <p class="tbl-hint">برای معلمان و کارمندان جدید، مدیریت مکتب از بخش «یوزرها» حساب جداگانه می‌سازد و رمز فراموش‌شده را همان‌جا بازیابی می‌کند.</p>
+
+    <div class="notes">
+      <div class="sec-title" style="margin-top:0">
+        <span class="num">۲</span>
+        <h2 style="font-size:24px;font-weight:900;color:var(--navy-d)">نکات مهم</h2>
+        <div class="rule"></div>
+      </div>
+      <div class="note-item"><div class="b"></div><p><b>همگام‌سازی خودکار:</b> هر معلومی که در سایت یا اپ ثبت شود، بلافاصله برای همهٔ دستگاه‌ها همگام می‌شود؛ نیازی به انتقال دستی معلومات نیست.</p></div>
+      <div class="note-item"><div class="b"></div><p><b>کار بدون انترنت:</b> اپ اندروید بدون انترنت هم کار می‌کند؛ معلومات در گوشی ذخیره و پس از وصل شدن، خودکار به سیستم ارسال می‌گردد.</p></div>
+      <div class="note-item"><div class="b"></div><p><b>امنیت:</b> پس از پایان کار از حساب خود خارج شوید و رمز خود را با کسی شریک نسازید؛ تغییر رمزها از بخش مدیریت امکان‌پذیر است.</p></div>
+      <div class="note-item"><div class="b"></div><p><b>فراموشی رمز:</b> با مدیریت مکتب به شمارهٔ <span class="ltr">0791680632</span> تماس بگیرید تا حساب شما دوباره فعال شود.</p></div>
+    </div>
+
+    <div class="duo">
+      <div class="card">
+        <h3><span class="ic">APK</span> اپلیکیشن اندروید <span class="v">v1.1.0</span></h3>
+        <p>برای استفادهٔ راحت در گوشی، فایل اپ را از صفحهٔ <span class="ltr">Releases</span> مخزن مکتب دریافت و نصب کنید: <span class="ltr">github.com/hasamsayedi0987-cloud/neda-al-qalam-school/releases</span></p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">i</span> تماس با مدیریت</h3>
+        <p>مدیر مکتب: <b style="color:var(--text)">حسام الدین سیدی</b> — بدخشان، بهارک<br>تلفن: <span class="ltr">0791680632</span> — ایمیل: <span class="ltr">hasamsayedi0987@gmail.com</span></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>مکتب خصوصی نداالقلم — سیستم مدیریت مکتب</span>
+    <span class="ltr">0791680632&nbsp;|&nbsp;hasamsayedi0987@gmail.com</span>
+    <span class="pg">۲</span>
+  </div>
+</div>
+
+</body>
+</html>
