@@ -161,4 +161,11 @@ html {
   .print-area, .print-area * { visibility: visible; }
   .print-area { position: absolute; inset: 0; padding: 16px; }
   .no-print { display: none !important; }
+  /* تقدیرنامه — فقط ورق A4 چاپ می‌شود */
+  #cert-print-root, #cert-print-root * { visibility: visible !important; }
+  #cert-print-root {
+    position: absolute;
+    inset: 0;
+    display: block !important;
+  }
 }

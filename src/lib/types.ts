@@ -150,6 +150,9 @@ export interface AppSettings {
   maxHomework: string;
   maxActivity: string;
   resultNote?: string;
+  gradeScale?: string; // JSON: [{label,min}] — مکتسبه‌های قابل تنظیم
+  aboutApp?: string; // JSON: متن دربارهٔ اپ + عکس
+  aboutDev?: string; // JSON: معلومات سازنده + عکس
 }
 
 export interface ResultsRow {

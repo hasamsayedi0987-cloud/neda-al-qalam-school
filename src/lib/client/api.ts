@@ -1,35 +1,15 @@
 'use client';
 
 /**
- * لایهٔ دادهٔ کلاینت — مکتب خصوصی نداالقلم
- * معماری «گیت‌هاب به‌عنوان دیتابیس ابری»: همهٔ درخواست‌های /api/* به‌صورت محلی
- * به مخزن دادهٔ خصوصی گیت‌هاب ترجمه می‌شوند. آفلاین: خواندن از کش، نوشتن در صف.
+ * لایهٔ ارتباط با سرور با پشتیبانی آفلاین — مکتب خصوصی نداالقلم
+ * - آنلاین: درخواست مستقیم به سرور (سریع — دیتابیس SQLite سرور)
+ * - آفلاین: خواندن از آخرین کش، ثبت‌ها در صف و همگام‌سازی خودکار پس از اتصال
+ * - ورود آفلاین: بررسی محلی نام کاربری و رمز (پس از اولین ورود موفق روی همین دستگاه)
  */
 
-import { ApiError } from './backend-common';
-import { ghWarmup, ghConfigured } from './gh';
-import { authGet, authPost, currentAuthUser } from './handlers-core';
-import {
-  usersGet, usersPost, usersPatch, usersDelete,
-  studentsGet, studentsPost, studentsPatch, studentsDelete,
-  teachersGet, teachersPost, teachersPatch, teachersDelete,
-  classesGet, classesPost, classesPatch, classesDelete,
-  assignPost, assignDelete, subjectsGet, subjectsPost, subjectsPatch, subjectsDelete,
-  settingsGet, settingsPut,
-} from './handlers-core';
-import {
-  attendanceGet, attendancePost,
-  activitiesGet, activitiesPost, activitiesDelete,
-  gradesGet, gradesPost, resultsGet,
-  libraryGet, libraryPost, libraryDelete,
-  notificationsGet, notificationsPost, notificationsPatch, notificationsDelete,
-  tasksGet, tasksPost, tasksPatch, tasksDelete,
-  dashboardGet, backupGet, backupPost,
-} from './handlers-data';
-
-/* ───────────────  وضعیت همگام‌سازی  ─────────────── */
-
 const QUEUE_KEY = 'noq_offline_queue_v1';
+const GET_CACHE_KEY = 'noq_get_cache_v1';
+const CREDS_KEY = 'noq_offline_creds_v1';
 
 interface QueuedRequest {
   id: string;
@@ -56,7 +36,9 @@ function readQueue(): QueuedRequest[] {
 function writeQueue(q: QueuedRequest[]) {
   try {
     localStorage.setItem(QUEUE_KEY, JSON.stringify(q.slice(-200)));
-  } catch { /* quota */ }
+  } catch {
+    /* quota */
+  }
   pendingCount = q.length;
   notify();
 }
@@ -88,12 +70,15 @@ export async function flushQueue(): Promise<number> {
   let sent = 0;
   for (const item of queue) {
     try {
-      const result = await dispatch(item.method, item.url, item.body, true);
-      if (result && typeof result === 'object' && 'error' in result && (result as { error?: string }).error) {
-        remaining.push(item); // خطای منطقی — بعداً دوباره
-      } else {
-        sent += 1;
-      }
+      const res = await fetch(item.url, {
+        method: item.method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item.body),
+        cache: 'no-store',
+      });
+      if (res.ok) sent += 1;
+      else if (res.status < 500) sent += 0; // خطای منطقی: حذف از صف
+      else remaining.push(item);
     } catch {
       remaining.push(item);
     }
@@ -125,135 +110,64 @@ export interface ApiResult<T> {
   queued?: boolean;
 }
 
-/* ───────────────  روتر  ─────────────── */
+/* ───────────────  کش خواندن برای حالت آفلاین  ─────────────── */
 
-function parseUrl(raw: string): { path: string; sp: URLSearchParams } {
-  const qIdx = raw.indexOf('?');
-  const path = qIdx === -1 ? raw : raw.slice(0, qIdx);
-  const sp = new URLSearchParams(qIdx === -1 ? '' : raw.slice(qIdx + 1));
-  return { path, sp };
+interface CacheItem {
+  t: number;
+  data: unknown;
 }
 
-let warmupDone = false;
+function readGetCache(): Record<string, CacheItem> {
+  if (typeof window === 'undefined') return {};
+  try {
+    return JSON.parse(localStorage.getItem(GET_CACHE_KEY) || '{}') as Record<string, CacheItem>;
+  } catch {
+    return {};
+  }
+}
 
-async function dispatch(
-  method: string,
-  rawUrl: string,
-  body: unknown,
-  fromQueue = false,
-): Promise<unknown> {
-  const { path, sp } = parseUrl(rawUrl);
-  const b = (body || {}) as Record<string, unknown>;
-  void fromQueue;
-
-  // ─── auth (قبل از requireUser) ───
-  if (path === '/api/auth') {
-    if (method === 'GET') {
-      const result = await authGet();
-      // پس از ورود موفق، داده‌ها برای کارکرد آفلاین پیش‌بارگذاری می‌شوند
-      if ((result as { user?: unknown }).user && !warmupDone && ghConfigured()) {
-        warmupDone = true;
-        void ghWarmup();
-      }
-      return result;
+function writeGetCache(cache: Record<string, CacheItem>) {
+  try {
+    // سقف ۵۰۰ کلید — قدیمی‌ترین‌ها حذف می‌شوند
+    const keys = Object.keys(cache);
+    if (keys.length > 500) {
+      keys.sort((a, b) => (cache[a].t || 0) - (cache[b].t || 0));
+      for (const k of keys.slice(0, keys.length - 500)) delete cache[k];
     }
-    if (method === 'POST') return authPost(b);
-    throw new ApiError('متد نامعتبر', 405);
+    localStorage.setItem(GET_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    /* quota */
   }
-
-  const me = await currentAuthUser();
-
-  if (path === '/api/users') {
-    if (method === 'GET') return usersGet(me);
-    if (method === 'POST') return usersPost(me, b);
-    if (method === 'PATCH') return usersPatch(me, b);
-    if (method === 'DELETE') return usersDelete(me, sp.get('id') || '');
-  }
-  if (path === '/api/students') {
-    if (method === 'GET') return studentsGet(me, sp);
-    if (method === 'POST') return studentsPost(me, b);
-    if (method === 'PATCH') return studentsPatch(me, b);
-    if (method === 'DELETE') return studentsDelete(me, sp.get('id') || '');
-  }
-  if (path === '/api/teachers') {
-    if (method === 'GET') return teachersGet(me);
-    if (method === 'POST') return teachersPost(me, b);
-    if (method === 'PATCH') return teachersPatch(me, b);
-    if (method === 'DELETE') return teachersDelete(me, sp.get('id') || '');
-  }
-  if (path === '/api/classes') {
-    if (method === 'GET') return classesGet(me);
-    if (method === 'POST') return classesPost(me, b);
-    if (method === 'PATCH') return classesPatch(me, b);
-    if (method === 'DELETE') return classesDelete(me, sp.get('id') || '');
-  }
-  if (path === '/api/classes/assign') {
-    if (method === 'POST') return assignPost(me, b);
-    if (method === 'DELETE') return assignDelete(me, sp.get('csId') || '');
-  }
-  if (path === '/api/subjects') {
-    if (method === 'GET') return subjectsGet(me);
-    if (method === 'POST') return subjectsPost(me, b);
-    if (method === 'PATCH') return subjectsPatch(me, b);
-    if (method === 'DELETE') return subjectsDelete(me, sp.get('id') || '');
-  }
-  if (path === '/api/settings') {
-    if (method === 'GET') return settingsGet(me);
-    if (method === 'PUT') return settingsPut(me, b);
-  }
-  if (path === '/api/attendance') {
-    if (method === 'GET') return attendanceGet(me, sp);
-    if (method === 'POST') return attendancePost(me, b);
-  }
-  if (path === '/api/activities') {
-    if (method === 'GET') return activitiesGet(me, sp);
-    if (method === 'POST') return activitiesPost(me, b);
-    if (method === 'DELETE') return activitiesDelete(me, sp.get('id') || '');
-  }
-  if (path === '/api/grades') {
-    if (method === 'GET') return gradesGet(me, sp);
-    if (method === 'POST') return gradesPost(me, b);
-  }
-  if (path === '/api/results') {
-    if (method === 'GET') return resultsGet(me, sp);
-  }
-  if (path === '/api/library') {
-    if (method === 'GET') return libraryGet(me);
-    if (method === 'POST') return libraryPost(me, b);
-    if (method === 'DELETE') return libraryDelete(me, sp.get('id') || '');
-  }
-  if (path === '/api/notifications') {
-    if (method === 'GET') return notificationsGet(me);
-    if (method === 'POST') return notificationsPost(me, b);
-    if (method === 'PATCH') return notificationsPatch(me, b);
-    if (method === 'DELETE') return notificationsDelete(me, sp.get('id') || '');
-  }
-  if (path === '/api/tasks') {
-    if (method === 'GET') return tasksGet(me);
-    if (method === 'POST') return tasksPost(me, b);
-    if (method === 'PATCH') return tasksPatch(me, b);
-    if (method === 'DELETE') return tasksDelete(me, sp.get('id') || '');
-  }
-  if (path === '/api/dashboard') {
-    if (method === 'GET') return dashboardGet(me);
-  }
-  if (path === '/api/backup') {
-    if (method === 'GET') return backupGet(me);
-    if (method === 'POST') return backupPost(me, b);
-  }
-
-  throw new ApiError('مسیر یافت نشد', 404);
 }
 
-/* ───────────────  رابط عمومی  ─────────────── */
+function cacheGet(url: string, data: unknown) {
+  const cache = readGetCache();
+  cache[url] = { t: Date.now(), data };
+  writeGetCache(cache);
+}
+
+function cachePeek(url: string): unknown | undefined {
+  const item = readGetCache()[url];
+  return item ? item.data : undefined;
+}
 
 export async function apiGet<T>(url: string): Promise<T> {
   try {
-    return (await dispatch('GET', url, undefined)) as T;
+    const res = await fetch(url, { cache: 'no-store' });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      // خطای سرور — اگر کش داریم همان را برمی‌گردانیم (حالت آفلاین/خطا)
+      const cached = cachePeek(url);
+      if (cached !== undefined) return cached as T;
+      throw new Error(json.error || 'خطا در دریافت اطلاعات');
+    }
+    cacheGet(url, json);
+    return json as T;
   } catch (e) {
-    if (e instanceof ApiError) throw new Error(e.message);
-    if (e instanceof Error && e.message) throw e;
-    throw new Error('خطا در دریافت اطلاعات');
+    // شبکه قطع — از آخرین دادهٔ ذخیره‌شده استفاده می‌کنیم
+    const cached = cachePeek(url);
+    if (cached !== undefined) return cached as T;
+    throw e instanceof Error && e.message ? e : new Error('خطا در دریافت اطلاعات');
   }
 }
 
@@ -264,7 +178,6 @@ export async function apiSend<T = unknown>(
   body?: unknown,
   opts: { queueLabel?: string; allowQueue?: boolean } = {},
 ): Promise<ApiResult<T>> {
-  // عملیات نوشتن به مخزن داده، اینترنت می‌خواهد — در آفلاین در صف می‌ماند
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     if (opts.allowQueue !== false) {
       const queue = readQueue();
@@ -279,21 +192,18 @@ export async function apiSend<T = unknown>(
     }
     return { error: 'در حالت آفلاین این عملیات در دسترس نیست' };
   }
-
   try {
-    const data = (await dispatch(method, url, body)) as T;
-    // پس از اولین موفقیت، داده‌ها برای آفلاین پیش‌بارگذاری می‌شوند
-    if (!warmupDone && ghConfigured()) {
-      warmupDone = true;
-      void ghWarmup();
-    }
-    return { data };
-  } catch (e) {
-    const msg = e instanceof ApiError || e instanceof Error
-      ? e.message
-      : 'عملیات ناموفق بود';
-    // خطای شبکه — در صف قرار بگیرد
-    if ((e instanceof TypeError || (e as { status?: number })?.status === 0) && opts.allowQueue !== false) {
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+      cache: 'no-store',
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: json.error || 'عملیات ناموفق بود' };
+    return { data: json as T };
+  } catch {
+    if (opts.allowQueue !== false) {
       const queue = readQueue();
       queue.push({
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -304,6 +214,65 @@ export async function apiSend<T = unknown>(
       writeQueue(queue);
       return { queued: true };
     }
-    return { error: msg || 'عملیات ناموفق بود' };
+    return { error: 'اتصال به سرور برقرار نشد' };
   }
+}
+
+/* ───────────────  ورود آفلاین — بررسی محلی رمز  ─────────────── */
+
+export interface OfflineCred {
+  user: {
+    id: string; username: string; name: string; role: string;
+    phone: string | null; teacherId: string | null; studentId: string | null;
+  };
+  salt: string;
+  hash: string;
+}
+
+function toHex(buf: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function derive(password: string, salt: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: enc.encode(salt), iterations: 120_000, hash: 'SHA-256' },
+    key, 256,
+  );
+  return toHex(bits);
+}
+
+/** پس از ورود موفق آنلاین، مشخصات برای ورود آفلاین بعدی ذخیره می‌شود */
+export async function saveOfflineCred(user: OfflineCred['user'], password: string) {
+  if (typeof window === 'undefined' || !password) return;
+  try {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const saltHex = toHex(salt.buffer as ArrayBuffer);
+    const hash = await derive(password, saltHex);
+    const all = JSON.parse(localStorage.getItem(CREDS_KEY) || '{}') as Record<string, OfflineCred>;
+    all[user.username.toLowerCase()] = { user, salt: saltHex, hash };
+    localStorage.setItem(CREDS_KEY, JSON.stringify(all));
+  } catch { /* ignore */ }
+}
+
+/** ورود بدون اینترنت — رمز در برابر هش ذخیره‌شدهٔ همین دستگاه بررسی می‌شود */
+export async function offlineLogin(username: string, password: string): Promise<OfflineCred['user'] | null> {
+  if (typeof window === 'undefined') return null;
+  try {
+    const all = JSON.parse(localStorage.getItem(CREDS_KEY) || '{}') as Record<string, OfflineCred>;
+    const cred = all[username.trim().toLowerCase()];
+    if (!cred) return null;
+    const hash = await derive(password, cred.salt);
+    if (hash !== cred.hash) return null;
+    return cred.user;
+  } catch {
+    return null;
+  }
+}
+
+export function clearOfflineCreds() {
+  try {
+    localStorage.removeItem(CREDS_KEY);
+  } catch { /* ignore */ }
 }

@@ -1,0 +1,643 @@
+     1→'use client';
+     2→
+     3→/**
+     4→ * هندلرهای هسته — auth، users، students، teachers، classes، subjects، settings
+     5→ * رفتار ۱:۱ با نسخهٔ سرور (Next.js API) — مکتب خصوصی نداالقلم
+     6→ */
+     7→
+     8→import {
+     9→  ApiError, str, num, optNum, genId, nowIso, hashPassword, verifyPassword,
+    10→  load, mutate, loadSettingsMap, mutateSettingsMap,
+    11→  getSession, setSession, clearSession, requireUser, requireRole,
+    12→  type AuthUser, type Rec,
+    13→} from './backend-common';
+    14→
+    15→const VALID_ROLES = ['ADMIN', 'HEADTEACHER', 'TEACHER', 'STUDENT', 'GUARDIAN', 'STAFF', 'LIBRARIAN'];
+    16→const POSITIONS = ['معلم', 'سرمعلم', 'مدیر', 'ملازم', 'کارمند', 'کتابخانه‌دار'];
+    17→
+    18→interface UserRec extends Rec {
+    19→  username: string;
+    20→  password: string;
+    21→  name: string;
+    22→  role: string;
+    23→  active: boolean;
+    24→  phone: string | null;
+    25→  teacherId: string | null;
+    26→  studentId: string | null;
+    27→  createdAt: string;
+    28→}
+    29→
+    30→function toSessionUser(u: UserRec) {
+    31→  return {
+    32→    id: u.id, username: u.username, name: u.name, role: u.role,
+    33→    phone: u.phone ?? null, teacherId: u.teacherId ?? null, studentId: u.studentId ?? null,
+    34→  };
+    35→}
+    36→
+    37→/** کاربر جاری از نشست — با بررسی فعال بودن حساب */
+    38→export async function currentAuthUser(): Promise<AuthUser | null> {
+    39→  const session = getSession();
+    40→  if (!session) return null;
+    41→  try {
+    42→    const users = await load<UserRec[]>('users');
+    43→    const u = users.find((x) => x.id === session.uid);
+    44→    if (!u || !u.active) return null;
+    45→    return {
+    46→      id: u.id, username: u.username, name: u.name, role: u.role, active: u.active,
+    47→      phone: u.phone ?? null, teacherId: u.teacherId ?? null, studentId: u.studentId ?? null,
+    48→    };
+    49→  } catch {
+    50→    return null;
+    51→  }
+    52→}
+    53→
+    54→/* ───────────────────────  auth  ─────────────────────── */
+    55→
+    56→export async function authGet() {
+    57→  const me = await currentAuthUser();
+    58→  return { user: me ? toSessionUser(me as unknown as UserRec) : null };
+    59→}
+    60→
+    61→export async function authPost(body: Record<string, unknown>) {
+    62→  const action = str(body.action);
+    63→
+    64→  if (action === 'login') {
+    65→    const username = str(body.username).toLowerCase();
+    66→    const password = str(body.password);
+    67→    if (!username || !password) throw new ApiError('نام کاربری و رمز عبور را وارد کنید');
+    68→    const users = await load<UserRec[]>('users', { maxAgeMs: 120_000 });
+    69→    const user = users.find((u) => (u.username || '').toLowerCase() === username);
+    70→    if (!user || !(await verifyPassword(password, user.password || ''))) {
+    71→      throw new ApiError('نام کاربری یا رمز عبور نادرست است', 401);
+    72→    }
+    73→    if (!user.active) {
+    74→      throw new ApiError('حساب کاربری شما توسط مدیر غیرفعال شده است. لطفاً با مدیر مکتب تماس بگیرید.', 403);
+    75→    }
+    76→    setSession(user.id);
+    77→    return { user: toSessionUser(user) };
+    78→  }
+    79→
+    80→  if (action === 'logout') {
+    81→    clearSession();
+    82→    return { ok: true };
+    83→  }
+    84→
+    85→  if (action === 'change-password') {
+    86→    const me = requireUser(await currentAuthUser());
+    87→    const current = str(body.currentPassword);
+    88→    const next = str(body.newPassword);
+    89→    if (next.length < 6) throw new ApiError('رمز عبور جدید باید حداقل ۶ حرف باشد');
+    90→    await mutate('users', async (users) => {
+    91→      const u = users.find((x) => x.id === me.id) as UserRec | undefined;
+    92→      if (!u || !(await verifyPassword(current, u.password || ''))) {
+    93→        throw new ApiError('رمز عبور فعلی نادرست است');
+    94→      }
+    95→      u.password = await hashPassword(next);
+    96→      return { ok: true };
+    97→    }, `users: تغییر رمز عبور ${me.username}`);
+    98→    return { ok: true };
+    99→  }
+   100→
+   101→  throw new ApiError('عملیات نامعلوم');
+   102→}
+   103→
+   104→/* ───────────────────────  users  ─────────────────────── */
+   105→
+   106→export async function usersGet(me: AuthUser | null) {
+   107→  requireRole(me, 'ADMIN');
+   108→  const [users, students] = await Promise.all([
+   109→    load<UserRec[]>('users'),
+   110→    load<Rec[]>('students', { maxAgeMs: 120_000 }),
+   111→  ]);
+   112→  const sorted = [...users].sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+   113→  return {
+   114→    users: sorted.map((u) => ({
+   115→      id: u.id, username: u.username, name: u.name, role: u.role,
+   116→      active: u.active, phone: u.phone ?? null, teacherId: u.teacherId ?? null, studentId: u.studentId ?? null,
+   117→      studentName: (() => {
+   118→        const s = students.find((x) => x.id === u.studentId);
+   119→        return s ? `${s.firstName} ${s.lastName}` : null;
+   120→      })(),
+   121→    })),
+   122→  };
+   123→}
+   124→
+   125→export async function usersPost(me: AuthUser | null, body: Record<string, unknown>) {
+   126→  requireRole(me, 'ADMIN');
+   127→  const username = str(body.username).toLowerCase();
+   128→  const password = str(body.password);
+   129→  const name = str(body.name);
+   130→  const role = str(body.role);
+   131→  if (!username || !password || !name) throw new ApiError('همهٔ فیلدهای ضروری را پر کنید');
+   132→  if (password.length < 6) throw new ApiError('رمز عبور باید حداقل ۶ حرف باشد');
+   133→  if (!VALID_ROLES.includes(role)) throw new ApiError('نقش نامعتبر است');
+   134→  return mutate('users', async (users) => {
+   135→    if (users.some((u) => (u.username || '').toLowerCase() === username)) {
+   136→      throw new ApiError('این نام کاربری قبلاً ثبت شده است');
+   137→    }
+   138→    const id = genId();
+   139→    users.push({
+   140→      id, username, name, role,
+   141→      password: await hashPassword(password),
+   142→      phone: str(body.phone) || null,
+   143→      teacherId: str(body.teacherId) || null,
+   144→      studentId: str(body.studentId) || null,
+   145→      active: true, createdAt: nowIso(),
+   146→    });
+   147→    return { id };
+   148→  }, `users: ثبت کاربر ${username}`);
+   149→}
+   150→
+   151→export async function usersPatch(me: AuthUser | null, body: Record<string, unknown>) {
+   152→  requireRole(me, 'ADMIN');
+   153→  const id = str(body.id);
+   154→  if (!id) throw new ApiError('شناسهٔ کاربر لازم است');
+   155→  await mutate('users', async (users) => {
+   156→    const u = users.find((x) => x.id === id) as UserRec | undefined;
+   157→    if (!u) throw new ApiError('کاربر یافت نشد', 404);
+   158→    if (body.name !== undefined) u.name = str(body.name);
+   159→    if (body.role !== undefined && VALID_ROLES.includes(str(body.role))) u.role = str(body.role);
+   160→    if (body.phone !== undefined) u.phone = str(body.phone) || null;
+   161→    if (body.teacherId !== undefined) u.teacherId = str(body.teacherId) || null;
+   162→    if (body.studentId !== undefined) u.studentId = str(body.studentId) || null;
+   163→    if (body.active !== undefined) u.active = Boolean(body.active);
+   164→    if (body.newPassword) {
+   165→      const pw = str(body.newPassword);
+   166→      if (pw.length < 6) throw new ApiError('رمز عبور باید حداقل ۶ حرف باشد');
+   167→      u.password = await hashPassword(pw);
+   168→    }
+   169→    return { ok: true };
+   170→  }, `users: ویرایش کاربر ${id}`);
+   171→  return { ok: true };
+   172→}
+   173→
+   174→export async function usersDelete(me: AuthUser | null, id: string) {
+   175→  const admin = requireRole(me, 'ADMIN');
+   176→  if (!id) throw new ApiError('شناسهٔ کاربر لازم است');
+   177→  if (id === admin.id) throw new ApiError('نمی‌توانید حساب خودتان را حذف کنید');
+   178→  await mutate('users', (users) => {
+   179→    const idx = users.findIndex((u) => u.id === id);
+   180→    if (idx === -1) throw new ApiError('کاربر یافت نشد', 404);
+   181→    users.splice(idx, 1);
+   182→    return { ok: true };
+   183→  }, `users: حذف کاربر ${id}`);
+   184→  try {
+   185→    await mutate('notifications', (notifs) => {
+   186→      return { ok: true, removed: notifs.filter((n) => n.userId === id).length, keep: notifs.filter((n) => n.userId !== id) };
+   187→    }, `users: حذف اعلان‌های کاربر ${id}`).catch(() => null);
+   188→  } catch { /* جانبی — اهمیتی ندارد */ }
+   189→  return { ok: true };
+   190→}
+   191→
+   192→/* ───────────────────────  students  ─────────────────────── */
+   193→
+   194→interface StudentRec extends Rec {
+   195→  firstName: string; lastName: string; fatherName: string; grandFather: string | null;
+   196→  gender: string; birthDate: string | null; idNumber: string | null;
+   197→  guardianName: string | null; guardianPhone: string | null; address: string | null;
+   198→  classId: string | null; rollNo: number | null; enrolledYear: string | null;
+   199→  status: string; createdAt: string;
+   200→}
+   201→
+   202→export async function studentsGet(me: AuthUser | null, sp: URLSearchParams) {
+   203→  const user = requireUser(me);
+   204→  const classId = sp.get('classId');
+   205→  const search = sp.get('q');
+   206→
+   207→  if (user.role === 'STUDENT' || user.role === 'GUARDIAN') {
+   208→    if (!user.studentId) throw new ApiError('حساب شما به هیچ شاگردی پیوند ندارد', 403);
+   209→    const [students, classes] = await Promise.all([load<StudentRec[]>('students'), load<Rec[]>('classes', { maxAgeMs: 300_000 })]);
+   210→    const s = students.find((x) => x.id === user.studentId);
+   211→    const rows = s ? [{ ...s, className: classes.find((c) => c.id === s.classId)?.name || null }] : [];
+   212→    return { students: rows };
+   213→  }
+   214→
+   215→  const [students, classes] = await Promise.all([
+   216→    load<StudentRec[]>('students'),
+   217→    load<Rec[]>('classes', { maxAgeMs: 300_000 }),
+   218→  ]);
+   219→  let rows = students;
+   220→  if (classId) rows = rows.filter((s) => s.classId === classId);
+   221→  if (search) {
+   222→    const q = search.toLowerCase();
+   223→    rows = rows.filter((s) =>
+   224→      [s.firstName, s.lastName, s.fatherName].some((f) => (f || '').toLowerCase().includes(q)));
+   225→  }
+   226→  rows = [...rows].sort((a, b) =>
+   227→    (a.classId || '').localeCompare(b.classId || '') ||
+   228→    ((a.rollNo ?? 1e9) - (b.rollNo ?? 1e9)) ||
+   229→    (a.createdAt || '').localeCompare(b.createdAt || ''));
+   230→  return {
+   231→    students: rows.map((s) => ({ ...s, className: classes.find((c) => c.id === s.classId)?.name || null })),
+   232→  };
+   233→}
+   234→
+   235→export async function studentsPost(me: AuthUser | null, body: Record<string, unknown>) {
+   236→  requireRole(me, 'ADMIN', 'HEADTEACHER', 'TEACHER');
+   237→  const firstName = str(body.firstName);
+   238→  const lastName = str(body.lastName);
+   239→  const fatherName = str(body.fatherName);
+   240→  if (!firstName || !lastName || !fatherName) throw new ApiError('اسم، شهرت و نام پدر ضروری است');
+   241→  const classId = str(body.classId) || null;
+   242→  let rollNo = optNum(body.rollNo);
+   243→  return mutate('students', (students) => {
+   244→    if (classId && rollNo == null) {
+   245→      rollNo = students.filter((s) => s.classId === classId).length + 1;
+   246→    }
+   247→    const id = genId();
+   248→    students.push({
+   249→      id, firstName, lastName, fatherName,
+   250→      grandFather: str(body.grandFather) || null,
+   251→      gender: str(body.gender) === 'F' ? 'F' : 'M',
+   252→      birthDate: str(body.birthDate) || null,
+   253→      idNumber: str(body.idNumber) || null,
+   254→      guardianName: str(body.guardianName) || null,
+   255→      guardianPhone: str(body.guardianPhone) || null,
+   256→      address: str(body.address) || null,
+   257→      classId, rollNo,
+   258→      enrolledYear: str(body.enrolledYear) || null,
+   259→      status: 'ACTIVE', createdAt: nowIso(),
+   260→    });
+   261→    return { id };
+   262→  }, `students: ثبت شاگرد ${firstName} ${lastName}`);
+   263→}
+   264→
+   265→export async function studentsPatch(me: AuthUser | null, body: Record<string, unknown>) {
+   266→  requireRole(me, 'ADMIN', 'HEADTEACHER', 'TEACHER');
+   267→  const id = str(body.id);
+   268→  if (!id) throw new ApiError('شناسهٔ شاگرد لازم است');
+   269→  await mutate('students', (students) => {
+   270→    const s = students.find((x) => x.id === id);
+   271→    if (!s) throw new ApiError('شاگرد یافت نشد', 404);
+   272→    for (const key of ['firstName', 'lastName', 'fatherName', 'grandFather', 'birthDate', 'idNumber', 'guardianName', 'guardianPhone', 'address', 'enrolledYear']) {
+   273→      if (body[key] !== undefined) (s as Rec)[key] = str(body[key]) || null;
+   274→    }
+   275→    if (body.gender !== undefined) s.gender = str(body.gender) === 'F' ? 'F' : 'M';
+   276→    if (body.classId !== undefined) s.classId = str(body.classId) || null;
+   277→    if (body.rollNo !== undefined) s.rollNo = optNum(body.rollNo);
+   278→    if (body.status !== undefined && ['ACTIVE', 'LEFT', 'GRADUATED'].includes(str(body.status))) {
+   279→      s.status = str(body.status);
+   280→    }
+   281→    return { ok: true };
+   282→  }, `students: ویرایش شاگرد ${id}`);
+   283→  return { ok: true };
+   284→}
+   285→
+   286→export async function studentsDelete(me: AuthUser | null, id: string) {
+   287→  requireRole(me, 'ADMIN', 'HEADTEACHER');
+   288→  if (!id) throw new ApiError('شناسهٔ شاگرد لازم است');
+   289→  await mutate('students', (students) => {
+   290→    const idx = students.findIndex((s) => s.id === id);
+   291→    if (idx === -1) throw new ApiError('شاگرد یافت نشد', 404);
+   292→    students.splice(idx, 1);
+   293→    return { ok: true };
+   294→  }, `students: حذف شاگرد ${id}`);
+   295→  // پیوند حساب‌های مرتبط قطع و سوابق شاگرد حذف می‌شود
+   296→  try {
+   297→    await mutate('users', (users) => {
+   298→      for (const u of users) if (u.studentId === id) u.studentId = null;
+   299→      return { ok: true };
+   300→    }, `students: قطع پیوند حساب‌های شاگرد ${id}`);
+   301→  } catch { /* جانبی */ }
+   302→  for (const [key, label] of [
+   303→    ['grades', 'نمرات'], ['attendance', 'حاضری'], ['activities', 'فعالیت‌ها'],
+   304→  ] as const) {
+   305→    try {
+   306→      await mutate(key, (rows) => {
+   307→        const before = rows.length;
+   308→        const kept = rows.filter((r) => r.studentId !== id);
+   309→        kept.forEach((r, i) => { rows[i] = r; });
+   310→        rows.length = kept.length;
+   311→        return { ok: true, removed: before - rows.length };
+   312→      }, `students: حذف ${label} شاگرد ${id}`);
+   313→    } catch { /* جانبی */ }
+   314→  }
+   315→  return { ok: true };
+   316→}
+   317→
+   318→/* ───────────────────────  teachers  ─────────────────────── */
+   319→
+   320→interface TeacherRec extends Rec {
+   321→  name: string; fatherName: string | null; position: string; phone: string | null;
+   322→  education: string | null; hireDate: string | null; active: boolean; createdAt: string;
+   323→}
+   324→
+   325→export async function teachersGet(me: AuthUser | null) {
+   326→  requireUser(me);
+   327→  const [teachers, users] = await Promise.all([
+   328→    load<TeacherRec[]>('teachers'),
+   329→    load<UserRec[]>('users', { maxAgeMs: 120_000 }),
+   330→  ]);
+   331→  const sorted = [...teachers].sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+   332→  return {
+   333→    teachers: sorted.map((t) => {
+   334→      const linked = users.find((u) => u.teacherId === t.id);
+   335→      return {
+   336→        id: t.id, name: t.name, fatherName: t.fatherName ?? null, position: t.position,
+   337→        phone: t.phone ?? null, education: t.education ?? null, hireDate: t.hireDate ?? null,
+   338→        active: t.active,
+   339→        username: linked?.username || null,
+   340→        userActive: linked ? linked.active : null,
+   341→      };
+   342→    }),
+   343→  };
+   344→}
+   345→
+   346→export async function teachersPost(me: AuthUser | null, body: Record<string, unknown>) {
+   347→  requireRole(me, 'ADMIN', 'HEADTEACHER');
+   348→  const name = str(body.name);
+   349→  if (!name) throw new ApiError('نام لازم است');
+   350→  const position = POSITIONS.includes(str(body.position)) ? str(body.position) : 'معلم';
+   351→  return mutate('teachers', (teachers) => {
+   352→    const id = genId();
+   353→    teachers.push({
+   354→      id, name,
+   355→      fatherName: str(body.fatherName) || null,
+   356→      position,
+   357→      phone: str(body.phone) || null,
+   358→      education: str(body.education) || null,
+   359→      hireDate: str(body.hireDate) || null,
+   360→      active: true, createdAt: nowIso(),
+   361→    });
+   362→    return { id };
+   363→  }, `teachers: ثبت ${name}`);
+   364→}
+   365→
+   366→export async function teachersPatch(me: AuthUser | null, body: Record<string, unknown>) {
+   367→  requireRole(me, 'ADMIN', 'HEADTEACHER');
+   368→  const id = str(body.id);
+   369→  if (!id) throw new ApiError('شناسه لازم است');
+   370→  await mutate('teachers', (teachers) => {
+   371→    const t = teachers.find((x) => x.id === id);
+   372→    if (!t) throw new ApiError('یافت نشد', 404);
+   373→    if (body.name !== undefined) t.name = str(body.name);
+   374→    if (body.fatherName !== undefined) t.fatherName = str(body.fatherName) || null;
+   375→    if (body.position !== undefined && POSITIONS.includes(str(body.position))) t.position = str(body.position);
+   376→    if (body.phone !== undefined) t.phone = str(body.phone) || null;
+   377→    if (body.education !== undefined) t.education = str(body.education) || null;
+   378→    if (body.hireDate !== undefined) t.hireDate = str(body.hireDate) || null;
+   379→    if (body.active !== undefined) t.active = Boolean(body.active);
+   380→    return { ok: true };
+   381→  }, `teachers: ویرایش ${id}`);
+   382→  return { ok: true };
+   383→}
+   384→
+   385→export async function teachersDelete(me: AuthUser | null, id: string) {
+   386→  requireRole(me, 'ADMIN');
+   387→  if (!id) throw new ApiError('شناسه لازم است');
+   388→  await mutate('teachers', (teachers) => {
+   389→    const idx = teachers.findIndex((t) => t.id === id);
+   390→    if (idx === -1) throw new ApiError('یافت نشد', 404);
+   391→    teachers.splice(idx, 1);
+   392→    return { ok: true };
+   393→  }, `teachers: حذف ${id}`);
+   394→  try {
+   395→    await mutate('users', (users) => {
+   396→      for (const u of users) if (u.teacherId === id) u.teacherId = null;
+   397→      return { ok: true };
+   398→    }, `teachers: قطع پیوند حساب ${id}`);
+   399→  } catch { /* جانبی */ }
+   400→  try {
+   401→    await mutate('classes', (classes) => {
+   402→      for (const c of classes) if (c.supervisorId === id) c.supervisorId = null;
+   403→      return { ok: true };
+   404→    }, `teachers: قطع نگرانی صنف ${id}`);
+   405→  } catch { /* جانبی */ }
+   406→  try {
+   407→    await mutate('classSubjects', (cs) => {
+   408→      for (const c of cs) if (c.teacherId === id) c.teacherId = null;
+   409→      return { ok: true };
+   410→    }, `teachers: قطع سپردگی مضامین ${id}`);
+   411→  } catch { /* جانبی */ }
+   412→  return { ok: true };
+   413→}
+   414→
+   415→/* ───────────────────────  classes  ─────────────────────── */
+   416→
+   417→interface ClassRec extends Rec {
+   418→  grade: number; name: string; supervisorId: string | null; createdAt: string;
+   419→}
+   420→interface ClassSubjectRec extends Rec {
+   421→  classId: string; subjectId: string; teacherId: string | null; createdAt: string;
+   422→}
+   423→
+   424→export async function classesGet(me: AuthUser | null) {
+   425→  requireUser(me);
+   426→  const [classes, classSubjects, subjects, teachers, students] = await Promise.all([
+   427→    load<ClassRec[]>('classes'),
+   428→    load<ClassSubjectRec[]>('classSubjects'),
+   429→    load<Rec[]>('subjects', { maxAgeMs: 300_000 }),
+   430→    load<TeacherRec[]>('teachers', { maxAgeMs: 120_000 }),
+   431→    load<StudentRec[]>('students', { maxAgeMs: 120_000 }),
+   432→  ]);
+   433→  const sorted = [...classes].sort((a, b) => a.grade - b.grade);
+   434→  return {
+   435→    classes: sorted.map((c) => {
+   436→      const supervisor = teachers.find((t) => t.id === c.supervisorId);
+   437→      const csList = classSubjects
+   438→        .filter((cs) => cs.classId === c.id)
+   439→        .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
+   440→        .map((cs) => {
+   441→          const subject = subjects.find((s) => s.id === cs.subjectId);
+   442→          const teacher = teachers.find((t) => t.id === cs.teacherId);
+   443→          return {
+   444→            id: cs.id, classId: cs.classId, subjectId: cs.subjectId, teacherId: cs.teacherId ?? null,
+   445→            subject: subject ? { id: subject.id, name: subject.name } : { id: cs.subjectId, name: '—' },
+   446→            teacher: teacher ? { id: teacher.id, name: teacher.name } : null,
+   447→          };
+   448→        });
+   449→      return {
+   450→        id: c.id, grade: c.grade, name: c.name, supervisorId: c.supervisorId ?? null,
+   451→        supervisorName: supervisor?.name || null,
+   452→        studentCount: students.filter((s) => s.classId === c.id && s.status === 'ACTIVE').length,
+   453→        classSubjects: csList,
+   454→      };
+   455→    }),
+   456→  };
+   457→}
+   458→
+   459→export async function classesPost(me: AuthUser | null, body: Record<string, unknown>) {
+   460→  requireRole(me, 'ADMIN', 'HEADTEACHER');
+   461→  const grade = num(body.grade);
+   462→  const name = str(body.name);
+   463→  if (grade < 1 || grade > 12) throw new ApiError('صنف باید بین ۱ تا ۱۲ باشد');
+   464→  if (!name) throw new ApiError('نام صنف لازم است');
+   465→  return mutate('classes', (classes) => {
+   466→    if (classes.some((c) => c.name === name)) throw new ApiError('صنفی با این نام قبلاً ثبت شده است');
+   467→    const id = genId();
+   468→    classes.push({ id, grade, name, supervisorId: str(body.supervisorId) || null, createdAt: nowIso() });
+   469→    return { id };
+   470→  }, `classes: ثبت صنف ${name}`);
+   471→}
+   472→
+   473→export async function classesPatch(me: AuthUser | null, body: Record<string, unknown>) {
+   474→  requireRole(me, 'ADMIN', 'HEADTEACHER');
+   475→  const id = str(body.id);
+   476→  if (!id) throw new ApiError('شناسهٔ صنف لازم است');
+   477→  await mutate('classes', (classes) => {
+   478→    const c = classes.find((x) => x.id === id);
+   479→    if (!c) throw new ApiError('صنف یافت نشد', 404);
+   480→    if (body.name !== undefined) c.name = str(body.name);
+   481→    if (body.grade !== undefined) c.grade = num(body.grade);
+   482→    if (body.supervisorId !== undefined) c.supervisorId = str(body.supervisorId) || null;
+   483→    return { ok: true };
+   484→  }, `classes: ویرایش صنف ${id}`);
+   485→  return { ok: true };
+   486→}
+   487→
+   488→export async function classesDelete(me: AuthUser | null, id: string) {
+   489→  requireRole(me, 'ADMIN');
+   490→  if (!id) throw new ApiError('شناسهٔ صنف لازم است');
+   491→  await mutate('classes', (classes) => {
+   492→    const cls = classes.find((c) => c.id === id);
+   493→    if (!cls) throw new ApiError('صنف یافت نشد', 404);
+   494→    return { ok: true, name: cls.name };
+   495→  }, `classes: بررسی صنف ${id}`);
+   496→  const students = await load<StudentRec[]>('students');
+   497→  if (students.some((s) => s.classId === id)) throw new ApiError('ابتدا شاگردان این صنف را منتقل کنید');
+   498→  await mutate('classes', (classes) => {
+   499→    const idx = classes.findIndex((c) => c.id === id);
+   500→    if (idx !== -1) classes.splice(idx, 1);
+   501→    return { ok: true };
+   502→  }, `classes: حذف صنف ${id}`);
+   503→  return { ok: true };
+   504→}
+   505→
+   506→/* ───────────────────────  classes/assign  ─────────────────────── */
+   507→
+   508→export async function assignPost(me: AuthUser | null, body: Record<string, unknown>) {
+   509→  requireRole(me, 'ADMIN', 'HEADTEACHER');
+   510→  const classId = str(body.classId);
+   511→  const subjectId = str(body.subjectId);
+   512→  const teacherId = str(body.teacherId) || null;
+   513→  if (!classId || !subjectId) throw new ApiError('صنف و مضمون لازم است');
+   514→  const [classes, subjects] = await Promise.all([
+   515→    load<ClassRec[]>('classes'), load<Rec[]>('subjects', { maxAgeMs: 300_000 }),
+   516→  ]);
+   517→  if (!classes.find((c) => c.id === classId) || !subjects.find((s) => s.id === subjectId)) {
+   518→    throw new ApiError('صنف یا مضمون یافت نشد');
+   519→  }
+   520→  await mutate('classSubjects', (cs) => {
+   521→    const existing = cs.find((x) => x.classId === classId && x.subjectId === subjectId);
+   522→    if (existing) {
+   523→      existing.teacherId = teacherId;
+   524→      return { ok: true, id: existing.id };
+   525→    }
+   526→    const id = genId();
+   527→    cs.push({ id, classId, subjectId, teacherId, createdAt: nowIso() });
+   528→    return { ok: true, id };
+   529→  }, `assign: سپردن مضمون در صنف (${classId.slice(0, 10)})`);
+   530→  return { ok: true };
+   531→}
+   532→
+   533→export async function assignDelete(me: AuthUser | null, csId: string) {
+   534→  requireRole(me, 'ADMIN', 'HEADTEACHER');
+   535→  if (!csId) throw new ApiError('شناسه لازم است');
+   536→  await mutate('classSubjects', (cs) => {
+   537→    const idx = cs.findIndex((x) => x.id === csId);
+   538→    if (idx === -1) throw new ApiError('سپردگی یافت نشد', 404);
+   539→    cs.splice(idx, 1);
+   540→    return { ok: true };
+   541→  }, `assign: حذف سپردگی ${csId.slice(0, 10)}`);
+   542→  try {
+   543→    await mutate('grades', (grades) => {
+   544→      const kept = grades.filter((g) => g.classSubjectId !== csId);
+   545→      const removed = grades.length - kept.length;
+   546→      kept.forEach((g, i) => { grades[i] = g; });
+   547→      grades.length = kept.length;
+   548→      return { ok: true, removed };
+   549→    }, `assign: حذف نمرات سپردگی ${csId.slice(0, 10)}`);
+   550→  } catch { /* جانبی */ }
+   551→  return { ok: true };
+   552→}
+   553→
+   554→/* ───────────────────────  subjects  ─────────────────────── */
+   555→
+   556→export async function subjectsGet(me: AuthUser | null) {
+   557→  requireUser(me);
+   558→  const subjects = await load<Rec[]>('subjects');
+   559→  return { subjects: [...subjects].sort((a, b) => String(a.name).localeCompare(String(b.name), 'fa')) };
+   560→}
+   561→
+   562→export async function subjectsPost(me: AuthUser | null, body: Record<string, unknown>) {
+   563→  requireRole(me, 'ADMIN', 'HEADTEACHER');
+   564→  const name = str(body.name);
+   565→  if (!name) throw new ApiError('نام مضمون لازم است');
+   566→  return mutate('subjects', (subjects) => {
+   567→    if (subjects.some((s) => s.name === name)) throw new ApiError('این مضمون قبلاً ثبت شده است');
+   568→    const id = genId();
+   569→    subjects.push({ id, name });
+   570→    return { id };
+   571→  }, `subjects: ثبت مضمون ${name}`);
+   572→}
+   573→
+   574→export async function subjectsPatch(me: AuthUser | null, body: Record<string, unknown>) {
+   575→  requireRole(me, 'ADMIN', 'HEADTEACHER');
+   576→  const id = str(body.id);
+   577→  if (!id) throw new ApiError('شناسهٔ مضمون لازم است');
+   578→  await mutate('subjects', (subjects) => {
+   579→    const s = subjects.find((x) => x.id === id);
+   580→    if (!s) throw new ApiError('مضمون یافت نشد', 404);
+   581→    s.name = str(body.name);
+   582→    return { ok: true };
+   583→  }, `subjects: ویرایش مضمون ${id}`);
+   584→  return { ok: true };
+   585→}
+   586→
+   587→export async function subjectsDelete(me: AuthUser | null, id: string) {
+   588→  requireRole(me, 'ADMIN');
+   589→  if (!id) throw new ApiError('شناسهٔ مضمون لازم است');
+   590→  const csList = await load<ClassSubjectRec[]>('classSubjects');
+   591→  const csIds = csList.filter((cs) => cs.subjectId === id).map((cs) => cs.id);
+   592→  await mutate('subjects', (subjects) => {
+   593→    const idx = subjects.findIndex((s) => s.id === id);
+   594→    if (idx === -1) throw new ApiError('مضمون یافت نشد', 404);
+   595→    subjects.splice(idx, 1);
+   596→    return { ok: true };
+   597→  }, `subjects: حذف مضمون ${id}`);
+   598→  try {
+   599→    await mutate('classSubjects', (cs) => {
+   600→      const kept = cs.filter((x) => x.subjectId !== id);
+   601→      kept.forEach((x, i) => { cs[i] = x; });
+   602→      cs.length = kept.length;
+   603→      return { ok: true };
+   604→    }, `subjects: حذف سپردگی‌های مضمون ${id}`);
+   605→  } catch { /* جانبی */ }
+   606→  if (csIds.length > 0) {
+   607→    try {
+   608→      await mutate('grades', (grades) => {
+   609→        const kept = grades.filter((g) => !csIds.includes(String(g.classSubjectId)));
+   610→        kept.forEach((g, i) => { grades[i] = g; });
+   611→        grades.length = kept.length;
+   612→        return { ok: true };
+   613→      }, `subjects: حذف نمرات مضمون ${id}`);
+   614→    } catch { /* جانبی */ }
+   615→  }
+   616→  return { ok: true };
+   617→}
+   618→
+   619→/* ───────────────────────  settings  ─────────────────────── */
+   620→
+   621→const EDITABLE_KEYS = [
+   622→  'schoolName', 'province', 'district', 'authority', 'academicYear',
+   623→  'directorName', 'directorPhone', 'directorEmail',
+   624→  'maxWritten', 'maxOral', 'maxHomework', 'maxActivity', 'resultNote',
+   625→];
+   626→
+   627→export async function settingsGet(me: AuthUser | null) {
+   628→  requireUser(me);
+   629→  const map = await loadSettingsMap();
+   630→  return { settings: map };
+   631→}
+   632→
+   633→export async function settingsPut(me: AuthUser | null, body: Record<string, unknown>) {
+   634→  requireRole(me, 'ADMIN');
+   635→  const incoming = (body.settings || {}) as Record<string, unknown>;
+   636→  await mutateSettingsMap((map) => {
+   637→    for (const key of EDITABLE_KEYS) {
+   638→      if (incoming[key] !== undefined) map[key] = str(incoming[key]);
+   639→    }
+   640→  }, 'settings: به‌روزرسانی تنظیمات مکتب');
+   641→  return { ok: true };
+   642→}
+   643→

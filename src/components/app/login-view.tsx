@@ -6,41 +6,63 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import { apiSend } from '@/lib/client/api';
-import { ghConfigured, setGhToken } from '@/lib/client/gh';
+import { apiSend, offlineLogin, saveOfflineCred, isOnline } from '@/lib/client/api';
 import { todayJalali, toPersianDigits } from '@/lib/jalali';
-import { BookOpenCheck, CloudCog, Eye, EyeOff, Lock, User, LogIn } from 'lucide-react';
+import { BookOpenCheck, Eye, EyeOff, Lock, User, LogIn, CloudOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import type { SessionUser } from '@/lib/types';
 
-export function LoginView({ onLoggedIn }: { onLoggedIn: () => void }) {
+export function LoginView({
+  onLoggedIn,
+  setupDone,
+}: {
+  onLoggedIn: () => void;
+  setupDone: boolean;
+}) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [offlineMode, setOfflineMode] = useState(false);
   const { toast } = useToast();
-  const [tokenInput, setTokenInput] = useState('');
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    if (!ghConfigured()) {
+    const uname = username.trim();
+    const pass = password;
+
+    if (navigator.onLine) {
+      const res = await apiSend<{ user: SessionUser }>('/api/auth', 'POST', { action: 'login', username: uname, password: pass }, { allowQueue: false });
+      if (res.error) {
+        setLoading(false);
+        setError(res.error);
+        return;
+      }
+      if (res.queued || !res.data?.user) {
+        setLoading(false);
+        setError('اتصال به سرور برقرار نیست. پس از وصل شدن دوباره تلاش کنید.');
+        return;
+      }
+      // ذخیرهٔ مشخصات ورود برای امکان ورود در حالت آفلاین (روی همین دستگاه)
+      void saveOfflineCred(res.data.user, pass);
       setLoading(false);
-      setError('اتصال ابری پیکربندی نشده است — توکن مخزن داده را در بخش زیر وارد کنید');
+      toast({ title: 'خوش آمدید', description: 'ورود با موفقیت انجام شد' });
+      onLoggedIn();
       return;
     }
-    const res = await apiSend('/api/auth', 'POST', { action: 'login', username, password }, { allowQueue: false });
+
+    // ─── حالت آفلاین: بررسی محلی نام کاربری و رمز ───
+    const user = await offlineLogin(uname, pass);
     setLoading(false);
-    if (res.error) {
-      setError(res.error);
+    if (!user) {
+      setError('در حالت آفلاین، ورود با حسابی که قبلاً روی همین دستگاه وارد شده امکان‌پذیر است.');
       return;
     }
-    if (res.queued) {
-      setError('اتصال به سرور برقرار نیست. پس از وصل شدن دوباره تلاش کنید.');
-      return;
-    }
-    toast({ title: 'خوش آمدید', description: 'ورود با موفقیت انجام شد' });
+    setOfflineMode(true);
+    toast({ title: 'ورود آفلاین موفق', description: 'داده‌ها پس از وصل شدن همگام می‌شوند' });
     onLoggedIn();
   };
 
@@ -54,6 +76,11 @@ export function LoginView({ onLoggedIn }: { onLoggedIn: () => void }) {
           <h1 className="text-2xl font-bold text-emerald-800">مکتب خصوصی نداالقلم</h1>
           <p className="text-sm text-muted-foreground mt-1">سیستم مدیریت تعلیمی — نمرات، حاضری، کتابخانه</p>
           <p className="text-xs text-emerald-700 mt-1">{toPersianDigits(todayJalali())}</p>
+          {!isOnline() && (
+            <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-3 py-1">
+              <CloudOff className="h-3.5 w-3.5" /> حالت آفلاین — با حساب قبلی همین دستگاه وارد شوید
+            </p>
+          )}
         </div>
 
         <Card className="border-emerald-100 shadow-lg">
@@ -67,9 +94,10 @@ export function LoginView({ onLoggedIn }: { onLoggedIn: () => void }) {
                   id="username"
                   dir="ltr"
                   className="text-left"
-                  placeholder="admin"
+                  placeholder="نام کاربری"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
+                  autoComplete="username"
                   autoFocus
                   required
                 />
@@ -87,6 +115,7 @@ export function LoginView({ onLoggedIn }: { onLoggedIn: () => void }) {
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
                     required
                   />
                   <button
@@ -119,58 +148,34 @@ export function LoginView({ onLoggedIn }: { onLoggedIn: () => void }) {
           </CardContent>
         </Card>
 
-        <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-xs text-emerald-900">
-          <div className="flex items-center gap-2 font-semibold mb-2">
-            <BookOpenCheck className="h-4 w-4" /> حساب‌های ابتدایی سیستم
-          </div>
-          <div className="grid grid-cols-2 gap-1.5 leading-6" dir="ltr">
-            <span className="font-mono">admin / admin123</span>
-            <span className="font-mono">sarallam / 12345678</span>
-            <span className="font-mono">teacher / 12345678</span>
-            <span className="font-mono">student / 12345678</span>
-            <span className="font-mono">parent / 12345678</span>
-            <span className="font-mono">library / 12345678</span>
-            <span className="font-mono">staff / 12345678</span>
-          </div>
-          <p className="mt-2 text-emerald-700">
-            پس از اولین ورود، رمز عبور مدیر را از بخش تنظیمات تغییر دهید.
-          </p>
-        </div>
-
-        <details className="mt-3 rounded-xl border border-slate-200 bg-white p-3 text-xs">
-          <summary className="flex cursor-pointer items-center gap-1.5 text-slate-600 select-none">
-            <CloudCog className="h-3.5 w-3.5" /> اتصال ابری گیت‌هاب {ghConfigured() ? '(برقرار)' : '(پیکربندی نشده)'}
-          </summary>
-          <div className="mt-2 space-y-2">
-            <p className="text-[11px] leading-5 text-muted-foreground">
-              این اپ داده‌ها را در مخزن خصوصی <span dir="ltr" className="font-mono">nedaalqalam-school-data</span> ذخیره می‌کند.
-              اگر توکن در این دستگاه تنظیم نشده، آن را اینجا وارد کنید (فقط یک بار).
-            </p>
-            <div className="flex gap-2">
-              <input
-                dir="ltr" type="password" className="flex-1 rounded-md border border-input bg-background px-3 py-2 font-mono text-left"
-                placeholder="github token..."
-                value={tokenInput}
-                onChange={(e) => setTokenInput(e.target.value)}
-              />
-              <button
-                type="button"
-                className="rounded-md bg-emerald-600 px-3 py-2 font-semibold text-white disabled:opacity-50"
-                disabled={tokenInput.trim().length < 20}
-                onClick={() => {
-                  setGhToken(tokenInput);
-                  setTokenInput('');
-                  toast({ title: 'اتصال ابری ذخیره شد', description: 'حالا می‌توانید وارد شوید' });
-                }}
-              >
-                ذخیره
-              </button>
+        {/* حساب‌های ابتدایی فقط قبل از اولین ورود مدیر نمایش داده می‌شود */}
+        {!setupDone && (
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-xs text-emerald-900">
+            <div className="flex items-center gap-2 font-semibold mb-2">
+              <BookOpenCheck className="h-4 w-4" /> حساب‌های ابتدایی سیستم — فقط برای اولین ورود
             </div>
+            <div className="grid grid-cols-2 gap-1.5 leading-6" dir="ltr">
+              <span className="font-mono">admin / admin123</span>
+              <span className="font-mono">sarallam / 12345678</span>
+              <span className="font-mono">teacher / 12345678</span>
+              <span className="font-mono">student / 12345678</span>
+              <span className="font-mono">parent / 12345678</span>
+              <span className="font-mono">library / 12345678</span>
+              <span className="font-mono">staff / 12345678</span>
+            </div>
+            <p className="mt-2 text-emerald-700">
+              ⚠ پس از اولین ورود مدیر، این فهرست برای همیشه مخفی می‌شود و دیگر به هیچ‌کس نمایش داده نمی‌شود.
+              می‌توانید حساب‌ها را از بخش «کاربران و دسترسی‌ها» تغییر یا حذف کنید.
+            </p>
           </div>
-        </details>
+        )}
+
+        {offlineMode && (
+          <p className="mt-3 text-center text-xs text-amber-700">شما در حالت آفلاین وارد شده‌اید</p>
+        )}
 
         <p className="text-center text-[11px] text-muted-foreground mt-4">
-          توسعه‌دهنده: حسام الدین سیدی — 0791680632
+          توسعه‌دهنده: حسام الدین سیدی — {toPersianDigits('0791680632')}
         </p>
       </div>
     </div>

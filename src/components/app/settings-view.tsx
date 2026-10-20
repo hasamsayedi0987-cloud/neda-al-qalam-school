@@ -8,11 +8,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Separator } from '@/components/ui/separator';
 import { PageHeader, Field } from './ui-bits';
 import { apiGet, apiSend } from '@/lib/client/api';
-import { ghToken, setGhToken, ghConfigured } from '@/lib/client/gh';
 import { toPersianDigits } from '@/lib/jalali';
+import { DEFAULT_SCALE, scaleRangesText, type GradeScaleEntry } from '@/lib/grading';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, AppSettings } from '@/lib/types';
-import { Download, Upload, Save, Settings as SettingsIcon, KeyRound, DatabaseBackup, AlertTriangle, CloudCog, CheckCircle2, XCircle } from 'lucide-react';
+import { Download, Upload, Save, Settings as SettingsIcon, KeyRound, DatabaseBackup, AlertTriangle, Plus, Trash2 } from 'lucide-react';
 
 const DEFAULTS: AppSettings = {
   schoolName: 'مکتب خصوصی نداالقلم',
@@ -32,36 +32,42 @@ export function SettingsView({ user }: { user: SessionUser }) {
   const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirm: '' });
   const [restoreConfirm, setRestoreConfirm] = useState(false);
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
-  const [tokenInput, setTokenInput] = useState('');
-  const [tokenOk, setTokenOk] = useState(ghConfigured());
-
-  const saveToken = () => {
-    setGhToken(tokenInput);
-    setTokenOk(ghConfigured());
-    setTokenInput('');
-    toast({
-      title: tokenOk ? 'اتصال ابری به‌روزرسانی شد' : 'اتصال ابری ذخیره شد',
-      description: 'برای اعمال کامل، صفحه تازه‌سازی می‌شود',
-    });
-    setTimeout(() => window.location.reload(), 1200);
-  };
+  const [scale, setScale] = useState<GradeScaleEntry[]>(DEFAULT_SCALE);
 
   useEffect(() => {
     apiGet<{ settings: AppSettings }>('/api/settings')
-      .then((d) => setSettings({ ...DEFAULTS, ...d.settings }))
+      .then((d) => {
+        setSettings({ ...DEFAULTS, ...d.settings });
+        try {
+          const parsed = JSON.parse(d.settings.gradeScale || '[]') as GradeScaleEntry[];
+          if (Array.isArray(parsed) && parsed.length >= 2) setScale(parsed);
+        } catch { /* پیش‌فرض */ }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
   const save = async () => {
     setSaving(true);
-    const res = await apiSend('/api/settings', 'PUT', { settings });
+    const res = await apiSend('/api/settings', 'PUT', {
+      settings: { ...settings, gradeScale: JSON.stringify(scale) },
+    });
     setSaving(false);
     if (res.error) {
       toast({ title: 'خطا', description: res.error, variant: 'destructive' });
       return;
     }
     toast({ title: 'تنظیمات ذخیره شد' });
+  };
+
+  const setScaleRow = (i: number, patch: Partial<GradeScaleEntry>) => {
+    setScale((s) => s.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
+  };
+  const addScaleRow = () => {
+    setScale((s) => [...s, { label: '', min: 0 }]);
+  };
+  const removeScaleRow = (i: number) => {
+    setScale((s) => (s.length > 2 ? s.filter((_, idx) => idx !== i) : s));
   };
 
   const changePassword = async () => {
@@ -85,8 +91,9 @@ export function SettingsView({ user }: { user: SessionUser }) {
 
   const downloadBackup = async () => {
     try {
-      const backup = await apiGet<Record<string, unknown>>('/api/backup');
-      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json; charset=utf-8' });
+      const res = await fetch('/api/backup', { cache: 'no-store' });
+      if (!res.ok) throw new Error('دریافت فایل ناموفق بود');
+      const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -144,7 +151,7 @@ export function SettingsView({ user }: { user: SessionUser }) {
       {isAdmin && (
         <Card className="border-emerald-100">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base text-emerald-900">مقیاس نمرات (سقف هر جزء از ۱۰۰)</CardTitle>
+            <CardTitle className="text-base text-emerald-900">مقاطع نمرات — سقف هر جزء از ۱۰۰</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Field label="تحریری"><Input type="number" min={0} value={settings.maxWritten} onChange={(e) => set('maxWritten', e.target.value)} /></Field>
@@ -156,6 +163,47 @@ export function SettingsView({ user }: { user: SessionUser }) {
                 <Input value={settings.resultNote || ''} onChange={(e) => set('resultNote', e.target.value)} />
               </Field>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* مکتسبه‌های قابل تنظیم — الف/ب/ج... با حد دلخواه */}
+      {isAdmin && (
+        <Card className="border-emerald-100">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-emerald-900">مکتسبه‌ها و حد نمرات (قابل تغییر)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground leading-5">
+              مثال: اگر «الف» باید از ۸۵ شروع شود، عدد کنار آن را به ۸۵ تغییر دهید. حد کمترین مکتسبهٔ قبولی، مرز ارتقا و تکرار صنف است.
+              پیش‌نمایش فعلی: <span className="font-semibold text-emerald-800">{scaleRangesText(scale)}</span>
+            </p>
+            <div className="space-y-2">
+              {scale.map((row, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Input
+                    className="max-w-[140px]" placeholder="نام مکتسبه (الف...)"
+                    value={row.label} onChange={(e) => setScaleRow(i, { label: e.target.value })}
+                  />
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">حداقل نمره:</span>
+                  <Input
+                    dir="ltr" type="number" min={0} max={100} className="max-w-[100px] text-left"
+                    value={row.min} onChange={(e) => setScaleRow(i, { min: Number(e.target.value) })}
+                  />
+                  <Button
+                    variant="ghost" size="icon" aria-label="حذف سطر"
+                    className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                    disabled={scale.length <= 2}
+                    onClick={() => removeScaleRow(i)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <Button variant="outline" size="sm" onClick={addScaleRow} className="gap-1.5 border-emerald-300 text-emerald-800">
+              <Plus className="h-4 w-4" /> افزودن مکتسبه
+            </Button>
           </CardContent>
         </Card>
       )}
@@ -184,41 +232,6 @@ export function SettingsView({ user }: { user: SessionUser }) {
           </Button>
         </CardContent>
       </Card>
-
-      {/* اتصال ابری گیت‌هاب */}
-      {isAdmin && (
-        <Card className="border-emerald-100">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base text-emerald-900 flex items-center gap-2">
-              <CloudCog className="h-5 w-5" /> اتصال ابری (مخزن دادهٔ گیت‌هاب)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center gap-2 text-sm">
-              {tokenOk ? (
-                <><CheckCircle2 className="h-4 w-4 text-emerald-600" /><span className="text-emerald-700">اتصال برقرار است — داده‌ها در مخزن خصوصی گیت‌هاب ذخیره می‌شود</span></>
-              ) : (
-                <><XCircle className="h-4 w-4 text-rose-600" /><span className="text-rose-700">اتصال پیکربندی نشده — توکن دسترسی مخزن داده را وارد کنید</span></>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground leading-5">
-              توکن باید دسترسی خواندن و نوشتن به مخزن <span dir="ltr" className="font-mono">nedaalqalam-school-data</span> داشته باشد.
-              پیشنهاد: از یک توکن Fine-grained محدود به همان مخزن استفاده کنید. توکن تنها در همین دستگاه ذخیره می‌شود.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Input
-                dir="ltr" className="text-left font-mono max-w-md" type="password"
-                placeholder="github_pat_... / ghp_..."
-                value={tokenInput}
-                onChange={(e) => setTokenInput(e.target.value)}
-              />
-              <Button variant="outline" className="border-emerald-300 text-emerald-800" disabled={tokenInput.trim().length < 20} onClick={saveToken}>
-                <Save className="h-4 w-4 ml-1" /> ذخیرهٔ توکن
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* پشتیبان‌گیری */}
       {isAdmin && (

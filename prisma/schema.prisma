@@ -262,3 +262,44 @@ model Setting {
   key   String @id
   value String
 }
+
+// ═══════════════ بخش‌های دلخواه (ساخته‌شده توسط مدیر) ═══════════════
+
+model CustomSection {
+  id        String   @id @default(cuid())
+  title     String
+  icon      String   @default("Sparkles") // نام آیکون lucide
+  color     String   @default("emerald")
+  fields    String   @default("[]") // JSON: [{key,label,type,options,required}]
+  viewRoles String   @default("[\"ADMIN\",\"HEADTEACHER\",\"TEACHER\"]") // چه کسی می‌بیند
+  writeRoles String  @default("[\"ADMIN\",\"HEADTEACHER\",\"TEACHER\"]") // چه کسی ثبت می‌کند
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entries CustomEntry[]
+}
+
+model CustomEntry {
+  id        String   @id @default(cuid())
+  sectionId String
+  data      String   @default("{}") // JSON: مقادیر فیلدها
+  entryDate String? // تاریخ شمسی اختیاری
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  section CustomSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@index([sectionId])
+}
+
+// ═══════════════ قالب‌های تقدیرنامه ═══════════════
+
+model CertificateTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  config    String   @default("{}") // JSON: طراحی کامل
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

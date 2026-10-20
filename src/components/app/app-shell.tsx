@@ -15,11 +15,12 @@ import { isoToJalaliDisplay, toPersianDigits } from '@/lib/jalali';
 import { ROLE_LABELS } from '@/lib/grading';
 import { cn } from '@/lib/utils';
 import type { SessionUser, NotificationInfo } from '@/lib/types';
+import type { CustomSectionData } from './custom-view';
 import {
   Bell, BellOff, BookOpen, CalendarCheck, CloudOff, ClipboardList, GraduationCap,
   Home, LayoutDashboard, Library, LogOut, Menu, RefreshCw, School, Settings,
   ShieldCheck, Upload, UserCog, Users, ClipboardCheck, BookMarked, Wifi, KeyRound,
-  FileSpreadsheet, UserCheck,
+  FileSpreadsheet, UserCheck, Award, LayoutGrid,
 } from 'lucide-react';
 import { DashboardView } from './dashboard-view';
 import { StudentsView } from './students-view';
@@ -35,6 +36,8 @@ import { UsersView } from './users-view';
 import { TasksView } from './tasks-view';
 import { SettingsView } from './settings-view';
 import { AboutView } from './about-view';
+import { CustomSectionsView } from './custom-view';
+import { CertificatesView } from './certificate-view';
 
 export interface NavItem {
   key: string;
@@ -53,6 +56,8 @@ export const NAV_ITEMS: NavItem[] = [
   { key: 'activities', label: 'فعالیت شاگردان', icon: ClipboardCheck, roles: ['ADMIN', 'HEADTEACHER', 'TEACHER', 'STUDENT', 'GUARDIAN'] },
   { key: 'grades', label: 'ثبت نمرات', icon: ClipboardList, roles: ['ADMIN', 'HEADTEACHER', 'TEACHER'] },
   { key: 'results', label: 'جدول نتایج و کارنامه', icon: FileSpreadsheet, roles: ['ADMIN', 'HEADTEACHER', 'TEACHER', 'STUDENT', 'GUARDIAN'] },
+  { key: 'certificates', label: 'تقدیرنامه‌ساز', icon: Award, roles: ['ADMIN', 'HEADTEACHER', 'TEACHER'] },
+  { key: 'customs', label: 'بخش‌های دلخواه', icon: LayoutGrid, roles: ['ADMIN'] },
   { key: 'library', label: 'کتابخانه', icon: Library, roles: ['ADMIN', 'LIBRARIAN', 'HEADTEACHER'] },
   { key: 'users', label: 'کاربران و دسترسی‌ها', icon: ShieldCheck, roles: ['ADMIN'] },
   { key: 'tasks', label: 'وظایف کارمندان', icon: BookMarked, roles: ['ADMIN', 'HEADTEACHER', 'STAFF', 'TEACHER'] },
@@ -67,9 +72,17 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
   const [unread, setUnread] = useState(0);
   const [online, setOnline] = useState(true);
   const [pending, setPending] = useState(0);
+  const [customSections, setCustomSections] = useState<CustomSectionData[]>([]);
   const { toast } = useToast();
 
   const visibleNav = NAV_ITEMS.filter((n) => n.roles.includes(user.role));
+
+  // بخش‌های دلخواهِ مجاز برای این نقش — به منوی اصلی افزوده می‌شوند
+  useEffect(() => {
+    apiGet<{ sections: CustomSectionData[] }>('/api/custom-sections')
+      .then((d) => setCustomSections(d.sections))
+      .catch(() => {});
+  }, []);
 
   const loadNotifications = useCallback(async () => {
     try {
@@ -139,6 +152,26 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
               <span className="truncate">{item.label}</span>
             </button>
           ))}
+          {customSections.length > 0 && (
+            <div className="pt-2 mt-2 border-t">
+              <p className="px-3 py-1 text-[10px] font-semibold text-muted-foreground">بخش‌های دلخواه</p>
+              {customSections.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => { setView(`custom:${s.id}`); setNavOpen(false); }}
+                  className={cn(
+                    'w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-right transition-colors min-h-[44px]',
+                    view === `custom:${s.id}`
+                      ? 'bg-emerald-600 text-white font-semibold shadow-sm'
+                      : 'text-emerald-950 hover:bg-emerald-50',
+                  )}
+                >
+                  <LayoutGrid className="h-[18px] w-[18px] shrink-0" />
+                  <span className="truncate">{s.title}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </nav>
       </ScrollArea>
       <div className="px-4 py-3 border-t text-[11px] text-muted-foreground">
@@ -147,7 +180,9 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
     </div>
   );
 
-  const current = visibleNav.find((n) => n.key === view) || visibleNav[0];
+  const current = visibleNav.find((n) => n.key === view)
+    || (view.startsWith('custom:') ? { label: customSections.find((s) => `custom:${s.id}` === view)?.title || 'بخش دلخواه' } as unknown as NavItem : undefined)
+    || visibleNav[0];
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-emerald-50/50 to-white">
@@ -287,11 +322,16 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
           {view === 'activities' && <ActivitiesView user={user} />}
           {view === 'grades' && <GradesView user={user} />}
           {view === 'results' && <ResultsView user={user} />}
+          {view === 'certificates' && <CertificatesView user={user} />}
+          {view === 'customs' && <CustomSectionsView user={user} />}
           {view === 'library' && <LibraryView user={user} />}
           {view === 'users' && <UsersView user={user} />}
           {view === 'tasks' && <TasksView user={user} />}
           {view === 'settings' && <SettingsView user={user} />}
-          {view === 'about' && <AboutView />}
+          {view === 'about' && <AboutView user={user} />}
+          {view.startsWith('custom:') && (
+            <CustomSectionsView user={user} initialSectionId={view.slice(7)} />
+          )}
         </main>
       </div>
 

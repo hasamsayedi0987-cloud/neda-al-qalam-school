@@ -48,15 +48,57 @@ export function finalScore(midterm: number | null, annual: number | null): numbe
   return round2(values.reduce((a, b) => a + b, 0) / values.length);
 }
 
-/** مکتسبه (حرف) بر اساس نمرهٔ نهائی */
-export function letterGrade(score: number | null): string {
+/** مکتسبه (حرف) بر اساس نمرهٔ نهائی — مقیاس قابل تنظیم توسط مدیر */
+export interface GradeScaleEntry {
+  label: string;
+  min: number; // حداقل درصد برای این مکتسبه (نزولی مرتب می‌شود)
+}
+
+export const DEFAULT_SCALE: GradeScaleEntry[] = [
+  { label: 'الف', min: 90 },
+  { label: 'ب', min: 80 },
+  { label: 'ج', min: 70 },
+  { label: 'د', min: 60 },
+  { label: 'هـ', min: 50 },
+  { label: 'تکرار', min: 0 },
+];
+
+/** خواندن و اعتبارسنجی مقیاس از تنظیمات */
+export function parseScale(json: string | null | undefined): GradeScaleEntry[] {
+  if (!json) return DEFAULT_SCALE;
+  try {
+    const arr = JSON.parse(json) as GradeScaleEntry[];
+    if (!Array.isArray(arr) || arr.length < 2) return DEFAULT_SCALE;
+    const clean = arr
+      .filter((e) => e && typeof e.label === 'string' && Number.isFinite(Number(e.min)))
+      .map((e) => ({ label: e.label, min: Math.max(0, Math.min(100, Number(e.min))) }))
+      .sort((a, b) => b.min - a.min);
+    return clean.length >= 2 ? clean : DEFAULT_SCALE;
+  } catch {
+    return DEFAULT_SCALE;
+  }
+}
+
+export function letterGrade(score: number | null, scale: GradeScaleEntry[] = DEFAULT_SCALE): string {
   if (score == null) return '—';
-  if (score >= 90) return 'الف';
-  if (score >= 80) return 'ب';
-  if (score >= 70) return 'ج';
-  if (score >= 60) return 'د';
-  if (score >= 50) return 'هـ';
-  return 'تکرار';
+  const sorted = [...scale].sort((a, b) => b.min - a.min);
+  for (const e of sorted) {
+    if (score >= e.min) return e.label;
+  }
+  return sorted[sorted.length - 1]?.label || 'تکرار';
+}
+
+/** برچسب بازهٔ مقیاس برای نمایش (مثال: الف ۸۵-۱۰۰) */
+export function scaleRangesText(scale: GradeScaleEntry[] = DEFAULT_SCALE): string {
+  const sorted = [...scale].sort((a, b) => b.min - a.min);
+  return sorted.map((e, i) => {
+    const top = i === 0 ? 100 : sorted[i - 1].min - 1;
+    return `${e.label}: ${toPersianDigitsSafe(e.min)}-${toPersianDigitsSafe(top)}`;
+  }).join(' | ');
+}
+
+function toPersianDigitsSafe(n: number): string {
+  return String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
 }
 
 /** رنگ پیشنهادی برای مکتسبه */
@@ -74,14 +116,19 @@ export const RESULT_PROMOTED = 'ارتقا صنف';
 export const RESULT_REPEAT = 'تکرار صنف';
 export const RESULT_INCOMPLETE = 'ناقص';
 
-/** نتیجهٔ کل شاگرد بر اساس نمرات نهائی همهٔ مضامین */
-export function overallResult(finals: Array<number | null>): {
+/** نتیجهٔ کل شاگرد بر اساس نمرات نهائی همهٔ مضامین — حد قبولی از مقیاس گرفته می‌شود */
+export function overallResult(
+  finals: Array<number | null>,
+  scale: GradeScaleEntry[] = DEFAULT_SCALE,
+): {
   result: string;
   failed: number;
 } {
   const valid = finals.filter((f) => f != null) as number[];
   if (valid.length === 0) return { result: RESULT_INCOMPLETE, failed: 0 };
-  const failed = valid.filter((f) => f < 50).length;
+  const sorted = [...scale].sort((a, b) => b.min - a.min);
+  const passMin = sorted.length > 1 ? sorted[sorted.length - 2].min : 50; // کمترین حد قبولی (بالای تکرار)
+  const failed = valid.filter((f) => f < passMin).length;
   if (failed === 0) return { result: RESULT_PROMOTED, failed: 0 };
   return { result: RESULT_REPEAT, failed };
 }
