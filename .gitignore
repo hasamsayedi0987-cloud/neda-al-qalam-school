@@ -40,3 +40,4 @@ apk-build/ecj.jar
 apk-build/build/
 scripts/*.png
 .nextprod/
+.nextapk/

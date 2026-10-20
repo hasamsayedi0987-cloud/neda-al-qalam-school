@@ -17,9 +17,22 @@ PKG="af/nedaalqalam/school"
 
 rm -rf "$OUT"; mkdir -p "$OUT/classes" "$OUT/dex" "$OUT/apk" "$OUT/gen"
 
+echo "0/5 آماده‌سازی رابط کاربری جاسازی‌شده (assets/www)…"
+# ساخت وب‌اپ با basePath=/assets — پیش از اجرای build.sh:
+#   NEXT_OUTPUT=export NEXT_DIST_DIR=.nextapk NEXT_PUBLIC_BASE_PATH=/assets \
+#   NEXT_PUBLIC_GH_TOKEN=<توکن> bun run build:static
+WEBDIR="../.nextapk"
+if [ ! -f "$WEBDIR/index.html" ]; then
+  echo "❌ رابط کاربری یافت نشد: $WEBDIR/index.html"
+  echo "   ابتدا وب‌اپ را بسازید (دستور بالا) یا مسیر WEBDIR را تنظیم کنید."
+  exit 1
+fi
+rm -rf assets/www; mkdir -p assets/www
+cp -r "$WEBDIR"/* assets/www/
+
 echo "1/5 کامپایل منابع (aapt2)…"
 "$BT/aapt2" compile --dir res -o "$OUT/res.zip"
-"$BT/aapt2" link -o "$OUT/apk/base.apk" -I "$PLATFORM" \
+"$BT/aapt2" link -o "$OUT/apk/base.apk" -I "$PLATFORM" -A assets \
   --manifest AndroidManifest.xml --java "$OUT/gen" "$OUT/res.zip"
 
 echo "2/5 کامپایل جاوا…"

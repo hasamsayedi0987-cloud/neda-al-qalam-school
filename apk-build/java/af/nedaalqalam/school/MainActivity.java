@@ -8,41 +8,48 @@ import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
-import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
-import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
+
 /**
- * مکتب خصوصی نداالقلم — اپلیکیشن اندروید (WebView)
+ * مکتب خصوصی نداالقلم — اپلیکیشن اندروید (نسخهٔ ابری ۱.۱)
  * توسعه‌دهنده: حسام الدین سیدی — 0791680632 — hasamsayedi0987@gmail.com
  *
- * اولین بار: کاربر آدرس سرور مکتب را وارد می‌کند (مثلاً http://192.168.1.10:3000
- * یا آدرس اینترنتی مکتب). آدرس ذخیره می‌شود و از دفعهٔ بعد مستقیم باز می‌شود.
- * برای تغییر آدرس: دکمهٔ منوی گوشی → «تغییر آدرس سرور».
+ * معماری: رابط کاربری اپ به‌صورت کامل داخل APK جاسازی شده (assets/www) و
+ * داده‌ها در مخزن خصوصی گیت‌هاب ذخیره و بین همهٔ دستگاه‌ها همگام می‌شوند.
+ * - بدون نیاز به آدرس IP یا سرور محلی — فقط نام کاربری و رمز عبور
+ * - آنلاین: همگام‌سازی با ابر | آفلاین: رابط و آخرین داده‌ها از حافظه، ثبت‌ها در صف
+ * - URL پیش‌فرض: نسخهٔ داخلی (appassets) — از منوی گوشی می‌توان آدرس سایت ابری
+ *   (https://hasamsayedi0987-cloud.github.io/neda-al-qalam-school/) را هم گذاشت.
  */
 public class MainActivity extends Activity {
 
     private static final String PREFS = "noq_prefs";
     private static final String KEY_URL = "server_url";
+    private static final String ASSET_URL = "https://appassets.androidplatform.net/assets/index.html";
+    private static final String ASSET_HOST = "appassets.androidplatform.net";
+    private static final String ASSET_PREFIX = "/assets/";
 
     private WebView webView;
     private ProgressBar progressBar;
-    private LinearLayout startLayout;
-    private EditText startUrlInput;
     private SharedPreferences prefs;
     private String serverUrl = "";
     private ValueCallback<Uri[]> fileCallback;
@@ -52,103 +59,9 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        String saved = prefs.getString(KEY_URL, "");
-        if (saved.isEmpty()) {
-            showStartScreen();
-        } else {
-            serverUrl = saved;
-            buildWebView();
-            webView.loadUrl(serverUrl);
-        }
-    }
-
-    // ───────── صفحهٔ اول: گرفتن آدرس سرور ─────────
-    private void showStartScreen() {
-        startLayout = new LinearLayout(this);
-        startLayout.setOrientation(LinearLayout.VERTICAL);
-        startLayout.setGravity(Gravity.CENTER);
-        startLayout.setPadding(dp(28), dp(28), dp(28), dp(28));
-        startLayout.setBackgroundColor(Color.rgb(236, 253, 245));
-
-        ImageView logo = new ImageView(this);
-        logo.setImageResource(getResources().getIdentifier("ic_launcher", "mipmap", getPackageName()));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(110), dp(110));
-        lp.gravity = Gravity.CENTER_HORIZONTAL;
-        logo.setLayoutParams(lp);
-        startLayout.addView(logo);
-
-        TextView title = new TextView(this);
-        title.setText("مکتب خصوصی نداالقلم");
-        title.setTextSize(24);
-        title.setTypeface(null, android.graphics.Typeface.BOLD);
-        title.setTextColor(Color.rgb(6, 78, 59));
-        title.setGravity(Gravity.CENTER);
-        title.setPadding(0, dp(18), 0, dp(4));
-        startLayout.addView(title);
-
-        TextView sub = new TextView(this);
-        sub.setText("سیستم مدیریت تعلیمی — نمرات، حاضری، کارنامه، کتابخانه");
-        sub.setTextSize(13);
-        sub.setTextColor(Color.rgb(77, 92, 87));
-        sub.setGravity(Gravity.CENTER);
-        sub.setPadding(0, 0, 0, dp(24));
-        startLayout.addView(sub);
-
-        TextView lbl = new TextView(this);
-        lbl.setText("آدرس سرور مکتب را وارد کنید:");
-        lbl.setTextSize(14);
-        lbl.setTextColor(Color.rgb(6, 78, 59));
-        lbl.setGravity(Gravity.CENTER);
-        startLayout.addView(lbl);
-
-        startUrlInput = new EditText(this);
-        startUrlInput.setHint("مثلاً http://192.168.1.10:3000");
-        startUrlInput.setTextSize(14);
-        startUrlInput.setTextDirection(View.TEXT_DIRECTION_LTR);
-        startUrlInput.setGravity(Gravity.CENTER);
-        startUrlInput.setSingleLine(true);
-        LinearLayout.LayoutParams ip = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        ip.setMargins(0, dp(10), 0, dp(14));
-        startUrlInput.setLayoutParams(ip);
-        startLayout.addView(startUrlInput);
-
-        Button btn = new Button(this);
-        btn.setText("ورود به سیستم");
-        btn.setTextColor(Color.WHITE);
-        btn.setBackgroundColor(Color.rgb(4, 120, 87));
-        btn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                String u = startUrlInput.getText().toString().trim();
-                if (u.isEmpty()) {
-                    Toast.makeText(MainActivity.this, "آدرس سرور را وارد کنید", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                if (!u.startsWith("http://") && !u.startsWith("https://")) u = "http://" + u;
-                u = u.replaceAll("/+$", "");
-                prefs.edit().putString(KEY_URL, u).apply();
-                serverUrl = u;
-                startLayout = null;
-                setContentView(new LinearLayout(MainActivity.this));
-                buildWebView();
-                webView.loadUrl(serverUrl);
-            }
-        });
-        startLayout.addView(btn);
-
-        TextView hint = new TextView(this);
-        hint.setText("آدرس سرور همان کامپیوتر/سروری است که سیستم مکتب روی آن اجرا است.\n"
-                + "مثال شبکهٔ مکتب: http://192.168.1.10:3000\n"
-                + "اگر روی اینترنت هاست شده: آدرس آن را وارد کنید.\n\n"
-                + "توسعه‌دهنده: حسام الدین سیدی — 0791680632");
-        hint.setTextSize(12);
-        hint.setTextColor(Color.rgb(77, 92, 87));
-        hint.setGravity(Gravity.CENTER);
-        hint.setPadding(0, dp(24), 0, 0);
-        startLayout.addView(hint);
-
-        setContentView(startLayout);
+        serverUrl = prefs.getString(KEY_URL, ASSET_URL);
+        buildWebView();
+        webView.loadUrl(serverUrl);
     }
 
     // ───────── ساخت WebView ─────────
@@ -183,12 +96,26 @@ public class MainActivity extends Activity {
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
 
         webView.setWebViewClient(new WebViewClient() {
+
+            // سرو کردن رابط کاربری جاسازی‌شده از assets/www
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                Uri url = request.getUrl();
+                String host = url.getHost() == null ? "" : url.getHost();
+                String path = url.getPath() == null ? "" : url.getPath();
+                if (ASSET_HOST.equals(host) && path.startsWith(ASSET_PREFIX)) {
+                    return serveAsset(path.substring(ASSET_PREFIX.length()));
+                }
+                return null; // بقیهٔ درخواست‌ها عادی (گیت‌هاب از اینترنت)
+            }
+
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
                 String host = uri.getHost() == null ? "" : uri.getHost();
-                String appHost = Uri.parse(serverUrl).getHost() == null ? "" : Uri.parse(serverUrl).getHost();
-                if (host.equals(appHost)) return false; // لینک داخلی
+                if (ASSET_HOST.equals(host)) return false;
+                String currentHost = Uri.parse(serverUrl).getHost() == null ? "" : Uri.parse(serverUrl).getHost();
+                if (host.equals(currentHost)) return false;
                 try {
                     startActivity(new Intent(Intent.ACTION_VIEW, uri)); // لینک خارجی
                 } catch (Exception ignored) { }
@@ -233,15 +160,57 @@ public class MainActivity extends Activity {
         });
     }
 
+    private WebResourceResponse serveAsset(String relPath) {
+        if (relPath == null || relPath.isEmpty() || "index.html".equals(relPath)) {
+            relPath = "index.html";
+        }
+        try {
+            InputStream is = getAssets().open("www/" + relPath);
+            Map<String, String> headers = new HashMap<String, String>();
+            headers.put("Access-Control-Allow-Origin", "*");
+            WebResourceResponse resp = new WebResourceResponse(guessMime(relPath), "utf-8", is);
+            resp.setResponseHeaders(headers);
+            return resp;
+        } catch (IOException e) {
+            // fallback: index.html برای مسیرهای SPA
+            try {
+                InputStream is = getAssets().open("www/index.html");
+                return new WebResourceResponse("text/html", "utf-8", is);
+            } catch (IOException e2) {
+                return new WebResourceResponse("text/plain", "utf-8", 404, "Not Found",
+                        null, new ByteArrayInputStream("not found".getBytes()));
+            }
+        }
+    }
+
+    private String guessMime(String path) {
+        String p = path.toLowerCase();
+        if (p.endsWith(".html") || p.endsWith(".htm")) return "text/html";
+        if (p.endsWith(".js") || p.endsWith(".mjs")) return "application/javascript";
+        if (p.endsWith(".css")) return "text/css";
+        if (p.endsWith(".json") || p.endsWith(".map")) return "application/json";
+        if (p.endsWith(".png")) return "image/png";
+        if (p.endsWith(".jpg") || p.endsWith(".jpeg")) return "image/jpeg";
+        if (p.endsWith(".svg")) return "image/svg+xml";
+        if (p.endsWith(".webp")) return "image/webp";
+        if (p.endsWith(".ico")) return "image/x-icon";
+        if (p.endsWith(".woff2")) return "font/woff2";
+        if (p.endsWith(".woff")) return "font/woff";
+        if (p.endsWith(".ttf")) return "font/ttf";
+        if (p.endsWith(".txt")) return "text/plain";
+        return "application/octet-stream";
+    }
+
     private String mainFrameErrorHtml() {
-        return "<html dir='rtl'><body style='font-family:sans-serif;text-align:center;padding:40px;background:#ecfdf5'>"
-                + "<h2 style='color:#064e3b'>اتصال به سرور برقرار نشد</h2>"
-                + "<p style='color:#4b5563'>بررسی کنید: ۱) سرور مکتب روشن است ۲) آدرس درست است ۳) به همان شبکه وصل هستید.</p>"
+        return "<html dir='rtl'><head><meta charset='utf-8'></head>"
+                + "<body style='font-family:sans-serif;text-align:center;padding:40px;background:#ecfdf5'>"
+                + "<h2 style='color:#064e3b'>بارگذاری ناموفق</h2>"
+                + "<p style='color:#4b5563'>اتصال اینترنت را بررسی کنید و دوباره تلاش کنید. داده‌های قبلی در حافظهٔ اپ موجود است.</p>"
                 + "<button onclick='location.reload()' style='background:#047857;color:#fff;border:0;padding:12px 28px;border-radius:8px;font-size:15px'>تلاش مجدد</button>"
                 + "</body></html>";
     }
 
-    // ───────── تغییر آدرس سرور ─────────
+    // ───────── منوی گوشی: تغییر آدرس (پیشرفته) ─────────
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_MENU && webView != null) {
@@ -257,15 +226,15 @@ public class MainActivity extends Activity {
         input.setTextDirection(View.TEXT_DIRECTION_LTR);
         input.setText(serverUrl);
         new AlertDialog.Builder(this)
-                .setTitle("تغییر آدرس سرور")
-                .setMessage("آدرس فعلی: " + serverUrl)
+                .setTitle("آدرس سیستم")
+                .setMessage("آدرس فعلی: " + serverUrl + "\n\nپیش‌فرض: نسخهٔ داخلی اپ (بدون نیاز به اینترنت برای رابط کاربری)")
                 .setView(input)
                 .setPositiveButton("ذخیره و بارگذاری", new android.content.DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(android.content.DialogInterface d, int w) {
                         String u = input.getText().toString().trim();
                         if (!u.isEmpty()) {
-                            if (!u.startsWith("http://") && !u.startsWith("https://")) u = "http://" + u;
+                            if (!u.startsWith("http://") && !u.startsWith("https://")) u = "https://" + u;
                             u = u.replaceAll("/+$", "");
                             prefs.edit().putString(KEY_URL, u).apply();
                             serverUrl = u;
@@ -273,12 +242,12 @@ public class MainActivity extends Activity {
                         }
                     }
                 })
-                .setNeutralButton("صفحهٔ ورود آدرس", new android.content.DialogInterface.OnClickListener() {
+                .setNeutralButton("بازگشت به نسخهٔ داخلی", new android.content.DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(android.content.DialogInterface d, int w) {
-                        webView = null;
-                        prefs.edit().remove(KEY_URL).apply();
-                        showStartScreen();
+                        prefs.edit().putString(KEY_URL, ASSET_URL).apply();
+                        serverUrl = ASSET_URL;
+                        webView.loadUrl(serverUrl);
                     }
                 })
                 .setNegativeButton("انصراف", null)
