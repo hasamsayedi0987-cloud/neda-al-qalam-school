@@ -2,7 +2,7 @@
  * Service Worker — مکتب خصوصی نداالقلم
  * پشتیبانی آفلاین: کش کردن پوستهٔ اپ (مسیرهای نسبی — سازگار با زیرمسیر GitHub Pages)
  */
-const CACHE_NAME = 'noq-cache-v2';
+const CACHE_NAME = 'noq-cache-v3';
 const APP_SHELL = [
   './',
   './logo.png',
@@ -49,4 +49,9 @@ self.addEventListener('fetch', (event) => {
         .catch(() => cached);
     }),
   );
+});
+
+/* نسخهٔ ۱.۲ — پاک‌سازی کش‌های قدیمی معماری گیت‌هاب */
+self.addEventListener('message', (event) => {
+  if (event.data === 'skip-waiting') self.skipWaiting();
 });
