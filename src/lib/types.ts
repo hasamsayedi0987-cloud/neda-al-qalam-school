@@ -37,7 +37,7 @@ export interface ClassSubjectInfo {
 export interface StudentInfo {
   id: string;
   firstName: string;
-  lastName: string;
+  lastName: string | null;
   fatherName: string;
   grandFather?: string | null;
   gender: string;

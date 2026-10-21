@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -87,6 +87,9 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
   const [online, setOnline] = useState(true);
   const [pending, setPending] = useState(0);
   const [authNeeded, setAuthNeeded] = useState(false);
+  // پس از تخلیهٔ موفق صف، ویوهای باز دوباره بارگذاری می‌شوند (دادهٔ واقعی سرور)
+  const [syncTick, setSyncTick] = useState(0);
+  const prevPendingRef = useRef(0);
   const [customSections, setCustomSections] = useState<CustomSectionData[]>([]);
   const { toast } = useToast();
 
@@ -118,8 +121,12 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
   useEffect(() => {
     const update = () => {
       setOnline(isOnline());
-      setPending(pendingSyncCount());
+      const p = pendingSyncCount();
+      setPending(p);
       setAuthNeeded(isAuthRequired());
+      // صف از «پر» به «خالی» رسید = همگام‌سازی موفق — رندر مجدد ویو فعال با دادهٔ سرور
+      if (p === 0 && prevPendingRef.current > 0) setSyncTick((t) => t + 1);
+      prevPendingRef.current = p;
     };
     update();
     const un = onSyncStateChange(update);
@@ -192,7 +199,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
         </nav>
       </ScrollArea>
       <div className="px-4 py-3 border-t text-[11px] text-muted-foreground">
-        نسخهٔ ۱.۰ — حسام الدین سیدی
+        نسخهٔ ۱.۵ — حسام الدین سیدی
       </div>
     </div>
   );
@@ -340,8 +347,8 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
           {navContent}
         </aside>
 
-        {/* محتوا */}
-        <main className="flex-1 min-w-0 p-3 md:p-6 max-w-[1400px]">
+        {/* محتوا — syncTick پس از هر همگام‌سازی موفق، ویو را با دادهٔ تازهٔ سرور بازسازی می‌کند */}
+        <main key={syncTick} className="flex-1 min-w-0 p-3 md:p-6 max-w-[1400px]">
           {view === 'dashboard' && <DashboardView user={user} onNavigate={setView} />}
           {view === 'students' && <StudentsView user={user} />}
           {view === 'teachers' && <TeachersView user={user} />}

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader, LoadingBlock, EmptyState, Field } from './ui-bits';
+import { fullName } from '@/lib/utils';
 import { apiGet, apiSend } from '@/lib/client/api';
 import { toPersianDigits } from '@/lib/jalali';
 import { useToast } from '@/hooks/use-toast';
@@ -80,7 +81,7 @@ export function StudentsView({ user }: { user: SessionUser }) {
 
   const openEdit = (s: StudentInfo) => {
     setForm({
-      id: s.id, firstName: s.firstName, lastName: s.lastName, fatherName: s.fatherName,
+      id: s.id, firstName: s.firstName, lastName: s.lastName || '', fatherName: s.fatherName,
       grandFather: s.grandFather || '', gender: s.gender, birthDate: s.birthDate || '',
       idNumber: s.idNumber || '', guardianName: s.guardianName || '', guardianPhone: s.guardianPhone || '',
       address: s.address || '', classId: s.classId || '', rollNo: s.rollNo != null ? String(s.rollNo) : '',
@@ -90,8 +91,9 @@ export function StudentsView({ user }: { user: SessionUser }) {
   };
 
   const save = async () => {
-    if (!form.firstName.trim() || !form.lastName.trim() || !form.fatherName.trim()) {
-      toast({ title: 'خطا', description: 'اسم، شهرت و نام پدر ضروری است', variant: 'destructive' });
+    // شهرت/تخلص اختیاری است — فقط اسم و نام پدر ضروری
+    if (!form.firstName.trim() || !form.fatherName.trim()) {
+      toast({ title: 'خطا', description: 'اسم و نام پدر ضروری است', variant: 'destructive' });
       return;
     }
     const res = await apiSend('/api/students', form.id ? 'PATCH' : 'POST', {
@@ -103,21 +105,22 @@ export function StudentsView({ user }: { user: SessionUser }) {
       return;
     }
     toast({
-      title: res.queued ? 'ذخیره در صف آفلاین' : 'ثبت شد',
-      description: res.queued ? 'پس از اتصال به شبکه همگام می‌شود' : 'اطلاعات شاگرد با موفقیت ثبت گردید',
+      title: 'ذخیره شد',
+      description: res.queued ? 'در حافظهٔ گوشی ذخیره شد — پس از اتصال به سرور منتقل می‌شود' : 'اطلاعات شاگرد ثبت گردید',
     });
     setDialogOpen(false);
-    if (!res.queued) load();
+    // آفلاین هم بارگذاری می‌شود — تغییر از کش محلی (با رونویسی) فوراً نمایش داده می‌شود
+    load();
   };
 
   const remove = async (s: StudentInfo) => {
-    if (!confirm(`آیا از حذف «${s.firstName} ${s.lastName}» مطمئن هستید؟ تمام نمرات و حاضری او نیز حذف می‌شود.`)) return;
+    if (!confirm(`آیا از حذف «${fullName(s)}» مطمئن هستید؟ تمام نمرات و حاضری او نیز حذف می‌شود.`)) return;
     const res = await apiSend(`/api/students?id=${s.id}`, 'DELETE');
     if (res.error) {
       toast({ title: 'خطا', description: res.error, variant: 'destructive' });
       return;
     }
-    toast({ title: 'حذف شد' });
+    toast({ title: 'حذف شد', description: res.queued ? 'در حافظهٔ گوشی حذف شد — پس از اتصال همگام می‌شود' : undefined });
     load();
   };
 
@@ -217,7 +220,7 @@ export function StudentsView({ user }: { user: SessionUser }) {
                     <TableRow key={s.id}>
                       <TableCell className="text-muted-foreground">{toPersianDigits(s.rollNo ?? i + 1)}</TableCell>
                       <TableCell className="font-medium">{s.firstName}</TableCell>
-                      <TableCell>{s.lastName}</TableCell>
+                      <TableCell>{s.lastName || '—'}</TableCell>
                       <TableCell>{s.fatherName}</TableCell>
                       <TableCell className="hidden md:table-cell">
                         <Badge variant="outline" className="border-emerald-200 text-emerald-700">{s.className || '—'}</Badge>
@@ -269,7 +272,7 @@ export function StudentsView({ user }: { user: SessionUser }) {
             <Field label="اسم *">
               <Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
             </Field>
-            <Field label="شهرت / تخلص *">
+            <Field label="شهرت / تخلص" hint="اختیاری — در صورت نداشتن، خالی بگذارید">
               <Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
             </Field>
             <Field label="ولد (نام پدر) *">

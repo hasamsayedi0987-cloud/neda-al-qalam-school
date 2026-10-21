@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PageHeader, LoadingBlock, Field } from './ui-bits';
+import { fullName } from '@/lib/utils';
 import { apiGet, apiSend } from '@/lib/client/api';
 import { toPersianDigits, isoToJalaliDisplay, isoToday } from '@/lib/jalali';
 import { useToast } from '@/hooks/use-toast';
@@ -123,7 +124,7 @@ export function CertificatesView({ user }: { user: SessionUser }) {
   const receiverName = () => {
     if (receiverType === 'student') {
       const s = students.find((x) => x.id === studentId);
-      return s ? `${s.firstName} ${s.lastName}` : '{نام}';
+      return s ? `${fullName(s)}` : '{نام}';
     }
     if (receiverType === 'teacher') {
       const t = teachers.find((x) => x.id === teacherId);
@@ -367,7 +368,7 @@ export function CertificatesView({ user }: { user: SessionUser }) {
                   <SelectContent className="max-h-72">
                     {students.map((s) => (
                       <SelectItem key={s.id} value={s.id}>
-                        {s.firstName} {s.lastName} {s.className ? `— ${s.className}` : ''}
+                        {fullName(s)} {s.className ? `— ${s.className}` : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>

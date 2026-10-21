@@ -14,7 +14,7 @@ import { letterGrade, letterColor, PERIOD_LABELS, RESULT_PROMOTED, RESULT_REPEAT
 import { printDocument, exportWord, exportExcel, fileStamp } from '@/lib/client/exports';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, ClassInfo, ResultsRow } from '@/lib/types';
-import { cn } from '@/lib/utils';
+import { cn, fullName } from '@/lib/utils';
 import { FileSpreadsheet, Printer, FileText, Award, Table2 } from 'lucide-react';
 
 interface ClassResultData {
@@ -102,7 +102,7 @@ export function ResultsView({ user }: { user: SessionUser }) {
       }).join('');
       return `<tr>
         <td>${toPersianDigits(r.student.rollNo ?? i + 1)}</td>
-        <td style="text-align:right">${r.student.firstName} ${r.student.lastName} ولد ${r.student.fatherName}</td>
+        <td style="text-align:right">${fullName(r.student)} ولد ${r.student.fatherName}</td>
         ${cells}
         <td>${r.total != null ? toPersianDigits(r.total) : '—'}</td>
         <td><b>${r.average != null ? toPersianDigits(r.average) : '—'}</b></td>
@@ -136,7 +136,7 @@ export function ResultsView({ user }: { user: SessionUser }) {
         const v = r.perSubject[s.id];
         return `<td>${v?.final ?? ''}</td>`;
       }).join('');
-      return `<tr><td>${i + 1}</td><td>${r.student.firstName} ${r.student.lastName}</td><td>${r.student.fatherName}</td>${cells}<td>${r.total ?? ''}</td><td>${r.average ?? ''}</td><td>${r.rank ?? ''}</td><td>${r.result}</td></tr>`;
+      return `<tr><td>${i + 1}</td><td>${fullName(r.student)}</td><td>${r.student.fatherName}</td>${cells}<td>${r.total ?? ''}</td><td>${r.average ?? ''}</td><td>${r.rank ?? ''}</td><td>${r.result}</td></tr>`;
     }).join('');
     exportExcel(
       `جدول نتایج ${data.classInfo.name}`,
@@ -318,7 +318,7 @@ export function ResultsView({ user }: { user: SessionUser }) {
                   {data.rows.map((r, i) => (
                     <TableRow key={r.student.id}>
                       <TableCell className="sticky right-0 bg-white z-10">
-                        <span className="font-medium">{toPersianDigits(r.student.rollNo ?? i + 1)}. {r.student.firstName} {r.student.lastName}</span>
+                        <span className="font-medium">{toPersianDigits(r.student.rollNo ?? i + 1)}. {fullName(r.student)}</span>
                         <span className="block text-[10px] text-muted-foreground">ولد {r.student.fatherName}</span>
                       </TableCell>
                       {data.subjects.map((s) => {

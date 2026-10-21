@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { PageHeader, LoadingBlock, EmptyState, Field } from './ui-bits';
+import { fullName } from '@/lib/utils';
 import { apiGet, apiSend } from '@/lib/client/api';
 import { ROLE_LABELS } from '@/lib/grading';
 import { useToast } from '@/hooks/use-toast';
@@ -58,12 +59,16 @@ export function UsersView({ user: me }: { user: SessionUser }) {
       toast({ title: 'خطا', description: 'نام کاربری، نام و رمز عبور ضروری است', variant: 'destructive' });
       return;
     }
+    if (!form.id && !/^[a-z0-9._\-@]+$/i.test(form.username.trim())) {
+      toast({ title: 'خطا', description: 'نام کاربری فقط حروف انگلیسی، عدد و . _ - @ می‌تواند داشته باشد', variant: 'destructive' });
+      return;
+    }
     const res = await apiSend('/api/users', form.id ? 'PATCH' : 'POST', form);
     if (res.error) {
       toast({ title: 'خطا', description: res.error, variant: 'destructive' });
       return;
     }
-    toast({ title: 'ذخیره شد', description: 'حساب کاربری با موفقیت ثبت گردید' });
+    toast({ title: 'ذخیره شد', description: 'حساب کاربری ثبت گردید' });
     setDialogOpen(false);
     load();
   };
@@ -92,7 +97,7 @@ export function UsersView({ user: me }: { user: SessionUser }) {
       toast({ title: 'خطا', description: res.error, variant: 'destructive' });
       return;
     }
-    toast({ title: 'حساب حذف شد' });
+    toast({ title: 'حساب حذف شد', description: res.queued ? 'در حافظهٔ گوشی — پس از اتصال همگام می‌شود' : undefined });
     load();
   };
 
@@ -219,8 +224,11 @@ export function UsersView({ user: me }: { user: SessionUser }) {
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto nice-scroll">
           <DialogHeader><DialogTitle>{form.id ? 'ویرایش کاربر' : 'کاربر جدید'}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-3 py-2">
-            <Field label="نام کاربری *">
-              <Input dir="ltr" className="text-left" value={form.username} disabled={!!form.id}
+            <Field
+              label="نام کاربری *"
+              hint={form.id ? 'قابل تغییر — دفعهٔ بعد با همین نام جدید وارد شوید' : undefined}
+            >
+              <Input dir="ltr" className="text-left" value={form.username}
                 onChange={(e) => setForm({ ...form, username: e.target.value })} />
             </Field>
             <Field label={form.id ? 'رمز (تغییر نکردن = خالی)' : 'رمز عبور *'}>
@@ -259,7 +267,7 @@ export function UsersView({ user: me }: { user: SessionUser }) {
                   <SelectContent>
                     <SelectItem value="none">بدون پیوند</SelectItem>
                     {students.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.firstName} {s.lastName} — {s.className || 'بدون صنف'}</SelectItem>
+                      <SelectItem key={s.id} value={s.id}>{fullName(s)} — {s.className || 'بدون صنف'}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

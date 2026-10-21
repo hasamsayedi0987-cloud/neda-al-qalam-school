@@ -1,16 +1,16 @@
 /**
- * Service Worker — مکتب خصوصی نداالقلم (نسخهٔ ۴ — آفلاین کامل)
+ * Service Worker — مکتب خصوصی نداالقلم (نسخهٔ ۵ — آفلاین سریع)
  *
  * قابلیت‌ها:
  *  - پوستهٔ کامل اپ (HTML + همهٔ فایل‌های JS/CSS از manifest تولیدی Build) در Install ذخیره می‌شود
  *    → اپ بدون انترنت هم باز می‌شود
  *  - صفحات (navigation): شبکه‌اول با سقف زمانی → در قطعی، از کش
  *  - /_next/static: کش‌اول (فایل‌های hash شده تغییرناپذیر)
- *  - API GET: شبکه‌اول → در قطعی آخرین داده از کش (لایهٔ localStorage اپ هم پشتیبان است)
+ *  - API GET: شبکه‌اول → در قطعی آخرین داده از کش (با نشانگر x-noq-cache تا اپ حالت آفلاین را بداند)
  *  - نوشتن‌ها (POST/PATCH/DELETE) دست‌نخورده — صف آفلاین در api.ts مدیریت می‌شود
  */
 
-const VERSION = 'v4-2';
+const VERSION = 'v5-1';
 const SHELL_CACHE = 'noq-shell-' + VERSION;
 const RUNTIME_CACHE = 'noq-runtime-' + VERSION;
 const API_CACHE = 'noq-api-' + VERSION;
@@ -77,8 +77,19 @@ function isCacheable(res) {
 function offlineApiRes() {
   return new Response(JSON.stringify({ error: 'آفلاین — اتصال به سرور برقرار نیست' }), {
     status: 503,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-noq-cache': '1' },
   });
+}
+
+/* افزودن نشانگر «از کش» به پاسخ — تا اپ بفهمد شبکه واقعاً در دسترس نبوده */
+function withCacheHeader(res) {
+  try {
+    const h = new Headers(res.headers);
+    h.set('x-noq-cache', '1');
+    return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h });
+  } catch (e) {
+    return res;
+  }
 }
 
 /* شبکه‌اول با سقف زمانی + برگشت به کش */
@@ -95,7 +106,7 @@ async function networkFirst(request, cacheName) {
     }
     return res;
   } catch (e) {
-    if (cached) return cached;
+    if (cached) return withCacheHeader(cached);
     // تلاش برای نسخه‌های مشابه (مثلاً / با و بدون اسلش)
     if (request.mode === 'navigate') {
       const root = await caches.match('./');

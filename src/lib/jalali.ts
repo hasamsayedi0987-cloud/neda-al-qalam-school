@@ -154,6 +154,13 @@ export function jalaliMonthRange(jy: number, jm: number): { startIso: string; en
   return { startIso: fmt(g1), endIso: fmt(g2) };
 }
 
+/** تعداد روزهای ماه شمسی (کبیسه لحاظ می‌شود) */
+export function jalaliMonthLength(jy: number, jm: number): number {
+  if (jm <= 6) return 31;
+  if (jm <= 11) return 30;
+  return jalCal(jy).leap === 0 ? 30 : 29;
+}
+
 export { afghanMonths };
 
 export function jalaliNowDisplay(): string {

@@ -41,7 +41,7 @@ const bad = (msg) => { console.log('  ✗', msg); failed++; };
   creds ? ok('اعتبار آفلاین admin ذخیره شد') : bad('اعتبار آفلاین ذخیره نشد!');
 
   console.log('── فاز ۲: خروج + کشتن سرور (onLine=true ولی شبکه مرده) ──');
-  await page.getByRole('button', { name: /حسام الدین سیدی/ }).click();
+  await page.locator('header button').filter({ hasText: 'مدیر مکتب' }).click();
   await page.getByRole('menuitem', { name: 'خروج از حساب' }).click();
   await page.waitForSelector('#username', { timeout: 10000 });
   ok('خروج — صفحهٔ ورود');
@@ -82,7 +82,7 @@ const bad = (msg) => { console.log('  ✗', msg); failed++; };
   badge ? ok('بج «آفلاین» فعال است') : ok('(بج آفلاین در این viewport دیده نشد — غیربحرانی)');
 
   console.log('── فاز ۵: رمز غلط آفلاین — پیام درست ──');
-  await page.getByRole('button', { name: /حسام الدین سیدی/ }).click().catch(() => {});
+  await page.locator('header button').filter({ hasText: 'مدیر مکتب' }).click().catch(() => {});
   await page.getByRole('menuitem', { name: 'خروج از حساب' }).click().catch(() => {});
   await page.waitForSelector('#username', { timeout: 10000 }).catch(() => {});
   await page.fill('#username', 'admin');

@@ -58,8 +58,9 @@ export async function POST(req: NextRequest) {
     const firstName = str(body.firstName);
     const lastName = str(body.lastName);
     const fatherName = str(body.fatherName);
-    if (!firstName || !lastName || !fatherName) {
-      throw new ApiError('اسم، شهرت و نام پدر ضروری است');
+    // شهرت/تخلص اختیاری است — فقط اسم و نام پدر ضروری
+    if (!firstName || !fatherName) {
+      throw new ApiError('اسم و نام پدر ضروری است');
     }
     const classId = str(body.classId) || null;
     // معلم باید مجوز مدیر داشته باشد و فقط در صنف‌های خودش شاگرد ثبت کند
@@ -80,7 +81,7 @@ export async function POST(req: NextRequest) {
     }
     const student = await db.student.create({
       data: {
-        firstName, lastName, fatherName,
+        firstName, lastName: lastName || null, fatherName,
         grandFather: str(body.grandFather) || null,
         gender: str(body.gender) === 'F' ? 'F' : 'M',
         birthDate: str(body.birthDate) || null,

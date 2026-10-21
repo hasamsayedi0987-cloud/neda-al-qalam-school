@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { PageHeader, LoadingBlock, EmptyState, Field } from './ui-bits';
+import { PageHeader, LoadingBlock, EmptyState, Field, JalaliDatePicker } from './ui-bits';
 import { apiGet, apiSend } from '@/lib/client/api';
 import { isoToJalaliDisplay, toPersianDigits } from '@/lib/jalali';
 import { useToast } from '@/hooks/use-toast';
@@ -193,8 +193,8 @@ export function TasksView({ user }: { user: SessionUser }) {
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="مهلت انجام">
-              <Input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
+            <Field label="مهلت انجام (شمسی)">
+              <JalaliDatePicker value={form.dueDate} onChange={(iso) => setForm({ ...form, dueDate: iso })} />
             </Field>
             <Field label="توضیحات">
               <Textarea rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />

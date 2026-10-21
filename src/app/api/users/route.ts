@@ -62,6 +62,17 @@ export async function PATCH(req: NextRequest) {
     const id = str(body.id);
     if (!id) throw new ApiError('شناسهٔ کاربر لازم است');
     const data: Record<string, unknown> = {};
+    // تغییر نام کاربری — باید یکتا باشد
+    if (body.username !== undefined) {
+      const username = str(body.username).toLowerCase().trim();
+      if (!username) throw new ApiError('نام کاربری نمی‌تواند خالی باشد');
+      if (!/^[a-z0-9._\-@]+$/.test(username)) {
+        throw new ApiError('نام کاربری فقط حروف انگلیسی، عدد و . _ - @ می‌تواند داشته باشد');
+      }
+      const taken = await db.user.findFirst({ where: { username, NOT: { id } } });
+      if (taken) throw new ApiError('این نام کاربری قبلاً گرفته شده است');
+      data.username = username;
+    }
     if (body.name !== undefined) data.name = str(body.name);
     if (body.role !== undefined && VALID_ROLES.includes(str(body.role))) data.role = str(body.role);
     if (body.phone !== undefined) data.phone = str(body.phone) || null;

@@ -9,7 +9,10 @@ import type {
 } from "@/components/ui/toast"
 
 const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+// حداکثر یک ثانیه برای پیام‌های موفق (ذخیره شد/حذف شد) — خطاها کمی بیشتر تا خوانده شوند
+const TOAST_DURATION_SUCCESS = 1000
+const TOAST_DURATION_ERROR = 3500
+const TOAST_REMOVE_DELAY = 600
 
 type ToasterToast = ToastProps & {
   id: string
@@ -156,6 +159,8 @@ function toast({ ...props }: Toast) {
     type: "ADD_TOAST",
     toast: {
       ...props,
+      duration:
+        props.duration ?? (props.variant === "destructive" ? TOAST_DURATION_ERROR : TOAST_DURATION_SUCCESS),
       id,
       open: true,
       onOpenChange: (open) => {

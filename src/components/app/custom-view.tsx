@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PageHeader, LoadingBlock, EmptyState, Field } from './ui-bits';
 import { apiGet, apiSend } from '@/lib/client/api';
-import { toPersianDigits } from '@/lib/jalali';
+import { isoToJalaliDisplay, toPersianDigits } from '@/lib/jalali';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, LayoutGrid, Sparkles } from 'lucide-react';
 import type { SessionUser } from '@/lib/types';
@@ -278,7 +278,7 @@ export function CustomSectionsView({ user, initialSectionId }: { user: SessionUs
                           </TableCell>
                         ))}
                         <TableCell className="text-xs text-muted-foreground">
-                          {e.entryDate || new Date(e.createdAt).toLocaleDateString('fa-AF')}
+                          {isoToJalaliDisplay(e.entryDate || e.createdAt.slice(0, 10))}
                         </TableCell>
                         {active.canWrite && (
                           <TableCell className="text-center">

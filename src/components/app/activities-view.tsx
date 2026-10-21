@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { PageHeader, LoadingBlock, EmptyState, Field } from './ui-bits';
+import { PageHeader, LoadingBlock, EmptyState, Field, JalaliDatePicker } from './ui-bits';
+import { fullName } from '@/lib/utils';
 import { apiGet, apiSend } from '@/lib/client/api';
 import { isoToJalaliDisplay, toPersianDigits } from '@/lib/jalali';
 import { ACTIVITY_TYPE_LABELS } from '@/lib/grading';
@@ -52,7 +53,7 @@ export function ActivitiesView({ user }: { user: SessionUser }) {
 
   const studentName = (id: string) => {
     const s = students.find((x) => x.id === id);
-    return s ? `${s.firstName} ${s.lastName}` : 'شاگرد';
+    return s ? `${fullName(s)}` : 'شاگرد';
   };
 
   const save = async () => {
@@ -67,10 +68,13 @@ export function ActivitiesView({ user }: { user: SessionUser }) {
       toast({ title: 'خطا', description: res.error, variant: 'destructive' });
       return;
     }
-    toast({ title: res.queued ? 'در صف آفلاین ذخیره شد' : 'فعالیت ثبت شد' });
+    toast({
+      title: 'ذخیره شد',
+      description: res.queued ? 'در حافظهٔ گوشی ذخیره شد — پس از اتصال به سرور منتقل می‌شود' : 'فعالیت ثبت گردید',
+    });
     setDialogOpen(false);
     setForm({ studentId: '', type: 'HOMEWORK', score: '', note: '', date: new Date().toISOString().slice(0, 10) });
-    if (!res.queued) load();
+    load();
   };
 
   const remove = async (a: ActivityInfo) => {
@@ -80,6 +84,7 @@ export function ActivitiesView({ user }: { user: SessionUser }) {
       toast({ title: 'خطا', description: res.error, variant: 'destructive' });
       return;
     }
+    toast({ title: 'حذف شد', description: res.queued ? 'در حافظهٔ گوشی — پس از اتصال همگام می‌شود' : undefined });
     load();
   };
 
@@ -174,7 +179,7 @@ export function ActivitiesView({ user }: { user: SessionUser }) {
                 <SelectTrigger><SelectValue placeholder="انتخاب شاگرد" /></SelectTrigger>
                 <SelectContent>
                   {students.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.firstName} {s.lastName}</SelectItem>
+                    <SelectItem key={s.id} value={s.id}>{fullName(s)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -192,8 +197,8 @@ export function ActivitiesView({ user }: { user: SessionUser }) {
             <Field label="امتیاز (اختیاری — از ۱۰۰)">
               <Input type="number" min={0} max={100} value={form.score} onChange={(e) => setForm({ ...form, score: e.target.value })} />
             </Field>
-            <Field label="تاریخ">
-              <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+            <Field label="تاریخ (شمسی)">
+              <JalaliDatePicker value={form.date} onChange={(iso) => setForm({ ...form, date: iso })} />
             </Field>
             <Field label="ملاحظات *">
               <Textarea rows={3} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="مثال: کارخانگی خویش را به‌وقت تکمیل کرد" />

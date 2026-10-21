@@ -13,7 +13,7 @@ import { toPersianDigits } from '@/lib/jalali';
 import { letterGrade, letterColor, clampComponent, componentTotal, PERIOD_LABELS } from '@/lib/grading';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, ClassInfo, GradeCell } from '@/lib/types';
-import { cn } from '@/lib/utils';
+import { cn, fullName } from '@/lib/utils';
 import { ClipboardList, Save, BadgeCheck, RotateCcw, Trash2, BookOpen } from 'lucide-react';
 
 interface CSItem {
@@ -163,18 +163,19 @@ export function GradesView({ user }: { user: SessionUser }) {
       });
     } else {
       toast({
-        title: res.queued ? 'در صف آفلاین ذخیره شد' : 'نمرات ثبت شد',
+        title: 'ذخیره شد',
         description: res.queued
-          ? 'پس از اتصال به شبکه به‌صورت خودکار همگام می‌شود'
+          ? 'در حافظهٔ گوشی ذخیره شد — پس از اتصال به سرور منتقل می‌شود'
           : `نمرات ${toPersianDigits(items.length)} شاگرد در جدول نتایج صنف منعکس گردید`,
       });
     }
-    if (!res.queued) loadGrades();
+    // آفلاین هم بارگذاری می‌شود — نمرات از کش محلی (با رونویسی) فوراً نمایش داده می‌شوند
+    loadGrades();
   };
 
   const deleteRow = async (s: StudentRow) => {
     if (!csId) return;
-    if (!confirm(`حذف نمرات «${s.firstName} ${s.lastName}» در این دوره؟ این عمل قابل بازگشت نیست.`)) return;
+    if (!confirm(`حذف نمرات «${fullName(s)}» در این دوره؟ این عمل قابل بازگشت نیست.`)) return;
     const res = await apiSend<{ deleted?: number }>('/api/grades', 'POST', {
       action: 'delete', classSubjectId: csId, period, studentIds: [s.id],
     }, { queueLabel: 'حذف نمره' });
@@ -182,12 +183,13 @@ export function GradesView({ user }: { user: SessionUser }) {
       toast({ title: 'خطا', description: res.error, variant: 'destructive' });
       return;
     }
-    if (!res.queued) {
-      toast({ title: 'نمره حذف شد', description: `نمرات ${toPersianDigits(res.data?.deleted || 0)} رکورد حذف گردید` });
-      loadGrades();
-    } else {
-      toast({ title: 'در صف آفلاین ثبت شد' });
-    }
+    toast({
+      title: 'حذف شد',
+      description: res.queued
+        ? 'در حافظهٔ گوشی حذف شد — پس از اتصال همگام می‌شود'
+        : `${toPersianDigits(res.data?.deleted || 0)} رکورد حذف گردید`,
+    });
+    loadGrades();
   };
 
   const toggleApprove = async (approved: boolean) => {
@@ -327,7 +329,7 @@ export function GradesView({ user }: { user: SessionUser }) {
                         <TableRow key={s.id}>
                           <TableCell className="text-muted-foreground">{toPersianDigits(s.rollNo ?? i + 1)}</TableCell>
                           <TableCell className="font-medium">
-                            {s.firstName} {s.lastName}
+                            {fullName(s)}
                             {approved && <BadgeCheck className="inline h-4 w-4 text-emerald-600 mr-1" />}
                           </TableCell>
                           {(['written', 'oral', 'homework', 'activity'] as const).map((k) => (
@@ -338,7 +340,7 @@ export function GradesView({ user }: { user: SessionUser }) {
                                 disabled={!teacherEditable || user.role === 'TEACHER' && approved}
                                 value={cells[s.id]?.[k] ?? ''}
                                 onChange={(e) => setCell(s.id, k, e.target.value)}
-                                aria-label={`${PERIOD_LABELS[k] || k} — ${s.firstName} ${s.lastName}`}
+                                aria-label={`${PERIOD_LABELS[k] || k} — ${fullName(s)}`}
                               />
                             </TableCell>
                           ))}
@@ -351,7 +353,7 @@ export function GradesView({ user }: { user: SessionUser }) {
                               <Button
                                 variant="ghost" size="icon" className="h-8 w-8"
                                 onClick={() => deleteRow(s)}
-                                aria-label={`حذف نمرات ${s.firstName} ${s.lastName}`}
+                                aria-label={`حذف نمرات ${fullName(s)}`}
                               >
                                 <Trash2 className="h-4 w-4 text-rose-600" />
                               </Button>

@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PageHeader, LoadingBlock, EmptyState, Field } from './ui-bits';
+import { PageHeader, LoadingBlock, EmptyState, Field, JalaliDatePicker } from './ui-bits';
+import { fullName } from '@/lib/utils';
 import { apiGet, apiSend } from '@/lib/client/api';
 import { isoToJalaliDisplay, isoToday, toPersianDigits } from '@/lib/jalali';
 import { useToast } from '@/hooks/use-toast';
@@ -347,22 +348,22 @@ export function LibraryView({ user }: { user: SessionUser }) {
               <Field label="انتخاب از لیست شاگردان">
                 <Select value={lendForm.studentId} onValueChange={(v) => {
                   const s = students.find((x) => x.id === v);
-                  setLendForm({ ...lendForm, studentId: v, borrowerName: s ? `${s.firstName} ${s.lastName}` : lendForm.borrowerName });
+                  setLendForm({ ...lendForm, studentId: v, borrowerName: s ? `${fullName(s)}` : lendForm.borrowerName });
                 }}>
                   <SelectTrigger><SelectValue placeholder="انتخاب شاگرد" /></SelectTrigger>
                   <SelectContent>
                     {students.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.firstName} {s.lastName} — {s.className || 'بدون صنف'}</SelectItem>
+                      <SelectItem key={s.id} value={s.id}>{fullName(s)} — {s.className || 'بدون صنف'}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </Field>
             )}
-            <Field label="تاریخ امانت">
-              <Input type="date" value={lendForm.loanDate} onChange={(e) => setLendForm({ ...lendForm, loanDate: e.target.value })} />
+            <Field label="تاریخ امانت (شمسی)">
+              <JalaliDatePicker value={lendForm.loanDate} onChange={(iso) => setLendForm({ ...lendForm, loanDate: iso })} />
             </Field>
-            <Field label="تاریخ برگشت *">
-              <Input type="date" value={lendForm.dueDate} onChange={(e) => setLendForm({ ...lendForm, dueDate: e.target.value })} />
+            <Field label="تاریخ برگشت (شمسی) *">
+              <JalaliDatePicker value={lendForm.dueDate} onChange={(iso) => setLendForm({ ...lendForm, dueDate: iso })} />
             </Field>
           </div>
           <DialogFooter>

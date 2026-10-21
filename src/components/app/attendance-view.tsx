@@ -7,14 +7,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PageHeader, LoadingBlock, EmptyState, Field } from './ui-bits';
+import { PageHeader, LoadingBlock, EmptyState, Field, JalaliDatePicker } from './ui-bits';
 import { apiGet, apiSend } from '@/lib/client/api';
 import { gregorianToJalali, isoToday, isoToJalaliDisplay, isoToWeekday, toPersianDigits, afghanMonths } from '@/lib/jalali';
 import { ATTENDANCE_LABELS, ATTENDANCE_COLORS } from '@/lib/grading';
 import { printDocument, exportExcel, fileStamp } from '@/lib/client/exports';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, ClassInfo, StudentInfo } from '@/lib/types';
-import { cn } from '@/lib/utils';
+import { cn, fullName } from '@/lib/utils';
 import { CalendarCheck, CalendarDays, Save, Printer, FileSpreadsheet, Users } from 'lucide-react';
 
 const STATUSES = ['PRESENT', 'ABSENT', 'SICK', 'LEAVE'] as const;
@@ -135,10 +135,10 @@ export function AttendanceView({ user }: { user: SessionUser }) {
       return;
     }
     toast({
-      title: res.queued ? 'در صف آفلاین ذخیره شد' : 'حاضری ثبت شد',
-      description: res.queued ? 'پس از اتصال به شبکه همگام می‌شود' : `حاضری ${toPersianDigits(items.length)} شاگرد ثبت گردید`,
+      title: 'ذخیره شد',
+      description: res.queued ? 'در حافظهٔ گوشی ذخیره شد — پس از اتصال به سرور منتقل می‌شود' : `حاضری ${toPersianDigits(items.length)} شاگرد ثبت گردید`,
     });
-    if (!res.queued) loadDaily();
+    loadDaily();
   };
 
   const saveStaff = async () => {
@@ -150,7 +150,8 @@ export function AttendanceView({ user }: { user: SessionUser }) {
       toast({ title: 'خطا', description: res.error, variant: 'destructive' });
       return;
     }
-    toast({ title: 'حاضری کارمندان ثبت شد' });
+    toast({ title: 'ذخیره شد', description: res.queued ? 'در حافظهٔ گوشی — پس از اتصال همگام می‌شود' : 'حاضری کارمندان ثبت گردید' });
+    loadStaff();
   };
 
   const loadStaff = useCallback(async () => {
@@ -191,7 +192,7 @@ export function AttendanceView({ user }: { user: SessionUser }) {
     const rows = monthlySummary.map((r, i) => `
       <tr>
         <td>${toPersianDigits(i + 1)}</td>
-        <td>${r.student.firstName} ${r.student.lastName} ولد ${r.student.fatherName}</td>
+        <td>${fullName(r.student)} ولد ${r.student.fatherName}</td>
         <td>${toPersianDigits(r.present)}</td>
         <td>${toPersianDigits(r.absent)}</td>
         <td>${toPersianDigits(r.sick)}</td>
@@ -215,7 +216,7 @@ export function AttendanceView({ user }: { user: SessionUser }) {
   const exportMonthlyExcel = () => {
     const monthName = `${afghanMonths[repMonth - 1]} ${toPersianDigits(repYear)}`;
     const rows = monthlySummary.map((r, i) =>
-      `<tr><td>${i + 1}</td><td>${r.student.firstName} ${r.student.lastName}</td><td>${r.student.fatherName}</td><td>${r.present}</td><td>${r.absent}</td><td>${r.sick}</td><td>${r.leave}</td><td>${r.total}</td></tr>`,
+      `<tr><td>${i + 1}</td><td>${fullName(r.student)}</td><td>${r.student.fatherName}</td><td>${r.present}</td><td>${r.absent}</td><td>${r.sick}</td><td>${r.leave}</td><td>${r.total}</td></tr>`,
     ).join('');
     exportExcel(
       `گزارش حاضری ${monthName}`,
@@ -257,8 +258,8 @@ export function AttendanceView({ user }: { user: SessionUser }) {
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label="تاریخ (میلادی)">
-                <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-[160px]" />
+              <Field label="تاریخ (شمسی)">
+                <JalaliDatePicker value={date} onChange={setDate} />
               </Field>
               <p className="text-xs text-muted-foreground pb-2">{todayJ} — {isoToWeekday(date)}</p>
             </div>
@@ -284,7 +285,7 @@ export function AttendanceView({ user }: { user: SessionUser }) {
                           <TableRow key={s.id}>
                             <TableCell className="text-muted-foreground">{toPersianDigits(s.rollNo ?? i + 1)}</TableCell>
                             <TableCell className="font-medium">
-                              {s.firstName} {s.lastName}
+                              {fullName(s)}
                               <span className="text-xs text-muted-foreground mr-1.5">ولد {s.fatherName}</span>
                             </TableCell>
                             <TableCell>
@@ -435,7 +436,7 @@ export function AttendanceView({ user }: { user: SessionUser }) {
                       {monthlySummary.map((r, i) => (
                         <TableRow key={r.student.id}>
                           <TableCell>{toPersianDigits(i + 1)}</TableCell>
-                          <TableCell className="font-medium">{r.student.firstName} {r.student.lastName}</TableCell>
+                          <TableCell className="font-medium">{fullName(r.student)}</TableCell>
                           <TableCell className="text-emerald-700 font-semibold">{toPersianDigits(r.present)}</TableCell>
                           <TableCell className="text-rose-600 font-semibold">{toPersianDigits(r.absent)}</TableCell>
                           <TableCell className="text-amber-600">{toPersianDigits(r.sick)}</TableCell>
@@ -455,8 +456,8 @@ export function AttendanceView({ user }: { user: SessionUser }) {
         {['ADMIN', 'HEADTEACHER'].includes(user.role) && (
           <TabsContent value="staff" className="space-y-4">
             <div className="flex flex-wrap items-end gap-2">
-              <Field label="تاریخ">
-                <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-[160px]" />
+              <Field label="تاریخ (شمسی)">
+                <JalaliDatePicker value={date} onChange={setDate} />
               </Field>
               <p className="text-xs text-muted-foreground pb-2">{todayJ}</p>
             </div>

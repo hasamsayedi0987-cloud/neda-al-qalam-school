@@ -93,7 +93,7 @@ model Teacher {
 model Student {
   id            String   @id @default(cuid())
   firstName     String // اسم
-  lastName      String // شهرت/تخلص
+  lastName      String? // شهرت/تخلص — اختیاری
   fatherName    String // ولد
   grandFather   String? // ولدیت
   gender        String   @default("M") // M | F
