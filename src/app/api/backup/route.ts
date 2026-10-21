@@ -72,10 +72,10 @@ export async function POST(req: NextRequest) {
     await db.classSubject.deleteMany({});
     await db.user.deleteMany({});
     await db.student.deleteMany({});
+    await db.class.deleteMany({}); // قبل از معلم — نگران صنف کلید خارجی دارد
     await db.teacher.deleteMany({});
     await db.book.deleteMany({});
     await db.subject.deleteMany({});
-    await db.class.deleteMany({});
     await db.setting.deleteMany({});
 
     // بازگردانی تنظیمات
@@ -86,12 +86,7 @@ export async function POST(req: NextRequest) {
         }
       }
     }
-    // بازگردانی صنف‌ها
-    if (Array.isArray(data.classes)) {
-      for (const c of data.classes) {
-        await db.class.create({ data: { id: c.id, grade: c.grade, name: c.name, supervisorId: c.supervisorId ?? null } });
-      }
-    }
+    // ترتیب کلیدهای خارجی: مضامین و معلمان قبل از صنف‌ها (سازگار با PostgreSQL)
     if (Array.isArray(data.subjects)) {
       for (const s of data.subjects) {
         await db.subject.create({ data: { id: s.id, name: s.name } });
@@ -106,6 +101,11 @@ export async function POST(req: NextRequest) {
             hireDate: t.hireDate ?? null, active: t.active ?? true,
           },
         });
+      }
+    }
+    if (Array.isArray(data.classes)) {
+      for (const c of data.classes) {
+        await db.class.create({ data: { id: c.id, grade: c.grade, name: c.name, supervisorId: c.supervisorId ?? null } });
       }
     }
     if (Array.isArray(data.students)) {
