@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { apiGet, apiSend, onSyncStateChange, pendingSyncCount, isOnline, isAuthRequired } from '@/lib/client/api';
+import { apiGet, apiSend, onSyncStateChange, pendingSyncCount, failedSyncItems, isOnline, isAuthRequired, flushQueue, tryAutoRelogin } from '@/lib/client/api';
 import { isoToJalaliDisplay, toPersianDigits } from '@/lib/jalali';
 import { ROLE_LABELS } from '@/lib/grading';
 import { cn } from '@/lib/utils';
@@ -20,7 +20,7 @@ import {
   Bell, BellOff, BookOpen, CalendarCheck, CloudOff, ClipboardList, GraduationCap,
   Home, LayoutDashboard, Library, LogOut, Menu, RefreshCw, School, Settings,
   ShieldCheck, Upload, UserCog, Users, ClipboardCheck, BookMarked, Wifi, KeyRound,
-  FileSpreadsheet, UserCheck, Award, LayoutGrid,
+  FileSpreadsheet, UserCheck, Award, LayoutGrid, AlertTriangle, Loader2,
 } from 'lucide-react';
 import { DashboardView } from './dashboard-view';
 import { StudentsView } from './students-view';
@@ -87,6 +87,8 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
   const [online, setOnline] = useState(true);
   const [pending, setPending] = useState(0);
   const [authNeeded, setAuthNeeded] = useState(false);
+  const [failedItems, setFailedItems] = useState<{ id: string; label: string; error: string }[]>([]);
+  const [syncing, setSyncing] = useState(false);
   // پس از تخلیهٔ موفق صف، ویوهای باز دوباره بارگذاری می‌شوند (دادهٔ واقعی سرور)
   const [syncTick, setSyncTick] = useState(0);
   const prevPendingRef = useRef(0);
@@ -124,6 +126,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
       const p = pendingSyncCount();
       setPending(p);
       setAuthNeeded(isAuthRequired());
+      setFailedItems(failedSyncItems());
       // صف از «پر» به «خالی» رسید = همگام‌سازی موفق — رندر مجدد ویو فعال با دادهٔ سرور
       if (p === 0 && prevPendingRef.current > 0) setSyncTick((t) => t + 1);
       prevPendingRef.current = p;
@@ -132,12 +135,39 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
     const un = onSyncStateChange(update);
     window.addEventListener('online', update);
     window.addEventListener('offline', update);
+    // پس از هر همگام‌سازی/تازه‌سازی (تخلیهٔ صف یا برگشت اتصال) ویوی باز با دادهٔ تازه رندر می‌شود
+    const onSynced = () => setSyncTick((t) => t + 1);
+    window.addEventListener('noq:synced', onSynced);
     return () => {
       un();
       window.removeEventListener('online', update);
       window.removeEventListener('offline', update);
+      window.removeEventListener('noq:synced', onSynced);
     };
   }, []);
+
+  /** دکمهٔ «همگام‌سازی الان» — ابتدا ورود مجدد خودکار (اگر نشست مرده)، بعد تخلیهٔ صف */
+  const manualSync = async () => {
+    setSyncing(true);
+    try {
+      if (authNeeded) {
+        const relog = await tryAutoRelogin();
+        if (!relog) {
+          toast({
+            title: 'ورود مجدد لازم است',
+            description: 'از منو «خروج از حساب» را بزنید و یک بار با انترنت وارد شوید — ثبت‌های آفلاین همان لحظه به سرور می‌رود',
+            duration: 6000,
+          });
+          setSyncing(false);
+          return;
+        }
+      }
+      await flushQueue();
+      await new Promise((r) => setTimeout(r, 800));
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const logout = async () => {
     // خروج هرگز صف نمی‌شود — صف‌شدنش بعد از ورود مجدد نشست را می‌شکند
@@ -199,7 +229,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
         </nav>
       </ScrollArea>
       <div className="px-4 py-3 border-t text-[11px] text-muted-foreground">
-        نسخهٔ ۱.۵ — حسام الدین سیدی
+        نسخهٔ ۱.۵.۱ — حسام الدین سیدی
       </div>
     </div>
   );
@@ -236,11 +266,11 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
 
           <div className="flex-1" />
 
-          {/* وضعیت اتصال */}
+          {/* وضعیت اتصال — در موبایل هم دیده می‌شود (پیشتر مخفی بود و کاربر از گیرکردن صف بی‌خبر می‌ماند!) */}
           <Badge
             variant="outline"
             className={cn(
-              'gap-1 hidden sm:flex',
+              'gap-1 shrink-0',
               online ? 'text-emerald-700 border-emerald-300' : 'text-rose-600 border-rose-300',
             )}
             title={
@@ -252,13 +282,16 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
             }
           >
             {online ? <Wifi className="h-3.5 w-3.5" /> : <CloudOff className="h-3.5 w-3.5" />}
-            {online
-              ? pending > 0
-                ? authNeeded
-                  ? `برای ارسال ثبت‌ها وارد شوید (${toPersianDigits(pending)})`
-                  : `در انتظار همگام‌سازی: ${toPersianDigits(pending)}`
-                : 'آنلاین'
-              : 'آفلاین'}
+            <span className="hidden sm:inline">
+              {online
+                ? pending > 0
+                  ? authNeeded
+                    ? `برای ارسال ثبت‌ها وارد شوید (${toPersianDigits(pending)})`
+                    : `در انتظار همگام‌سازی: ${toPersianDigits(pending)}`
+                  : 'آنلاین'
+                : 'آفلاین'}
+            </span>
+            <span className="sm:hidden">{!online ? 'آفلاین' : pending > 0 ? toPersianDigits(pending) : ''}</span>
           </Badge>
 
           {/* اعلان‌ها */}
@@ -340,6 +373,56 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
           </DropdownMenu>
         </div>
       </header>
+
+      {/* نوار وضعیت همگام‌سازی — در همهٔ صفحه‌ها (مخصوصاً موبایل) تغییرات معطل را نشان می‌دهد */}
+      {(!online || pending > 0) && (
+        <div
+          className={cn(
+            'px-3 md:px-6 py-2 flex flex-wrap items-center gap-2 text-xs border-b',
+            failedItems.length > 0
+              ? 'bg-rose-50 border-rose-200 text-rose-800'
+              : authNeeded
+                ? 'bg-amber-50 border-amber-200 text-amber-800'
+                : 'bg-sky-50 border-sky-200 text-sky-800',
+          )}
+        >
+          {failedItems.length > 0 ? <AlertTriangle className="h-4 w-4 shrink-0" /> : online ? <RefreshCw className="h-4 w-4 shrink-0" /> : <CloudOff className="h-4 w-4 shrink-0" />}
+          {failedItems.length > 0 ? (
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold">{toPersianDigits(failedItems.length)} ثبت توسط سرور پذیرفته نشد — داده حذف نشده است:</p>
+              <p className="truncate text-[11px] opacity-80">
+                {failedItems.slice(0, 2).map((f) => `${f.label}: ${f.error}`).join(' | ')}
+              </p>
+            </div>
+          ) : !online ? (
+            <p className="flex-1 font-medium">
+              حالت آفلاین — تغییرات در حافظهٔ گوشی ذخیره می‌شود
+              {pending > 0 && ` (${toPersianDigits(pending)} ثبت منتظر ارسال)`}؛ با وصل شدن انترنت خودکار به سرور می‌رود
+            </p>
+          ) : authNeeded ? (
+            <p className="flex-1 font-medium">
+              نشست سرور منقضی شده — {toPersianDigits(pending)} ثبت منتظر ارسال است؛ با یک لمس وارد و ارسال می‌شود
+            </p>
+          ) : (
+            <p className="flex-1 font-medium">{toPersianDigits(pending)} ثبت در انتظار همگام‌سازی…</p>
+          )}
+          {online && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={manualSync}
+              disabled={syncing}
+              className={cn(
+                'h-7 text-xs gap-1 shrink-0',
+                failedItems.length > 0 ? 'border-rose-300 text-rose-800' : 'border-sky-300 text-sky-800',
+              )}
+            >
+              {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              {syncing ? 'در حال همگام‌سازی…' : authNeeded ? 'ورود و ارسال الآن' : 'همگام‌سازی الآن'}
+            </Button>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-1">
         {/* سایدبار دسکتاپ */}

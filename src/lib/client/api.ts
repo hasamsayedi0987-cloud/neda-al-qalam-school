@@ -14,11 +14,10 @@
 import { gregorianToJalali, isoToday } from '@/lib/jalali';
 
 const QUEUE_KEY = 'noq_offline_queue_v1';
-const OVERLAY_KEY = 'noq_overlay_v1';
 const GET_CACHE_KEY = 'noq_get_cache_v1';
 const CREDS_KEY = 'noq_offline_creds_v1';
 const IDMAP_KEY = 'noq_idmap_v1';
-
+const LAST_USER_KEY = 'noq_last_user_v1';
 type Row = Record<string, unknown>;
 
 interface QueuedRequest {
@@ -30,6 +29,9 @@ interface QueuedRequest {
   label: string;
   /** شناسهٔ موقت محلی برای رکورد POST (تا زمان همگام‌سازی) */
   tempId?: string;
+  /** شمار شکست‌ها (۴xx منطقی) — داده هرگز بی‌صدا حذف نمی‌شود */
+  failCount?: number;
+  lastError?: string;
 }
 
 interface OverlayEntry {
@@ -46,6 +48,9 @@ let online = typeof navigator !== 'undefined' ? navigator.onLine : true;
 let pendingCount = 0;
 let authRequired = false;
 let probing = false;
+/** قفل تخلیهٔ صف — دو flush هم‌زمان هرگز (رقابت و ازدست‌رفتن داده ممنوع) */
+let flushing = false;
+let flushAgain = false;
 const listeners = new Set<() => void>();
 
 function readLS<T>(key: string, fallback: T): T {
@@ -94,6 +99,13 @@ export function pendingSyncCount() {
   return pendingCount;
 }
 
+/** ثبت‌هایی که سرور آن‌ها را رد کرده (۴xx منطقی) — برای نمایش به مدیر، هرگز حذف بی‌صدا نمی‌شوند */
+export function failedSyncItems(): { id: string; label: string; error: string }[] {
+  return readQueue()
+    .filter((q) => q.failCount && q.lastError)
+    .map((q) => ({ id: q.id, label: q.label, error: q.lastError || '' }));
+}
+
 /** آیا صف به‌دلیل نبود نشست معتبر ارسال نشد؟ (نیاز به ورود مجدد) */
 export function isAuthRequired() {
   return authRequired;
@@ -112,23 +124,24 @@ function readQueue(): QueuedRequest[] {
 }
 
 function writeQueue(q: QueuedRequest[]) {
-  writeLS(QUEUE_KEY, q.slice(-200));
+  writeLS(QUEUE_KEY, q.slice(-300));
   pendingCount = q.length;
   notify();
 }
 
+/**
+ * رونویسی محلی (Overlay) دیگر حافظهٔ جداگانه ندارد — همیشه از خود صف «مشتق» می‌شود.
+ * یعنی رونوشت و صف هرگز از هم جدا نمی‌افتند و تغییر آفلاین تا لحظهٔ همگام‌سازی همیشه دیده می‌شود.
+ */
 function readOverlay(): OverlayEntry[] {
-  return readLS<OverlayEntry[]>(OVERLAY_KEY, []);
-}
-
-function writeOverlay(o: OverlayEntry[]) {
-  writeLS(OVERLAY_KEY, o.slice(-200));
-}
-
-function removeOverlayByQid(qid: string) {
-  const o = readOverlay();
-  const next = o.filter((e) => e.qid !== qid);
-  if (next.length !== o.length) writeOverlay(next);
+  return readQueue().map((item) => ({
+    qid: item.id,
+    collection: collectionOf(item.url),
+    method: item.method,
+    body: item.body,
+    url: item.url,
+    tempId: item.tempId,
+  }));
 }
 
 function collectionOf(url: string): string {
@@ -151,6 +164,15 @@ function rememberId(tempId: string, realId: string) {
     for (const k of keys.slice(0, keys.length - 300)) delete map[k];
   }
   writeLS(IDMAP_KEY, map);
+  // ترمیم اعتبار آفلاین کاربرانی که آفلاین ساخته شدند (شناسهٔ موقت → واقعی)
+  try {
+    const all = JSON.parse(localStorage.getItem(CREDS_KEY) || '{}') as Record<string, OfflineCred>;
+    let changed = false;
+    for (const c of Object.values(all)) {
+      if (c.user?.id === tempId) { c.user.id = realId; changed = true; }
+    }
+    if (changed) localStorage.setItem(CREDS_KEY, JSON.stringify(all));
+  } catch { /* ignore */ }
 }
 
 /** جایگزینی بازگشتی هر مقدار رشته‌ای برابر با شناسهٔ موقت، با شناسهٔ واقعی سرور */
@@ -722,11 +744,8 @@ function enqueue<T>(url: string, method: string, body: unknown, opts: { queueLab
   const queue = readQueue();
   queue.push({ id, url, method, body: body ?? {}, createdAt: Date.now(), label: opts.queueLabel || url, tempId });
   writeQueue(queue);
-  const overlay = readOverlay();
-  overlay.push({ qid: id, collection: collectionOf(url), method, body: body ?? {}, url, tempId });
-  writeOverlay(overlay);
   requestBackgroundSync();
-  return { queued: true };
+  return { queued: true, tempId };
 }
 
 /** درخواست ثبت‌کننده: در حالت آفلاین فوراً روی کش محلی اعمال و در صف قرار می‌گیرد */
@@ -770,6 +789,29 @@ export async function apiSend<T = unknown>(
 
 export async function flushQueue(): Promise<number> {
   if (typeof window === 'undefined') return 0;
+  if (flushing) {
+    // تخلیه در جریان است — به‌جای اجرای موازی، نشانه می‌گذاریم تا بلافاصله دوباره تلاش شود
+    flushAgain = true;
+    return 0;
+  }
+  flushing = true;
+  try {
+    return await flushQueueInner();
+  } finally {
+    flushing = false;
+    if (flushAgain) {
+      flushAgain = false;
+      void flushQueue();
+    }
+  }
+}
+
+/** پیام خطای تکراری‌بودن — داده روی سرور موجود است، حذف از صف بی‌خطر است */
+function isDuplicateError(msg: string): boolean {
+  return msg.includes('قبلاً ثبت شده') || msg.includes('قبلاً گرفته شده');
+}
+
+async function flushQueueInner(attempt = 0): Promise<number> {
   const queue = readQueue();
   if (queue.length === 0) return 0;
   const idMap = readIdMap();
@@ -786,24 +828,31 @@ export async function flushQueue(): Promise<number> {
         headers: { 'Content-Type': 'application/json' },
         body: item.method === 'DELETE' ? undefined : JSON.stringify(sendBody),
         cache: 'no-store',
-      }, 8000);
+      }, 15000);
       const json = await res.json().catch(() => ({}));
       if (res.ok) {
         sent += 1;
         if (item.method === 'POST' && (json as Row)?.id && item.tempId) {
           rememberId(item.tempId, String((json as Row).id));
         }
-        removeOverlayByQid(item.id);
         affected.add(collectionOf(item.url));
       } else if (res.status === 401 || res.status === 403) {
-        // نشست معتبر نیست — داده حذف نمی‌شود؛ پس از ورود مجدد دوباره تلاش می‌شود
+        // نشست معتبر نیست — داده حذف نمی‌شود؛ با ورود خودکار/دوباره ارسال می‌شود
         remaining.push(item);
         authFailed = true;
       } else if (res.status >= 500) {
         remaining.push(item);
       } else {
-        // خطای منطقی — دوباره تلاش نتیجه ندارد
-        removeOverlayByQid(item.id);
+        // خطای منطقی سرور — داده هرگز بی‌صدا نابود نمی‌شود:
+        //  • تکراری (روی سرور هست) → حذف از صف بی‌خطر است
+        //  • سایر ۴xx → با شمار شکست در صف می‌ماند تا مدیر ببیند و اصلاح کند
+        const msg = (json as Row).error ? String((json as Row).error) : `خطای ${res.status}`;
+        if (isDuplicateError(msg)) {
+          affected.add(collectionOf(item.url));
+        } else {
+          const failCount = (item.failCount || 0) + 1;
+          remaining.push({ ...item, failCount, lastError: msg });
+        }
       }
     } catch {
       remaining.push(item);
@@ -811,6 +860,14 @@ export async function flushQueue(): Promise<number> {
   }
   writeQueue(remaining);
   authRequired = authFailed && remaining.length > 0;
+  if (authFailed && attempt < 2) {
+    // ورود مجدد خودکار با اعتبار ذخیره‌شدهٔ همین دستگاه — اگر موفق شود صف بلافاصله تخلیه می‌شود
+    const relog = await tryAutoRelogin();
+    if (relog) {
+      authRequired = false;
+      return sent + (await flushQueueInner(attempt + 1));
+    }
+  }
   if (affected.size > 0) {
     void refreshCollections(affected);
     try {
@@ -833,10 +890,33 @@ async function probeConnectivity() {
     await fetchTimeout(`/manifest.json?probe=${Date.now()}`, { method: 'HEAD', cache: 'no-store' }, 4000);
     setOnlineState(true);
     void flushQueue();
+    // اگر داده‌ها قبلاً از کش کهنه (شبکهٔ کند) نمایش داده شده بود، همین حالا از سرور تازه می‌شود
+    void refreshRecentCache();
   } catch {
     /* هنوز آفلاین */
   }
   probing = false;
+}
+
+/** ۲۵ کلید اخیر کش خواندن را از سرور تازه می‌کند — پس از برگشت اتصال */
+async function refreshRecentCache() {
+  const cache = readGetCache();
+  const keys = Object.keys(cache)
+    .sort((a, b) => (cache[b].t || 0) - (cache[a].t || 0))
+    .slice(0, 25);
+  await Promise.allSettled(
+    keys.map(async (k) => {
+      try {
+        const res = await fetchTimeout(k, { cache: 'no-store' }, 8000);
+        if (res.ok && res.headers.get('x-noq-cache') !== '1') cacheGet(k, await res.json());
+      } catch { /* کش قبلی می‌ماند */ }
+    }),
+  );
+  if (keys.length > 0) {
+    try {
+      window.dispatchEvent(new CustomEvent('noq:synced', { detail: { collections: [] } }));
+    } catch { /* ignore */ }
+  }
 }
 
 if (typeof window !== 'undefined') {
@@ -853,6 +933,8 @@ if (typeof window !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) void probeConnectivity();
   });
+  // هنگام باز شدن اپ با انترنت — صف معطل نمی‌ماند (تا پیش از این فقط هر ۳۰ ثانیه!)
+  if (navigator.onLine && pendingCount > 0) void flushQueue();
   setInterval(() => {
     if (navigator.onLine && readQueue().length > 0) flushQueue();
   }, 30_000);
@@ -890,6 +972,8 @@ export interface ApiResult<T> {
   queued?: boolean;
   /** درست بودن یعنی مشکل از شبکه بود (نه رد شدن منطقی سرور) */
   network?: boolean;
+  /** برای ثبت‌های صف‌شدهٔ POST — شناسهٔ موقت محلی (برای ذخیرهٔ اعتبار آفلاین کاربر جدید) */
+  tempId?: string;
 }
 
 /* ───────────────  ورود آفلاین — بررسی محلی رمز  ─────────────── */
@@ -901,6 +985,8 @@ export interface OfflineCred {
   };
   salt: string;
   hash: string;
+  /** رمز رمزنگاری‌شدهٔ ساده (base64) — فقط برای ورود مجدد خودکار پس از برگشت انترنت */
+  pw?: string;
 }
 
 function toHex(buf: ArrayBuffer): string {
@@ -917,17 +1003,61 @@ async function derive(password: string, salt: string): Promise<string> {
   return toHex(bits);
 }
 
-/** پس از ورود موفق آنلاین، مشخصات برای ورود آفلاین بعدی ذخیره می‌شود */
-export async function saveOfflineCred(user: OfflineCred['user'], password: string) {
+/** پس از ورود موفق آنلاین، مشخصات برای ورود آفلاین بعدی ذخیره می‌شود (asLastUser=false برای ذخیرهٔ کاربر تازه‌ساخته بدون تغییر کاربر جاری) */
+export async function saveOfflineCred(user: OfflineCred['user'], password: string, asLastUser = true) {
   if (typeof window === 'undefined' || !password) return;
   try {
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const saltHex = toHex(salt.buffer as ArrayBuffer);
     const hash = await derive(password, saltHex);
     const all = JSON.parse(localStorage.getItem(CREDS_KEY) || '{}') as Record<string, OfflineCred>;
-    all[user.username.toLowerCase()] = { user, salt: saltHex, hash };
+    all[user.username.toLowerCase()] = {
+      user, salt: saltHex, hash,
+      // برای ورود مجدد خودکار پس از برگشت انترنت (وقتی نشست کوکی مرده) —
+      // تا صف آفلاین هرگز به‌خاطر نشست مرده گیر نکند
+      pw: typeof password === 'string' ? btoa(unescape(encodeURIComponent(password))) : undefined,
+    };
     localStorage.setItem(CREDS_KEY, JSON.stringify(all));
+    if (asLastUser) localStorage.setItem(LAST_USER_KEY, user.username.toLowerCase());
   } catch { /* ignore */ }
+}
+
+/** آخرین کاربری که روی همین دستگاه وارد شده (برای ورود مجدد خودکار) */
+export function lastUsername(): string {
+  if (typeof window === 'undefined') return '';
+  return localStorage.getItem(LAST_USER_KEY) || '';
+}
+
+/**
+ * ورود مجدد خودکار بدون دخالت کاربر:
+ * وقتی صف هنگام تخلیه با ۴۰۱ روبه‌رو می‌شود (نشست کوکی با بستن اپ مرده)،
+ * با اعتبار ذخیره‌شدهٔ همان کاربر یک بار وارد می‌شود و صف بلافاصله تخلیه می‌شود.
+ * این همان جایی است که پیشتر ثبت‌های آفلاین برای همیشه معطل می‌ماندند.
+ */
+export async function tryAutoRelogin(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  try {
+    const uname = lastUsername();
+    if (!uname) return false;
+    const all = JSON.parse(localStorage.getItem(CREDS_KEY) || '{}') as Record<string, OfflineCred>;
+    const cred = all[uname];
+    if (!cred?.pw) return false;
+    const password = decodeURIComponent(escape(atob(cred.pw)));
+    const res = await fetchTimeout('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'login', username: cred.user.username, password }),
+      cache: 'no-store',
+    }, 10000);
+    if (!res.ok) return false;
+    const json = await res.json().catch(() => ({}));
+    if (!(json as Row).user) return false;
+    // نشست تازه — شاید نقش/شناسه تغییر کرده باشد، اعتبار محلی هم به‌روز می‌شود
+    await saveOfflineCred((json as Row).user as OfflineCred['user'], password);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** ورود بدون اینترنت — رمز در برابر هش ذخیره‌شدهٔ همین دستگاه بررسی می‌شود */
@@ -939,6 +1069,7 @@ export async function offlineLogin(username: string, password: string): Promise<
     if (!cred) return null;
     const hash = await derive(password, cred.salt);
     if (hash !== cred.hash) return null;
+    localStorage.setItem(LAST_USER_KEY, username.trim().toLowerCase());
     return cred.user;
   } catch {
     return null;

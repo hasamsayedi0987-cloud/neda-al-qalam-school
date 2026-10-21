@@ -10,11 +10,13 @@
  *  - نوشتن‌ها (POST/PATCH/DELETE) دست‌نخورده — صف آفلاین در api.ts مدیریت می‌شود
  */
 
-const VERSION = 'v5-1';
+const VERSION = 'v5-2';
 const SHELL_CACHE = 'noq-shell-' + VERSION;
 const RUNTIME_CACHE = 'noq-runtime-' + VERSION;
 const API_CACHE = 'noq-api-' + VERSION;
 const NAV_TIMEOUT = 4000;
+/** API به شبکهٔ کند (۳G/۴G واقعی) فرصت کافی می‌دهد — پیشتر ۴ ثانیه بود و روی شبکهٔ کند دادهٔ کهنه برمی‌گشت */
+const API_TIMEOUT = 8000;
 
 /* فایل‌های پایه — اگر manifest تولیدی در دسترس نبود */
 const CORE_ASSETS = [
@@ -93,12 +95,12 @@ function withCacheHeader(res) {
 }
 
 /* شبکه‌اول با سقف زمانی + برگشت به کش */
-async function networkFirst(request, cacheName) {
+async function networkFirst(request, cacheName, timeout) {
   const cached = await caches.match(request);
   try {
     const res = await Promise.race([
       fetch(request),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), NAV_TIMEOUT)),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), timeout || NAV_TIMEOUT)),
     ]);
     if (isCacheable(res)) {
       const clone = res.clone();
@@ -149,9 +151,9 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  // API GET — شبکه‌اول، برگشت به کش
+  // API GET — شبکه‌اول با سقف ۸ ثانیه (شبکهٔ کند گوشی)، برگشت به کش
   if (url.pathname.startsWith('/api/')) {
-    event.respondWith(networkFirst(request, API_CACHE).catch(() => offlineApiRes()));
+    event.respondWith(networkFirst(request, API_CACHE, API_TIMEOUT).catch(() => offlineApiRes()));
     return;
   }
 

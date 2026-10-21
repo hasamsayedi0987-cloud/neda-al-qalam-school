@@ -41,3 +41,4 @@ apk-build/build/
 scripts/*.png
 .nextprod/
 .nextapk/
+tool-results/

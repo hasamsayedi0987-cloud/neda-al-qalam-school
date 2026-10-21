@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { PageHeader, LoadingBlock, EmptyState, Field } from './ui-bits';
 import { fullName } from '@/lib/utils';
-import { apiGet, apiSend } from '@/lib/client/api';
+import { apiGet, apiSend, saveOfflineCred } from '@/lib/client/api';
 import { ROLE_LABELS } from '@/lib/grading';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, UserInfo, TeacherInfo, StudentInfo } from '@/lib/types';
@@ -55,20 +55,50 @@ export function UsersView({ user: me }: { user: SessionUser }) {
   useEffect(() => { queueMicrotask(load); }, [load]);
 
   const save = async () => {
-    if (!form.username.trim() || !form.name.trim() || (!form.id && !form.password)) {
+    const uname = form.username.trim();
+    if (!uname || !form.name.trim() || (!form.id && !form.password)) {
       toast({ title: 'خطا', description: 'نام کاربری، نام و رمز عبور ضروری است', variant: 'destructive' });
       return;
     }
-    if (!form.id && !/^[a-z0-9._\-@]+$/i.test(form.username.trim())) {
+    if (!form.id && !/^[a-z0-9._\-@]+$/i.test(uname)) {
       toast({ title: 'خطا', description: 'نام کاربری فقط حروف انگلیسی، عدد و . _ - @ می‌تواند داشته باشد', variant: 'destructive' });
       return;
     }
-    const res = await apiSend('/api/users', form.id ? 'PATCH' : 'POST', form);
+    // مانند سرور: رمز حداقل ۶ حرف — پیش از صف‌شدن چک می‌شود تا داده هرگز رد نشده نابود نشود
+    if (!form.id && form.password.length < 6) {
+      toast({ title: 'خطا', description: 'رمز عبور باید حداقل ۶ حرف باشد', variant: 'destructive' });
+      return;
+    }
+    // بررسی تکراری‌بودن در همین دستگاه (شامل ثبت‌های آفلاین هنوز همگام‌نشده) — پیام فوری
+    if (!form.id && users.some((u) => u.username.toLowerCase() === uname.toLowerCase())) {
+      toast({ title: 'خطا', description: 'این نام کاربری قبلاً ثبت شده است', variant: 'destructive' });
+      return;
+    }
+    const res = await apiSend<{ id?: string }>('/api/users', form.id ? 'PATCH' : 'POST', form);
     if (res.error) {
       toast({ title: 'خطا', description: res.error, variant: 'destructive' });
       return;
     }
-    toast({ title: 'ذخیره شد', description: 'حساب کاربری ثبت گردید' });
+    // کاربر تازه‌ساختهٔ آفلاین — همان لحظه برای ورود آفلاین روی همین دستگاه آماده می‌شود
+    if (res.queued && res.tempId && form.password) {
+      void saveOfflineCred(
+        {
+          id: res.tempId,
+          username: uname.toLowerCase(),
+          name: form.name.trim(),
+          role: form.role,
+          phone: form.phone || null,
+          teacherId: form.teacherId || null,
+          studentId: form.studentId || null,
+        },
+        form.password,
+        false, // کاربر جاری (مدیر) تغییر نمی‌کند — ورود مجدد خودکار همچنان با حساب مدیر است
+      );
+    }
+    toast({
+      title: 'ذخیره شد',
+      description: res.queued ? 'در حافظهٔ گوشی — پس از اتصال خودکار به سرور می‌رود' : 'حساب کاربری ثبت گردید',
+    });
     setDialogOpen(false);
     load();
   };
