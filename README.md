@@ -29,9 +29,9 @@
 
 | مورد | توضیح |
 |---|---|
-| **وب‌سایت (هاست دائمی)** | پس از استقرار روی Vercel — آدرس ثابت `https://neda-al-qalam-school.vercel.app` (راهنمای پایین) |
+| **وب‌سایت (هاست دائمی)** | **https://neda-al-qalam-school.vercel.app** — همیشه روشن، دیتابیس ابری PostgreSQL (Neon) |
 | **مخزن کد** | https://github.com/hasamsayedi0987-cloud/neda-al-qalam-school |
-| **APK اندروید** | Release v1.2.0 (nedaalqalam-school.apk) — پس از تعیین آدرس نهایی هاست، APK با آدرس ثابت بازسازی و در Release جدید گذاشته می‌شود |
+| **APK اندروید** | **Release v1.3.0** (nedaalqalam-school.apk) — آدرس سرور جاسازی‌شده، بدون هیچ پیکربندی |
 
 - **بدون آی‌پی و بدون سرور محلی** — هر جا اینترنت باشد، سیستم در دسترس است.
 - **همگام‌سازی کامل**: هر ثبت (نمره، حاضری، شاگرد، کتاب...) روی سرور ذخیره و برای همه یکسان دیده می‌شود.
@@ -39,6 +39,8 @@
 - **APK**: آدرس سرور فقط بار اول (در صورت نیاز) پرسیده می‌شود و برای همیشه ذخیره می‌گردد؛ سپس هر بار مستقیم صفحهٔ ورود باز می‌شود.
 
 ## ☁️ استقرار روی هاست دائمی (Vercel) — سایت همیشه‌روشن با آدرس ثابت
+
+> ✅ **وضعیت: مستقر شده** — سایت روی https://neda-al-qalam-school.vercel.app با دیتابیس Neon PostgreSQL فعال است. راهنمای زیر برای نصب مجدد/مهاجرت نگه داشته شده است.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fhasamsayedi0987-cloud%2Fneda-al-qalam-school&project-name=neda-al-qalam-school)
 
