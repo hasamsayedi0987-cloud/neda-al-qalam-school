@@ -198,3 +198,31 @@ Stage Summary:
 - APK ثابت: پس از دریافت آدرس vercel.app → نوشتن در apk-build/server-url.txt → build.sh → Release جدید (APK بدون هیچ سوالی)
 - یادآوری امنیتی قبلی پابرجاست: توکن گیت‌هاب کاربر باید regenerate شود
 
+---
+Task ID: vercel-2
+Agent: main (Z.ai)
+Task: تکمیل استقرار ابری — اتصال دیتابیس کاربر، انتقال داده‌ها، APK نهایی با آدرس ثابت، Release v1.3.0
+
+Work Log:
+- کاربر Vercel را مستقر کرد و لینک https://neda-al-qalam-school.vercel.app را فرستاد
+- بررسی اولیه: سایت ۲۰۰ (۰.۶s) اما پیام ۵۰۳ فارسی «اتصال به پایگاه داده برقرار نیست» (پیام طراحی‌شده bootstrap) — اسکرین‌شات کاربر هم همین را نشان می‌داد؛ راهنمای گامی Storage→Neon Postgres→Connect→Redeploy داده شد
+- کاربر وصل کرد: /api/auth → {user:null, setupDone:true} — دیتابیس متصل و ۷ حساب bootstrap ساخته شده بود
+- کشف ریست فضای کاری: download/ پاک شده بود، local db خالی شده بود، Android SDK پاک شده بود، و یک کامیت خودکار bbfd1f5 (فقط تغییر mode به ۷۵۵) ساخته شده بود — بی‌ضرر، همراه push شد
+- بازیابی داده از مخزن دادهٔ گیت‌هاب nedaalqalam-school-data: scripts/wipe-db.mjs (جدید) + migrate-from-github.mjs + reset-default-passwords.mjs → ۷ معلم، ۱۲ صنف، ۱۵ مضمون، ۴ شاگرد، ۷ کاربر، ۱۲ تقسیم، ۸ حاضری، ۴ نمره، ۵ کتاب، ۳ امانت، ۱۳ تنظیم — همه OK
+- پشتیبان تازه: download/nedaalqalam-backup-2026-10-21.json (95 ردیف)
+- تلاش بازیابی روی Vercel → خطا Class_supervisorId_fkey: PostgreSQL (برخلاف SQLite) FK را اجرا می‌کند و route بازیابی صنف‌ها را قبل از معلمان درج می‌کرد
+- رفع src/app/api/backup/route.ts: ترتیب درج مضامین/معلمان قبل از صنف‌ها + ترتیب حذف صنف قبل از معلم — تست محلی OK → commit 12c4d68 → push → Vercel خودکار deploy شد → بازیابی ابری OK
+- صحت‌سنجی ابری: dashboard students:4 teachers:5 staff:2 classes:12 subjects:15 books:5 — دقیقاً مطابق محلی؛ ورود teacher با teacherId=tch-3 OK
+- نصب مجدد Android SDK (platform-34-ext7_r03 + build-tools_r34) — آدرس صحیح از repository2-3.xml
+- APK بازسازی با server-url.txt=https://neda-al-qalam-school.vercel.app → 226KB، apksigner verify OK، URL در classes.dex جاسازی‌شده
+- Release v1.3.0 ساخته و APK آپلود شد: https://github.com/hasamsayedi0987-cloud/neda-al-qalam-school/releases/download/v1.3.0/nedaalqalam-school.apk
+- README: جدول سایت زنده + Release v1.3.0 + وضعیت «مستقر شده» → commit 1931e59 → push
+
+Stage Summary:
+- سایت همیشه‌روشن: https://neda-al-qalam-school.vercel.app (PostgreSQL/Neon، داده‌های منتقل‌شده، ورود همهٔ نقش‌ها OK)
+- APK نهایی: Release v1.3.0 — آدرس ثابت جاسازی‌شده، بدون هیچ سوالی، ورود اجباری هر بازکردن
+- بازیابی پشتیبان حالا ۱۰۰٪ سازگار با PostgreSQL است (رفع ترتیب FK)
+- بازیابی داده از مخزن گیت‌هاب مسیر اطمینان پایدار شد (wipe-db + migrate)
+- توجه: بخش‌های دلخواه و قالب تقدیرنامه در پشتیبان نیستند — کاربر در صورت نیاز دوباره می‌سازد
+- امنیت: توکن در /tmp/gh_token.txt استخراج شد (فقط این جلسه) — کاربر همچنان باید regenerate کند
+
