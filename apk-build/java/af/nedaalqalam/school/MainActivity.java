@@ -2,16 +2,24 @@ package af.nedaalqalam.school;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -26,13 +34,15 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 /**
- * مکتب خصوصی نداالقلم — اپلیکیشن اندروید (نسخهٔ ۱.۲ — سرور اختصاصی)
+ * مکتب خصوصی نداالقلم — اپلیکیشن اندروید (نسخهٔ ۱.۴ — آفلاین کامل)
  * توسعه‌دهنده: حسام الدین سیدی — 0791680632 — hasamsayedi0987@gmail.com
  *
  * - هیچ توکنی لازم نیست: فقط نام کاربری و رمز عبور
  * - آدرس سرور یک بار ذخیره می‌شود و همیشه مستقیم وارد اپ می‌شوید
  * - با هر بازکردن اپ، نشست پاک می‌شود و ورود مجدد لازم است (حتی آفلاین)
  * - آنلاین: ارتباط مستقیم با سرور مکتب | آفلاین: آخرین داده‌ها از حافظه، ثبت‌ها در صف
+ * - جدید در ۱.۴: صفحهٔ خطای هوشمند با اتصال مجدد خودکار هنگام برگشت انترنت
+ *   (دکمهٔ تلاش مجدد قدیمی خراب بود — location.reload روی URL داده‌ای گیر می‌کرد)
  */
 public class MainActivity extends Activity {
 
@@ -47,6 +57,34 @@ public class MainActivity extends Activity {
     private String serverUrl = "";
     private ValueCallback<Uri[]> fileCallback;
     private static final int FILE_REQ = 101;
+    private boolean showingError = false;
+    private ConnectivityManager.NetworkCallback netCallback;
+    private final Handler retryHandler = new Handler(Looper.getMainLooper());
+
+    private final Runnable retryRun = new Runnable() {
+        @Override
+        public void run() {
+            if (showingError && webView != null) {
+                webView.loadUrl(serverUrl);
+                retryHandler.postDelayed(this, 8000);
+            }
+        }
+    };
+
+    /** پل جاوااسکریپت — دکمهٔ «تلاش مجدد» صفحهٔ خطا */
+    private class Bridge {
+        @JavascriptInterface
+        public void retry() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    showingError = false;
+                    retryHandler.removeCallbacks(retryRun);
+                    if (webView != null) webView.loadUrl(serverUrl);
+                }
+            });
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -216,15 +254,25 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 progressBar.setVisibility(View.GONE);
+                if (url != null && url.startsWith("http")) {
+                    // صفحهٔ واقعی سایت بارگذاری شد (آنلاین یا از کش سرویس‌ورکر)
+                    showingError = false;
+                    retryHandler.removeCallbacks(retryRun);
+                }
             }
 
             @Override
             public void onReceivedError(WebView view, WebResourceRequest req, android.webkit.WebResourceError err) {
-                if (req.isForMainFrame()) {
+                if (req.isForMainFrame() && !showingError) {
+                    showingError = true;
                     view.loadData(mainFrameErrorHtml(), "text/html", "utf-8");
+                    retryHandler.removeCallbacks(retryRun);
+                    retryHandler.postDelayed(retryRun, 8000); // تلاش خودکار هر ۸ ثانیه
                 }
             }
         });
+
+        webView.addJavascriptInterface(new Bridge(), "AndroidBridge");
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -244,18 +292,60 @@ public class MainActivity extends Activity {
                 return true;
             }
         });
+        registerNetworkCallback(); // اتصال مجدد خودکار هنگام برگشت انترنت
     }
 
     private String mainFrameErrorHtml() {
-        return "<html dir='rtl'><head><meta charset='utf-8'>"
+        return "<!doctype html><html dir='rtl'><head><meta charset='utf-8'>"
                 + "<meta name='viewport' content='width=device-width, initial-scale=1'>"
                 + "</head>"
-                + "<body style='font-family:sans-serif;text-align:center;padding:40px;background:#ecfdf5'>"
-                + "<h2 style='color:#064e3b'>اتصال به سرور مکتب برقرار نشد</h2>"
-                + "<p style='color:#4b5563'>اینترنت دستگاه را بررسی کنید و دوباره تلاش کنید.<br>"
-                + "داده‌های قبلی پس از اتصال در دسترس خواهد بود.</p>"
-                + "<button onclick='location.reload()' style='background:#047857;color:#fff;border:0;padding:12px 28px;border-radius:8px;font-size:15px;margin:8px'>تلاش مجدد</button>"
+                + "<body style='font-family:sans-serif;text-align:center;padding:36px 22px;background:#ecfdf5'>"
+                + "<div style='font-size:50px'>&#128225;</div>"
+                + "<h2 style='color:#064e3b;margin:8px 0'>اتصال به سرور مکتب برقرار نشد</h2>"
+                + "<p style='color:#4b5563;font-size:14px;line-height:2.1'>اینترنت دستگاه را وصل کنید — اپ خودکار دوباره وصل می‌شود.<br>"
+                + "اگر قبلاً با انترنت وارد اپ شده باشید، می‌توانید با همان حساب وارد شوید.<br>"
+                + "ثبت‌های آفلاین در حافظهٔ گوشی ذخیره و با اولین اتصال خودکار به سرور منتقل می‌شوند.</p>"
+                + "<button onclick='AndroidBridge.retry()' style='background:#047857;color:#fff;border:0;padding:12px 30px;border-radius:10px;font-size:15px;margin-top:10px'>تلاش مجدد</button>"
                 + "</body></html>";
+    }
+
+    // ───────── اتصال مجدد خودکار هنگام برگشت انترنت ─────────
+    private void registerNetworkCallback() {
+        try {
+            ConnectivityManager cmv = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cmv == null) return;
+            NetworkRequest req = new NetworkRequest.Builder()
+                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    .build();
+            netCallback = new ConnectivityManager.NetworkCallback() {
+                @Override
+                public void onAvailable(Network network) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (showingError && webView != null) {
+                                showingError = false;
+                                retryHandler.removeCallbacks(retryRun);
+                                webView.loadUrl(serverUrl);
+                            }
+                        }
+                    });
+                }
+            };
+            cmv.registerNetworkCallback(req, netCallback);
+        } catch (Exception ignored) { }
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (netCallback != null) {
+            try {
+                ConnectivityManager cmv = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+                if (cmv != null) cmv.unregisterNetworkCallback(netCallback);
+            } catch (Exception ignored) { }
+        }
+        retryHandler.removeCallbacksAndMessages(null);
+        super.onDestroy();
     }
 
     // ───────── منوی گوشی: تغییر آدرس سرور (پیشرفته) ─────────

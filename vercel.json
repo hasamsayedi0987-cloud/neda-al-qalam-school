@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "buildCommand": "node scripts/prisma-setup.mjs && npx next build",
+  "buildCommand": "node scripts/prisma-setup.mjs && npx next build && node scripts/sw-manifest.mjs",
   "installCommand": "bun install",
   "env": {
     "DEPLOY_TARGET": "vercel",

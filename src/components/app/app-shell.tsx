@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { apiGet, apiSend, onSyncStateChange, pendingSyncCount, isOnline } from '@/lib/client/api';
+import { apiGet, apiSend, onSyncStateChange, pendingSyncCount, isOnline, isAuthRequired } from '@/lib/client/api';
 import { isoToJalaliDisplay, toPersianDigits } from '@/lib/jalali';
 import { ROLE_LABELS } from '@/lib/grading';
 import { cn } from '@/lib/utils';
@@ -86,6 +86,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
   const [unread, setUnread] = useState(0);
   const [online, setOnline] = useState(true);
   const [pending, setPending] = useState(0);
+  const [authNeeded, setAuthNeeded] = useState(false);
   const [customSections, setCustomSections] = useState<CustomSectionData[]>([]);
   const { toast } = useToast();
 
@@ -118,6 +119,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
     const update = () => {
       setOnline(isOnline());
       setPending(pendingSyncCount());
+      setAuthNeeded(isAuthRequired());
     };
     update();
     const un = onSyncStateChange(update);
@@ -131,7 +133,8 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
   }, []);
 
   const logout = async () => {
-    await apiSend('/api/auth', 'POST', { action: 'logout' });
+    // خروج هرگز صف نمی‌شود — صف‌شدنش بعد از ورود مجدد نشست را می‌شکند
+    await apiSend('/api/auth', 'POST', { action: 'logout' }, { allowQueue: false });
     onLogout();
   };
 
@@ -233,10 +236,22 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
               'gap-1 hidden sm:flex',
               online ? 'text-emerald-700 border-emerald-300' : 'text-rose-600 border-rose-300',
             )}
-            title={online ? 'متصل به سرور' : 'حالت آفلاین — داده‌ها در صف ذخیره می‌شوند'}
+            title={
+              online
+                ? pending > 0 && authNeeded
+                  ? 'نشست منقضی شده — برای ارسال ثبت‌ها دوباره وارد شوید'
+                  : 'متصل به سرور'
+                : 'حالت آفلاین — داده‌ها در صف ذخیره می‌شوند'
+            }
           >
             {online ? <Wifi className="h-3.5 w-3.5" /> : <CloudOff className="h-3.5 w-3.5" />}
-            {online ? (pending > 0 ? `در انتظار همگام‌سازی: ${toPersianDigits(pending)}` : 'آنلاین') : 'آفلاین'}
+            {online
+              ? pending > 0
+                ? authNeeded
+                  ? `برای ارسال ثبت‌ها وارد شوید (${toPersianDigits(pending)})`
+                  : `در انتظار همگام‌سازی: ${toPersianDigits(pending)}`
+                : 'آنلاین'
+              : 'آفلاین'}
           </Badge>
 
           {/* اعلان‌ها */}

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════
-# ساخت APK اپلیکیشن مکتب خصوصی نداالقلم — نسخهٔ ۱.۲ (سرور اختصاصی)
+# ساخت APK اپلیکیشن مکتب خصوصی نداالقلم — نسخهٔ ۱.۴ (آفلاین کامل)
 # بدون Gradle | پیش‌نیازها: JDK 17+ و Android SDK:
 #   $ANDROID_SDK_HOME/build-tools/34.0.0  (aapt2, d8, zipalign, apksigner)
 #   $ANDROID_SDK_HOME/platforms/android-34/android.jar
@@ -50,9 +50,14 @@ cp "$OUT/dex/classes.dex" "$OUT/apk/classes.dex"
 
 echo "5/5 امضای APK…"
 if [ ! -f "$KEYSTORE" ]; then
-  keytool -genkeypair -keystore "$KEYSTORE" -alias noq -keyalg RSA -keysize 2048 \
-    -validity 10000 -storepass nedaalqalam1405 -keypass nedaalqalam1405 \
-    -dname "CN=Neda al-Qalam School, OU=IT, O=Neda al-Qalam, L=Baharak, ST=Badakhshan, C=AF"
+  # کلید پایدار از مخزن (apk-build/noq.keystore) — تا امضا در همهٔ Buildها یکسان بماند
+  if [ -f noq.keystore ]; then
+    cp noq.keystore "$KEYSTORE"
+  else
+    keytool -genkeypair -keystore "$KEYSTORE" -alias noq -keyalg RSA -keysize 2048 \
+      -validity 10000 -storepass nedaalqalam1405 -keypass nedaalqalam1405 \
+      -dname "CN=Neda al-Qalam School, OU=IT, O=Neda al-Qalam, L=Baharak, ST=Badakhshan, C=AF"
+  fi
 fi
 "$BT/zipalign" -f 4 "$OUT/apk/base.apk" "$OUT/nedaalqalam-unsigned.apk"
 "$BT/apksigner" sign --ks "$KEYSTORE" --ks-pass pass:nedaalqalam1405 \

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { LoginView } from '@/components/app/login-view';
 import { AppShell } from '@/components/app/app-shell';
-import { apiGet } from '@/lib/client/api';
+import { apiGet, markAuthRestored } from '@/lib/client/api';
 import type { SessionUser } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
 
@@ -25,8 +25,11 @@ export default function Page() {
       const data = await apiGet<{ user: SessionUser | null; setupDone?: boolean }>('/api/auth');
       setUser(data.user);
       if (data.setupDone !== undefined) setSetupDone(data.setupDone);
-      if (data.user) sessionStorage.setItem(ALIVE_KEY, '1');
-      else sessionStorage.removeItem(ALIVE_KEY);
+      if (data.user) {
+        sessionStorage.setItem(ALIVE_KEY, '1');
+        // ورود معتبر شد — ثبت‌های آفلاین مانده در صف ارسال می‌شوند
+        markAuthRestored();
+      } else sessionStorage.removeItem(ALIVE_KEY);
     } catch {
       setUser(null);
     }
@@ -34,15 +37,16 @@ export default function Page() {
   };
 
   useEffect(() => {
+    // ثبت Service Worker برای حالت آفلاین — همیشه در production
+    // (قبلاً فقط وقتی نشست از قبل موجود بود ثبت می‌شد که در اپ هرگز اتفاق نمی‌افتاد!)
+    if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    }
     // فقط وقتی علامت نشست موجود است نشست بازیابی می‌شود — وگرنه صفحهٔ ورود
     let alive = false;
     try { alive = sessionStorage.getItem(ALIVE_KEY) === '1'; } catch { alive = false; }
     if (alive) {
       queueMicrotask(loadSession);
-      // ثبت Service Worker برای حالت آفلاین — فقط در نسخهٔ production
-      if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
-        navigator.serviceWorker.register('./sw.js').catch(() => {});
-      }
     } else {
       const t = setTimeout(() => setLoading(false), 0);
       // وضعیت راه‌اندازی اولیه (نمایش حساب‌های ابتدایی) بدون بازیابی نشست
@@ -54,8 +58,13 @@ export default function Page() {
     }
   }, []);
 
-  const handleLoggedIn = () => {
+  const handleLoggedIn = (u?: SessionUser) => {
     try { sessionStorage.setItem(ALIVE_KEY, '1'); } catch { /* ignore */ }
+    if (u) {
+      // ورود آفلاین — کاربر از اعتبار محلی، بدون خواندن کش
+      setUser(u);
+      return;
+    }
     queueMicrotask(loadSession);
   };
 

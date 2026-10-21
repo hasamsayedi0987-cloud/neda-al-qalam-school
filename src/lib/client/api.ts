@@ -22,6 +22,7 @@ interface QueuedRequest {
 
 let online = typeof navigator !== 'undefined' ? navigator.onLine : true;
 let pendingCount = 0;
+let authRequired = false;
 const listeners = new Set<() => void>();
 
 function readQueue(): QueuedRequest[] {
@@ -62,12 +63,24 @@ export function pendingSyncCount() {
   return pendingCount;
 }
 
+/** آیا صف به‌دلیل نبود نشست معتبر ارسال نشد؟ (نیاز به ورود مجدد) */
+export function isAuthRequired() {
+  return authRequired;
+}
+
+/** پس از ورود موفق آنلاین — صف دوباره تلاش می‌کند */
+export function markAuthRestored() {
+  authRequired = false;
+  flushQueue();
+}
+
 export async function flushQueue(): Promise<number> {
   if (typeof window === 'undefined') return 0;
   const queue = readQueue();
   if (queue.length === 0) return 0;
   const remaining: QueuedRequest[] = [];
   let sent = 0;
+  let authFailed = false;
   for (const item of queue) {
     try {
       const res = await fetch(item.url, {
@@ -77,13 +90,19 @@ export async function flushQueue(): Promise<number> {
         cache: 'no-store',
       });
       if (res.ok) sent += 1;
-      else if (res.status < 500) sent += 0; // خطای منطقی: حذف از صف
+      else if (res.status === 401 || res.status === 403) {
+        // نشست معتبر نیست — داده حذف نمی‌شود؛ پس از ورود مجدد دوباره تلاش می‌شود
+        remaining.push(item);
+        authFailed = true;
+      } else if (res.status < 500) sent += 0; // خطای منطقی: حذف از صف
       else remaining.push(item);
     } catch {
       remaining.push(item);
     }
   }
   writeQueue(remaining);
+  authRequired = authFailed && remaining.length > 0;
+  notify();
   return sent;
 }
 
@@ -102,6 +121,25 @@ if (typeof window !== 'undefined') {
     if (navigator.onLine && readQueue().length > 0) flushQueue();
   }, 30_000);
   online = navigator.onLine;
+  // پیام سرویس‌ورکر پس از برگشت اتصال (Background Sync) — تخلیهٔ صف
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (e) => {
+      if (e.data === 'flush-queue') flushQueue();
+    });
+  }
+}
+
+/** ثبت Background Sync — پس از وصل شدن، سرویس‌ورکر به اپ خبر می‌دهد */
+function requestBackgroundSync() {
+  try {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready
+        .then((reg) => reg.sync.register('noq-flush'))
+        .catch(() => {});
+    }
+  } catch {
+    /* مرورگر پشتیبانی نمی‌کند */
+  }
 }
 
 export interface ApiResult<T> {
@@ -188,6 +226,7 @@ export async function apiSend<T = unknown>(
         label: opts.queueLabel || url,
       });
       writeQueue(queue);
+      requestBackgroundSync();
       return { queued: true };
     }
     return { error: 'در حالت آفلاین این عملیات در دسترس نیست' };
@@ -212,6 +251,7 @@ export async function apiSend<T = unknown>(
         label: opts.queueLabel || url,
       });
       writeQueue(queue);
+      requestBackgroundSync();
       return { queued: true };
     }
     return { error: 'اتصال به سرور برقرار نشد' };

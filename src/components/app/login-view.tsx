@@ -16,7 +16,7 @@ export function LoginView({
   onLoggedIn,
   setupDone,
 }: {
-  onLoggedIn: () => void;
+  onLoggedIn: (user?: SessionUser) => void;
   setupDone: boolean;
 }) {
   const [username, setUsername] = useState('');
@@ -63,7 +63,8 @@ export function LoginView({
     }
     setOfflineMode(true);
     toast({ title: 'ورود آفلاین موفق', description: 'داده‌ها پس از وصل شدن همگام می‌شوند' });
-    onLoggedIn();
+    // کاربر آفلاین مستقیم پاس داده می‌شود تا از کش احتمالاً کهنه خوانده نشود
+    onLoggedIn(user as SessionUser);
   };
 
   return (
