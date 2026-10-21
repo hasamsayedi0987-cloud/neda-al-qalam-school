@@ -48,6 +48,14 @@ function notify() {
   listeners.forEach((l) => l());
 }
 
+/** وضعیت اتصال بر اساس نتیجهٔ واقعی fetch — نه فقط navigator.onLine (وای‌فای بدون انترنت دروغ می‌گوید) */
+function setOnlineState(v: boolean) {
+  if (online !== v) {
+    online = v;
+    notify();
+  }
+}
+
 export function onSyncStateChange(cb: () => void) {
   listeners.add(cb);
   return () => {
@@ -146,6 +154,8 @@ export interface ApiResult<T> {
   data?: T;
   error?: string;
   queued?: boolean;
+  /** درست بودن یعنی مشکل از شبکه بود (نه رد شدن منطقی سرور) */
+  network?: boolean;
 }
 
 /* ───────────────  کش خواندن برای حالت آفلاین  ─────────────── */
@@ -199,10 +209,12 @@ export async function apiGet<T>(url: string): Promise<T> {
       if (cached !== undefined) return cached as T;
       throw new Error(json.error || 'خطا در دریافت اطلاعات');
     }
+    setOnlineState(true);
     cacheGet(url, json);
     return json as T;
   } catch (e) {
     // شبکه قطع — از آخرین دادهٔ ذخیره‌شده استفاده می‌کنیم
+    setOnlineState(false);
     const cached = cachePeek(url);
     if (cached !== undefined) return cached as T;
     throw e instanceof Error && e.message ? e : new Error('خطا در دریافت اطلاعات');
@@ -217,6 +229,7 @@ export async function apiSend<T = unknown>(
   opts: { queueLabel?: string; allowQueue?: boolean } = {},
 ): Promise<ApiResult<T>> {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    setOnlineState(false);
     if (opts.allowQueue !== false) {
       const queue = readQueue();
       queue.push({
@@ -229,7 +242,7 @@ export async function apiSend<T = unknown>(
       requestBackgroundSync();
       return { queued: true };
     }
-    return { error: 'در حالت آفلاین این عملیات در دسترس نیست' };
+    return { error: 'در حالت آفلاین این عملیات در دسترس نیست', network: true };
   }
   try {
     const res = await fetch(url, {
@@ -239,9 +252,16 @@ export async function apiSend<T = unknown>(
       cache: 'no-store',
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) return { error: json.error || 'عملیات ناموفق بود' };
+    if (!res.ok) {
+      // خطای ۵xx یعنی سرور/شبکه در دسترس نیست — برای ورود، fallback آفلاین معنا دارد
+      if (res.status >= 500) return { error: json.error || 'سرور در دسترس نیست', network: true };
+      return { error: json.error || 'عملیات ناموفق بود' };
+    }
+    setOnlineState(true);
     return { data: json as T };
   } catch {
+    // navigator.onLine ممکن است دروغ گفته باشد (وای‌فای بدون انترنت)
+    setOnlineState(false);
     if (opts.allowQueue !== false) {
       const queue = readQueue();
       queue.push({
@@ -254,7 +274,7 @@ export async function apiSend<T = unknown>(
       requestBackgroundSync();
       return { queued: true };
     }
-    return { error: 'اتصال به سرور برقرار نشد' };
+    return { error: 'اتصال به سرور برقرار نشد', network: true };
   }
 }
 

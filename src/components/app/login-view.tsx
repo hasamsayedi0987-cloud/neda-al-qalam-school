@@ -34,35 +34,44 @@ export function LoginView({
     const uname = username.trim();
     const pass = password;
 
+    let networkFailed = false;
+
     if (navigator.onLine) {
       const res = await apiSend<{ user: SessionUser }>('/api/auth', 'POST', { action: 'login', username: uname, password: pass }, { allowQueue: false });
-      if (res.error) {
+      if (res.data?.user) {
+        // ذخیرهٔ مشخصات ورود برای امکان ورود در حالت آفلاین (روی همین دستگاه)
+        void saveOfflineCred(res.data.user, pass);
+        setLoading(false);
+        toast({ title: 'خوش آمدید', description: 'ورود با موفقیت انجام شد' });
+        onLoggedIn();
+        return;
+      }
+      if (res.error && !res.network) {
+        // رد شدن منطقی سرور (رمز نادرست و غیره) — کاربر آنلاین است، دوباره تلاش کند
         setLoading(false);
         setError(res.error);
         return;
       }
-      if (res.queued || !res.data?.user) {
-        setLoading(false);
-        setError('اتصال به سرور برقرار نیست. پس از وصل شدن دوباره تلاش کنید.');
-        return;
-      }
-      // ذخیرهٔ مشخصات ورود برای امکان ورود در حالت آفلاین (روی همین دستگاه)
-      void saveOfflineCred(res.data.user, pass);
-      setLoading(false);
-      toast({ title: 'خوش آمدید', description: 'ورود با موفقیت انجام شد' });
-      onLoggedIn();
-      return;
+      // navigator.onLine دروغ می‌گفت (وای‌فای/دیتا بدون انترنت) یا سرور در دسترس نیست
+      networkFailed = true;
     }
 
-    // ─── حالت آفلاین: بررسی محلی نام کاربری و رمز ───
+    // ─── ورود آفلاین: بررسی محلی نام کاربری و رمز ───
     const user = await offlineLogin(uname, pass);
     setLoading(false);
     if (!user) {
-      setError('در حالت آفلاین، ورود با حسابی که قبلاً روی همین دستگاه وارد شده امکان‌پذیر است.');
+      setError(
+        networkFailed
+          ? 'اتصال انترنت برقرار نیست. می‌توانید با حسابی که قبلاً روی همین دستگاه وارد شده، آفلاین وارد شوید.'
+          : 'در حالت آفلاین، ورود با حسابی که قبلاً روی همین دستگاه وارد شده امکان‌پذیر است.',
+      );
       return;
     }
     setOfflineMode(true);
-    toast({ title: 'ورود آفلاین موفق', description: 'داده‌ها پس از وصل شدن همگام می‌شوند' });
+    toast({
+      title: 'ورود آفلاین موفق',
+      description: 'داده‌ها پس از وصل شدن اینترنت خودکار همگام می‌شوند',
+    });
     // کاربر آفلاین مستقیم پاس داده می‌شود تا از کش احتمالاً کهنه خوانده نشود
     onLoggedIn(user as SessionUser);
   };
