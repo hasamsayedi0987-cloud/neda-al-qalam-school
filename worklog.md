@@ -252,3 +252,24 @@ Stage Summary:
 - Release: https://github.com/hasamsayedi0987-cloud/neda-al-qalam-school/releases/tag/v1.4.0
 - یادآوری نصب برای کاربر: ابتدا اپ قبلی uninstall شود
 - امنیت: توکن گیت‌هاب همچنان باید regenerate شود
+
+---
+Task ID: offline-2
+Agent: main (Z.ai)
+Task: رفع ورود آفلاین وقتی وای‌فای/دیتا «وصل» است ولی انترنت واقعی نیست (گزارش کاربر + اسکرین‌شات خطای «اتصال به سرور برقرار نشد»)
+
+Work Log:
+- تشخیص از اسکرین‌شات: خطا از catch مسیر آنلاین می‌آمد → navigator.onLine=true بود در حالی که شبکه مرده بود (تلهٔ کلاسیک onLine) → مسیر offlineLogin هرگز اجرا نمی‌شد
+- login-view submit بازنویسی شد: شکست شبکه‌ای (network:true) → fallback خودکار به ورود آفلاین؛ رد منطقی سرور (رمز غلط) بدون تغییر مستقیم نشان داده می‌شود
+- api.ts: ApiResult.network + setOnlineState بر اساس نتیجهٔ واقعی fetch (بج آفلاین با وای‌فای بدون انترنت هم درست می‌شود) + خطای 5xx = network:true
+- sw.js → v4-2
+- اسکریپت تست scripts/test-offline-trap.js (Playwright): ۶ فاز — ورود آنلاین+SW(۳۵ فایل کش) / خروج+کشتن سرور با onLine=true / reload از کش / ورود آفلاین fallback / پیام رمز غلط آفلاین / برگشت سرور — همه PASS
+- نکتهٔ تست: reload CLI دیمون agent-browser روی ناوبری SW-served قفل می‌شود — تست با Playwright مستقیم و waitUntil:'commit' انجام شد
+- APK versionCode 5 / versionName 1.4.1 (همان keystore پایدار مخزن — امضا یکسان با v1.4.0)
+- commit 5c87afa → push → Vercel auto-deploy (sw.js v4-2 زنده تأیید شد)
+- Release v1.4.1 + APK آپلود شد
+
+Stage Summary:
+- رفع اصلی در کد وب است: با باز کردن اپ یک بار با انترنت واقعی، fix روی APK نصب‌شدهٔ کاربر هم اعمال می‌شود (بدون نیاز به نصب مجدد)
+- APK جدید v1.4.1 هم منتشر شد
+- امنیت: توکن همچنان باید regenerate شود
