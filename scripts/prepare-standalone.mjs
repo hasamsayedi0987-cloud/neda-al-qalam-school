@@ -23,4 +23,6 @@ cpSync(src, dest, {
   recursive: true,
   filter: (from) => !from.startsWith(path.join(src, 'standalone')),
 });
-console.log(`✓ standalone آماده شد: ${path.relative(root, dest)}`);
+// فایل‌های عمومی هم داخل standalone لازم هستند
+cpSync(path.join(root, 'public'), path.join(root, distDir, 'standalone', 'public'), { recursive: true });
+console.log(`✓ standalone آماده شد: ${path.relative(root, dest)} + public/`);
