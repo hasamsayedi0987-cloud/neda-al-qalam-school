@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { requireUser, requireRole, ApiError } from '@/lib/auth';
+import { requireUser, requireRole, requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
 
 /**
@@ -42,7 +42,7 @@ export function parseConfig(json: string): CertConfig {
 
 export async function GET() {
   try {
-    await requireUser();
+    await requireSection('certificates');
     const templates = await db.certificateTemplate.findMany({
       orderBy: { createdAt: 'asc' },
     });

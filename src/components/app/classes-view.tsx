@@ -15,9 +15,9 @@ import { toPersianDigits } from '@/lib/jalali';
 import { gradeName } from '@/lib/grading';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, ClassInfo, TeacherInfo, SubjectInfo } from '@/lib/types';
-import { Plus, Pencil, Trash2, School, BookOpen } from 'lucide-react';
+import { Plus, Pencil, Trash2, School, BookOpen, UserLock } from 'lucide-react';
 
-const EMPTY_FORM = { id: '', grade: '1', name: '', supervisorId: '' };
+const EMPTY_FORM = { id: '', grade: '1', name: '', supervisorId: '', actingSupervisorId: '' };
 
 export function ClassesView({ user }: { user: SessionUser }) {
   const [classes, setClasses] = useState<ClassInfo[]>([]);
@@ -56,6 +56,7 @@ export function ClassesView({ user }: { user: SessionUser }) {
     const res = await apiSend('/api/classes', form.id ? 'PATCH' : 'POST', {
       ...form, grade: Number(form.grade),
       supervisorId: form.supervisorId || null,
+      actingSupervisorId: form.actingSupervisorId || null,
     });
     if (res.error) {
       toast({ title: 'خطا', description: res.error, variant: 'destructive' });
@@ -132,6 +133,11 @@ export function ClassesView({ user }: { user: SessionUser }) {
                     <p className="text-xs text-muted-foreground mt-0.5">
                       شاگردان: {toPersianDigits(c.studentCount || 0)} | نگران صنف: {c.supervisorName || 'تعیین نشده'}
                     </p>
+                    {c.actingSupervisorName && (
+                      <p className="text-xs text-amber-700 mt-0.5 flex items-center gap-1">
+                        <UserLock className="h-3 w-3" /> نگران موقت: {c.actingSupervisorName}
+                      </p>
+                    )}
                   </div>
                   {canEdit && (
                     <div className="flex gap-1">
@@ -140,6 +146,7 @@ export function ClassesView({ user }: { user: SessionUser }) {
                         onClick={() => {
                           setForm({
                             id: c.id, grade: String(c.grade), name: c.name, supervisorId: c.supervisorId || '',
+                            actingSupervisorId: c.actingSupervisorId || '',
                           });
                           setDialogOpen(true);
                         }}
@@ -222,6 +229,18 @@ export function ClassesView({ user }: { user: SessionUser }) {
                 </SelectContent>
               </Select>
             </Field>
+            <Field
+              label="نگران موقت (در غیاب نگران اصلی)"
+              hint="تا زمان تغییر، همین شخص حاضری صنف و دسترسی‌های نگران را دارد — مثلاً وقتی نگران مریض است"
+            >
+              <Select value={form.actingSupervisorId || 'none'} onValueChange={(v) => setForm({ ...form, actingSupervisorId: v === 'none' ? '' : v })}>
+                <SelectTrigger><SelectValue placeholder="بدون نگران موقت" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">بدون نگران موقت</SelectItem>
+                  {teachers.map((t) => <SelectItem key={t.id} value={t.id}>{t.name} ({t.position})</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </Field>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>انصراف</Button>
@@ -250,8 +269,8 @@ export function ClassesView({ user }: { user: SessionUser }) {
                 <SelectTrigger><SelectValue placeholder="انتخاب معلم" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">بدون معلم</SelectItem>
-                  {teachers.filter((t) => t.position === 'معلم' || t.position === 'سرمعلم' || t.position === 'مدیر').map((t) => (
-                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  {teachers.filter((t) => t.active).map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.name} ({t.position})</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

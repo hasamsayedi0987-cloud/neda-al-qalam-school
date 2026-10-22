@@ -13,7 +13,7 @@ import { PageHeader, LoadingBlock, EmptyState, Field } from './ui-bits';
 import { apiGet, apiSend } from '@/lib/client/api';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, TeacherInfo } from '@/lib/types';
-import { Plus, Pencil, Trash2, UserCog, BookOpen } from 'lucide-react';
+import { Plus, Pencil, Trash2, UserCog, BookOpen, UserPlus } from 'lucide-react';
 
 const POSITIONS = ['معلم', 'سرمعلم', 'مدیر', 'ملازم', 'کارمند', 'کتابخانه‌دار'];
 
@@ -28,6 +28,9 @@ export function TeachersView({ user }: { user: SessionUser }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const { toast } = useToast();
+  // ساخت سریع حساب کاربری برای معلم بدون حساب (رفع «بدون حساب» — ریشهٔ دیده‌نشدن مضامین)
+  const [accDialog, setAccDialog] = useState<TeacherInfo | null>(null);
+  const [accForm, setAccForm] = useState({ username: '', password: '', role: 'TEACHER' });
 
   const canEdit = ['ADMIN', 'HEADTEACHER'].includes(user.role);
 
@@ -76,6 +79,38 @@ export function TeachersView({ user }: { user: SessionUser }) {
       return;
     }
     toast({ title: 'حذف شد' });
+    load();
+  };
+
+  const createAccount = async () => {
+    if (!accDialog) return;
+    const uname = accForm.username.trim().toLowerCase();
+    if (!uname || accForm.password.length < 6) {
+      toast({ title: 'خطا', description: 'نام کاربری و رمز (حداقل ۶ حرف) ضروری است', variant: 'destructive' });
+      return;
+    }
+    if (!/^[a-z0-9._\-@]+$/i.test(uname)) {
+      toast({ title: 'خطا', description: 'نام کاربری فقط حروف انگلیسی، عدد و . _ - @ می‌تواند داشته باشد', variant: 'destructive' });
+      return;
+    }
+    const res = await apiSend<{ id?: string }>('/api/users', 'POST', {
+      username: uname,
+      password: accForm.password,
+      name: accDialog.name,
+      role: accForm.role,
+      teacherId: accDialog.id,
+    });
+    if (res.error) {
+      toast({ title: 'خطا', description: res.error, variant: 'destructive' });
+      return;
+    }
+    toast({
+      title: 'حساب ساخته شد',
+      description: `${accDialog.name} حالا با نام کاربری «${uname}» وارد می‌شود و مضامین و صنف نگرانی خود را می‌بیند`,
+      duration: 5000,
+    });
+    setAccDialog(null);
+    setAccForm({ username: '', password: '', role: 'TEACHER' });
     load();
   };
 
@@ -133,7 +168,16 @@ export function TeachersView({ user }: { user: SessionUser }) {
                           <span className={t.userActive ? 'text-emerald-700' : 'text-rose-600'}>
                             @{t.username}{t.userActive ? '' : ' (غیرفعال)'}
                           </span>
-                        ) : 'بدون حساب'}
+                        ) : (
+                          user.role === 'ADMIN' ? (
+                            <Button
+                              variant="outline" size="sm" className="h-7 text-[11px] gap-1 border-amber-300 text-amber-800"
+                              onClick={() => { setAccDialog(t); setAccForm({ username: '', password: '', role: 'TEACHER' }); }}
+                            >
+                              <UserPlus className="h-3 w-3" /> ساخت حساب
+                            </Button>
+                          ) : 'بدون حساب'
+                        )}
                       </TableCell>
                       <TableCell>
                         {(t.assignments?.length || 0) === 0 ? (
@@ -230,6 +274,45 @@ export function TeachersView({ user }: { user: SessionUser }) {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>انصراف</Button>
             <Button onClick={save}>{form.id ? 'ذخیرهٔ تغییرات' : 'افزودن'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* دیالوگ ساخت حساب کاربری برای معلم */}
+      <Dialog open={!!accDialog} onOpenChange={(v) => !v && setAccDialog(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>ساخت حساب کاربری — {accDialog?.name}</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground leading-5">
+            حساب به‌صورت خودکار با پروندهٔ این معلم پیوند داده می‌شود؛ پس از ورود، مضامین سپرده‌شده و صنف نگرانی‌اش را می‌بیند.
+          </p>
+          <div className="space-y-3 py-1">
+            <Field label="نام کاربری *">
+              <Input dir="ltr" className="text-left" value={accForm.username}
+                onChange={(e) => setAccForm({ ...accForm, username: e.target.value })}
+                placeholder="مثلاً ahmad.teacher" />
+            </Field>
+            <Field label="رمز عبور * (حداقل ۶ حرف)">
+              <Input dir="ltr" className="text-left" type="password" value={accForm.password}
+                onChange={(e) => setAccForm({ ...accForm, password: e.target.value })} />
+            </Field>
+            <Field label="نقش کاربر">
+              <Select value={accForm.role} onValueChange={(v) => setAccForm({ ...accForm, role: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="TEACHER">معلم</SelectItem>
+                  <SelectItem value="HEADTEACHER">سرمعلم</SelectItem>
+                  <SelectItem value="STAFF">ملازم/کارمند</SelectItem>
+                  <SelectItem value="LIBRARIAN">کتابخانه‌دار</SelectItem>
+                  <SelectItem value="ADMIN">مدیر</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAccDialog(null)}>انصراف</Button>
+            <Button onClick={createAccount} className="gap-1.5"><UserPlus className="h-4 w-4" /> ساخت حساب</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -359,3 +359,40 @@ Stage Summary:
 - نسخهٔ ۲.۰.۰: محصول مدرن، امن و کامل — همهٔ قابلیت‌های قبلی سالم (رگرسیون کامل PASS)
 - همهٔ لینک‌های دانلود نسخه‌های قبلی (v1.0.0 تا v1.5.1) در Releases فعال می‌مانند
 - امنیت: توکن گیت‌هاب همچنان باید regenerate شود
+
+---
+Task ID: v21-nine-issues
+Agent: main (Z.ai)
+Task: حل ۹ مشکل گزارش کاربر — دسترسی معلم، ولد/ولدیت در نتایج، کنترل دسترسی‌ها توسط مدیر، نگران موقت، چند مدیر، عناوین قابل‌تغییر + APK اندروید و PWA آیفون
+
+Work Log:
+- ممیزی: شِمای کامل (User/Teacher/ClassSubject/Class/Setting)، گاردهای همهٔ ۱۹ مسیر API، ۱۷ ویو خوانده شد
+- ریشهٔ مشکل ۱: حساب کاربری معلم به پروندهٔ معلم پیوند نداشت (user.teacherId=null) → همهٔ گاردهای scope درست بودند ولی پیوند خالی بود
+- ترمیم خودکار: در POST /api/auth login — اگر TEACHER/HEADTEACHER/STAFF/LIBRARIAN پیوند نداشت و دقیقاً یک معلم هم‌نامِ فعال بدون حسابِ پیوسته وجود داشت، پیوند خودکار برقرار می‌شود (همچنین STUDENT/GUARDIAN با نام کامل یکتا)
+- grades-view: بنر معلم سه‌حالته شد — بدون پیوند (پیام دقیق + راهنما)، مضامین سپرده‌شده، یا «هنوز مضمونی سپرده نشده»
+- users-view: هشدار «بدون پیوند!» برای کاربران بدون teacherId + hint ضروری در فرم
+- teachers-view: دکمهٔ «ساخت حساب» برای معلم بدون حساب — POST /api/users با teacherId خودکار
+- schema.prisma + schema.postgres.prisma: User.perms (JSON رونویسی دسترسی) + Class.actingSupervisorId (نگران موقت) + رابطهٔ actingSupervisor — db push موفق
+- src/lib/access.ts جدید: SECTIONS (۱۶ بخش با نقش‌های پیش‌فرض و manageable)، parsePerms، sectionAllowed، visibleSections — مشترک سرور/کلاینت
+- auth.ts: AuthUser.perms + requireSection(section, extraRoles) — رونویسی مدیر روی نقش پیش‌فرض
+- گاردهای API: requireSection روی students/grades/results/attendance/activities/library/tasks/certificates + گارد نقش برای نوشته‌های مدیریتی (teachers/classes/subjects/tasks)؛ مراجع مشترک خواندنی (classes/subjects/teachers GET) با requireUser باز ماند + بایپس LIBRARIAN/STUDENT/GUARDIAN در students GET
+- users API: sanitizePerms (فقط کلیدهای manageable بولین) در POST/PATCH + perms در GET
+- users-view بازنویسی: دیالوگ «دسترسی بخش‌ها» (۱۲ سوییچ + برچسب پیش‌فرض/فعال‌شده/محدودشده + بازگشت به پیش‌فرض) + «کپی دسترسی از کاربر دیگر» + تغییر سریع نقش از ستون نقش (Select) + ستون «دسترسی»
+- app-shell: NAV_ITEMS از SECTIONS ساخته می‌شود؛ فیلتر منو فقط sectionAllowed (رونویسی مدیر می‌تواند بخش به نقشِ فاقدِ پیش‌فرض بدهد)؛ لینک‌پذیری عمیق هم sectionAllowed
+- مشکل ۲: grandFather در select شاگردان grades API + نمایش «ولد — ولدیت» زیر نام شاگرد در جدول نمرات؛ جدول نتایج (رابط) + چاپ + Word + Excel + کارنامهٔ چاپی — همه ولدیت را نشان می‌دهند (فقط اگر ذکر شده باشد)
+- مشکل ۴: داشبورد API pendingApprovals (مضامین دارای نمرهٔ تاییدنشده، گروه‌بندی و ۸ مورد برتر) + کارت «نمرات در انتظار بررسی و تایید» با ناوبری به ثبت نمرات
+- مشکل ۷: classes API GET/POST/PATCH نگران موقت + کارت صنف «نگران موقت: X» + فیلد در دیالوگ صنف + teacherClassIds شامل actingSupervisor (نگران موقت حاضری می‌گیرد) + دیالوگ تقسیم مضمون همهٔ معلمان فعال را نشان می‌دهد (قبلاً فیلتر position مانع بود)
+- مشکل ۸: تغییر سریع نقش → چند مدیر با گارد «آخرین مدیر فعال» موجود؛ تست: معلم→مدیر→ورود→بازگشت
+- مشکل ۹: settings EDITABLE_KEYS + tagline + navLabels (اعتبارسنجی JSON)؛ settings-view کارت «عناوین و نام‌ها» (نام مکتب، شعار، ۱۶ برچسب منو)؛ app-shell + login-view برچسب‌ها را اعمال می‌کنند + document.title
+- iOS/PWA (از v2.0.0 موجود): manifest/اسپلش/meta حفظ شد + کارت راهنمای نصب اندروید/آیفون در about-view
+- prepare-standalone.mjs: رفع خطای self-copy (کپی به tmp سپس rename)
+- sw.js → v7-0 (باطل‌کردن کش قبلی)
+- تست‌ها: test-v21.js جدید ۳۷/۳۷ PASS (هر ۹ مسئله: پیوند، نمرهٔ معلم، حاضری نگران، ولدیت در API/رابط، pendingApprovals، ۴۰۳/۲۰۰ دسترسی، perms در نشست، کپی دسترسی، نگران موقت حاضری، ارتقای مدیر، عناوین در سربرگ/منو/حذف بخش محدودشده، صفر خطای کنسول)؛ رگرسیون کامل: test-v15-offline ۲۳ PASS، test-offline-trap ۶ فاز PASS، repro-users-sync PASS، test-v2-features PASS؛ tsc و eslint پاک
+- رگرسیون کشف‌شده و رفع‌شده: فیلتر منو قبلاً roles پیش‌فرض را پیش‌شرط داشت و «فعال‌سازی» را می‌شکست؛ classes GET موقتاً برای معلم ۴۰۳ می‌شد (فقط ویوهای مدیریتی گارد نقش دارند)
+- APK: versionCode 9 / versionName 2.1.0 — keystore پایدار مخزن (SHA-256 یکسان e4bafbce...) — apksigner verify OK
+- README: تازه‌های ۲.۱ + ردیف جدید تاریخچهٔ نسخه‌ها
+
+Stage Summary:
+- هر ۹ مشکل کاربر حل و با تست خودکار اثبات شد؛ هیچ قابلیت قبلی (آفلاین، همگام‌سازی، تم، iOS) نسلانی نشد
+- مدیر اکنون کامل کنترل دارد: محدود/فعال/غیرفعال هر بخش برای هر کاربر، کپی دسترسی، تعیین مدیر/سرمعلم، نگران موقت، تغییر همهٔ عناوین
+- یادآوری امنیتی: توکن گیت‌هاب همچنان باید regenerate شود

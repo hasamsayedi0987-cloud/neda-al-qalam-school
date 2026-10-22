@@ -9,6 +9,7 @@
 import { createHmac, timingSafeEqual, randomBytes, scryptSync } from 'crypto';
 import { cookies } from 'next/headers';
 import { db } from '@/lib/db';
+import { sectionAllowed } from '@/lib/access';
 
 export const SESSION_COOKIE = 'noq_session';
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // ۷ روز
@@ -102,6 +103,7 @@ export interface AuthUser {
   phone: string | null;
   teacherId: string | null;
   studentId: string | null;
+  perms: string | null; // JSON دسترسی بخش‌ها (رونویسی نقش)
 }
 
 /** کاربر جاری از کوکی — با بررسی فعال بودن حساب */
@@ -114,7 +116,7 @@ export async function getSessionUser(): Promise<AuthUser | null> {
     where: { id: payload.uid },
     select: {
       id: true, username: true, name: true, role: true,
-      active: true, phone: true, teacherId: true, studentId: true,
+      active: true, phone: true, teacherId: true, studentId: true, perms: true,
     },
   });
   if (!user || !user.active) return null; // کاربر غیرفعال یا حذف‌شده نمی‌تواند وارد شود
@@ -149,6 +151,19 @@ export async function requireRole(...roles: string[]): Promise<AuthUser> {
   const user = await requireUser();
   if (!roles.includes(user.role)) {
     throw new ApiError('شما به این بخش دسترسی ندارید', 403);
+  }
+  return user;
+}
+
+/**
+ * دسترسی بر اساس بخش — نقش پیش‌فرض + رونویسی perms توسط مدیر
+ * مدیر می‌تواند برای هر کاربر هر بخش را محدود یا فعال کرده باشد
+ */
+export async function requireSection(section: string, extraRoles: string[] = []): Promise<AuthUser> {
+  const user = await requireUser();
+  const allowed = sectionAllowed(user, section) || extraRoles.includes(user.role);
+  if (!allowed) {
+    throw new ApiError('شما به این بخش دسترسی ندارید — دسترسی شما توسط مدیر مکتب تنظیم شده است', 403);
   }
   return user;
 }

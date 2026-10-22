@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { requireUser, requireRole, ApiError } from '@/lib/auth';
+import { requireUser, requireRole, requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, optNum, str } from '@/lib/api-helpers';
 import { studentInTeacherScope, teacherClassIds } from '@/lib/teacher-scope';
 
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const me = await requireRole('ADMIN', 'HEADTEACHER', 'TEACHER');
+    const me = await requireSection('activities');
     const body = await req.json();
     const studentId = str(body.studentId);
     const note = str(body.note);
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const me = await requireRole('ADMIN', 'HEADTEACHER', 'TEACHER');
+    const me = await requireSection('activities');
     const body = await req.json();
     const id = str(body.id);
     if (!id) throw new ApiError('شناسه لازم است');
@@ -121,7 +121,7 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const me = await requireRole('ADMIN', 'HEADTEACHER', 'TEACHER');
+    const me = await requireSection('activities');
     const id = new NextRequest(req.url).nextUrl.searchParams.get('id') || '';
     if (!id) throw new ApiError('شناسه لازم است');
     const existing = await db.studentActivity.findUnique({ where: { id } });

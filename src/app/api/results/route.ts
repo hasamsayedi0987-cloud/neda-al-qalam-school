@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { requireUser, ApiError } from '@/lib/auth';
+import { requireUser, requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
 import {
   finalScore, letterGrade, overallResult, computeRanks, round2, componentTotal, parseScale,
@@ -11,7 +11,7 @@ import type { ResultsRow } from '@/lib/types';
 /** جدول نتایج صنف و کارنامهٔ شاگرد — نمرات به‌صورت خودکار در جدول‌ها منعکس می‌شود */
 export async function GET(req: NextRequest) {
   try {
-    const me = await requireUser();
+    const me = await requireSection('results');
     const sp = req.nextUrl.searchParams;
     const mode = sp.get('mode') || 'class';
 

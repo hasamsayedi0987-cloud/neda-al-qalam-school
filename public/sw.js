@@ -10,7 +10,7 @@
  *  - نوشتن‌ها (POST/PATCH/DELETE) دست‌نخورده — صف آفلاین در api.ts مدیریت می‌شود
  */
 
-const VERSION = 'v6-0';
+const VERSION = 'v7-0';
 const SHELL_CACHE = 'noq-shell-' + VERSION;
 const RUNTIME_CACHE = 'noq-runtime-' + VERSION;
 const API_CACHE = 'noq-api-' + VERSION;

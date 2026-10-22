@@ -62,6 +62,35 @@ export async function POST(req: NextRequest) {
       if (!user.active) {
         throw new ApiError('حساب کاربری شما توسط مدیر غیرفعال شده است. لطفاً با مدیر مکتب تماس بگیرید.', 403);
       }
+      // ── ترمیم خودکار پیوند حساب با پروندهٔ معلم/شاگرد ──
+      // اگر حساب معلم به «پروندهٔ معلم» پیوند نداشته باشد، مضامین و صنف‌هایش دیده نمی‌شود.
+      // در ورود، اگر نام حساب با دقیقاً یک معلمِ بدون حسابِ پیوسته مطابقت کند، پیوند خودکار برقرار می‌شود.
+      let teacherId = user.teacherId;
+      let studentId = user.studentId;
+      try {
+        if (!teacherId && ['TEACHER', 'HEADTEACHER', 'STAFF', 'LIBRARIAN'].includes(user.role)) {
+          const matches = await db.teacher.findMany({ where: { name: user.name.trim(), active: true } });
+          if (matches.length === 1) {
+            const linked = await db.user.findFirst({ where: { teacherId: matches[0].id, NOT: { id: user.id } } });
+            if (!linked) {
+              await db.user.update({ where: { id: user.id }, data: { teacherId: matches[0].id } });
+              teacherId = matches[0].id;
+            }
+          }
+        }
+        if (!studentId && ['STUDENT', 'GUARDIAN'].includes(user.role)) {
+          const matches = await db.student.findMany({ where: { firstName: user.name.trim().split(/\s+/)[0] } });
+          const full = user.name.trim();
+          const exact = matches.filter((s) => `${s.firstName} ${s.lastName || ''}`.trim() === full);
+          if (exact.length === 1) {
+            const linked = await db.user.findFirst({ where: { studentId: exact[0].id, NOT: { id: user.id } } });
+            if (!linked) {
+              await db.user.update({ where: { id: user.id }, data: { studentId: exact[0].id } });
+              studentId = exact[0].id;
+            }
+          }
+        }
+      } catch { /* ترمیم پیوند حیاتی نیست — ورود ادامه می‌یابد */ }
       const token = await createToken({ uid: user.id, role: user.role, iat: Math.floor(Date.now() / 1000) });
       // بعد از اولین ورود مدیر، حساب‌های ابتدایی دیگر به هیچ‌کس نمایش داده نمی‌شود
       if (user.role === 'ADMIN') {
@@ -74,7 +103,7 @@ export async function POST(req: NextRequest) {
       const res = NextResponse.json({
         user: {
           id: user.id, username: user.username, name: user.name,
-          role: user.role, phone: user.phone, teacherId: user.teacherId, studentId: user.studentId,
+          role: user.role, phone: user.phone, teacherId, studentId, perms: user.perms,
         },
         setupDone: true,
       });

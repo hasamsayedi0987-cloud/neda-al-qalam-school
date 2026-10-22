@@ -30,6 +30,7 @@ interface StudentRow {
   firstName: string;
   lastName: string;
   fatherName: string;
+  grandFather?: string | null;
   rollNo: number | null;
 }
 
@@ -230,13 +231,19 @@ export function GradesView({ user }: { user: SessionUser }) {
         icon={ClipboardList}
       />
 
-      {/* بنر مضامین معلم */}
+      {/* بنر مضامین معلم — با تشخیص دقیق مشکل: بدون پیوند حساب ≠ بدون مضمون */}
       {isTeacher && (
         <div className="rounded-lg border border-sky-200 bg-sky-50/70 px-3.5 py-3 mb-4">
           <p className="text-sm font-semibold text-sky-900 flex items-center gap-1.5">
             <BookOpen className="h-4 w-4" /> مضامین سپرده‌شده به شما
           </p>
-          {myAssignments.length > 0 ? (
+          {!user.teacherId ? (
+            <p className="text-xs text-amber-700 mt-1">
+              حساب شما به پروندهٔ معلم پیوند ندارد؛ به همین سبب مضامین و صنف‌های شما نمایش داده نمی‌شود.
+              از مدیر بخواهید در بخش «کاربران و دسترسی‌ها» حساب شما را با پروندهٔ معلم‌تان پیوند بزند.
+              (نکته: با یک بار خروج و ورود مجدد، پیوند به‌صورت خودکار هم برقرار می‌شود.)
+            </p>
+          ) : myAssignments.length > 0 ? (
             <div className="flex flex-wrap gap-1.5 mt-2">
               {myAssignments.map((a, i) => (
                 <Badge key={i} variant="outline" className="border-sky-300 text-sky-800">
@@ -331,6 +338,13 @@ export function GradesView({ user }: { user: SessionUser }) {
                           <TableCell className="font-medium">
                             {fullName(s)}
                             {approved && <BadgeCheck className="inline h-4 w-4 text-emerald-600 mr-1" />}
+                            {(s.fatherName || s.grandFather) && (
+                              <span className="block text-[10px] font-normal text-muted-foreground">
+                                {s.fatherName ? `ولد ${s.fatherName}` : ''}
+                                {s.fatherName && s.grandFather ? ' — ' : ''}
+                                {s.grandFather ? `ولدیت ${s.grandFather}` : ''}
+                              </span>
+                            )}
                           </TableCell>
                           {(['written', 'oral', 'homework', 'activity'] as const).map((k) => (
                             <TableCell key={k}>

@@ -13,6 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { apiGet, apiSend, onSyncStateChange, pendingSyncCount, failedSyncItems, isOnline, isAuthRequired, flushQueue, tryAutoRelogin } from '@/lib/client/api';
 import { configureExports } from '@/lib/client/exports';
+import { SECTIONS, sectionAllowed } from '@/lib/access';
 import { isoToJalaliDisplay, toPersianDigits } from '@/lib/jalali';
 import { ROLE_LABELS } from '@/lib/grading';
 import { cn } from '@/lib/utils';
@@ -63,24 +64,32 @@ export interface NavItem {
   roles: string[];
 }
 
-export const NAV_ITEMS: NavItem[] = [
-  { key: 'dashboard', label: 'خانه / داشبورد', icon: Home, roles: ['ADMIN', 'HEADTEACHER', 'TEACHER', 'STUDENT', 'GUARDIAN', 'STAFF', 'LIBRARIAN'] },
-  { key: 'students', label: 'شاگردان', icon: Users, roles: ['ADMIN', 'HEADTEACHER', 'TEACHER'] },
-  { key: 'teachers', label: 'معلمان و کارمندان', icon: UserCog, roles: ['ADMIN', 'HEADTEACHER'] },
-  { key: 'classes', label: 'صنف‌ها و تقسیم مضامین', icon: School, roles: ['ADMIN', 'HEADTEACHER'] },
-  { key: 'subjects', label: 'مضامین', icon: BookOpen, roles: ['ADMIN', 'HEADTEACHER'] },
-  { key: 'attendance', label: 'حاضری یومیه', icon: CalendarCheck, roles: ['ADMIN', 'HEADTEACHER', 'TEACHER', 'STUDENT', 'GUARDIAN', 'STAFF'] },
-  { key: 'activities', label: 'فعالیت شاگردان', icon: ClipboardCheck, roles: ['ADMIN', 'HEADTEACHER', 'TEACHER', 'STUDENT', 'GUARDIAN'] },
-  { key: 'grades', label: 'ثبت نمرات', icon: ClipboardList, roles: ['ADMIN', 'HEADTEACHER', 'TEACHER'] },
-  { key: 'results', label: 'جدول نتایج و کارنامه', icon: FileSpreadsheet, roles: ['ADMIN', 'HEADTEACHER', 'TEACHER', 'STUDENT', 'GUARDIAN'] },
-  { key: 'certificates', label: 'تقدیرنامه‌ساز', icon: Award, roles: ['ADMIN', 'HEADTEACHER', 'TEACHER'] },
-  { key: 'customs', label: 'بخش‌های دلخواه', icon: LayoutGrid, roles: ['ADMIN'] },
-  { key: 'library', label: 'کتابخانه', icon: Library, roles: ['ADMIN', 'LIBRARIAN', 'HEADTEACHER'] },
-  { key: 'users', label: 'کاربران و دسترسی‌ها', icon: ShieldCheck, roles: ['ADMIN'] },
-  { key: 'tasks', label: 'وظایف کارمندان', icon: BookMarked, roles: ['ADMIN', 'HEADTEACHER', 'STAFF', 'TEACHER'] },
-  { key: 'settings', label: 'تنظیمات و پشتیبان‌گیری', icon: Settings, roles: ['ADMIN', 'HEADTEACHER', 'TEACHER', 'STUDENT', 'GUARDIAN', 'STAFF', 'LIBRARIAN'] },
-  { key: 'about', label: 'دربارهٔ اپ و سازنده', icon: GraduationCap, roles: ['ADMIN', 'HEADTEACHER', 'TEACHER', 'STUDENT', 'GUARDIAN', 'STAFF', 'LIBRARIAN'] },
-];
+/** آیکون هر بخش — برچسب و دسترسی از SECTIONS خوانده می‌شود */
+const SECTION_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  dashboard: Home,
+  students: Users,
+  teachers: UserCog,
+  classes: School,
+  subjects: BookOpen,
+  attendance: CalendarCheck,
+  activities: ClipboardCheck,
+  grades: ClipboardList,
+  results: FileSpreadsheet,
+  certificates: Award,
+  customs: LayoutGrid,
+  library: Library,
+  users: ShieldCheck,
+  tasks: BookMarked,
+  settings: Settings,
+  about: GraduationCap,
+};
+
+export const NAV_ITEMS: NavItem[] = Object.entries(SECTIONS).map(([key, def]) => ({
+  key,
+  label: def.label,
+  icon: SECTION_ICONS[key] || LayoutGrid,
+  roles: [...def.roles],
+}));
 
 /** اشتراک بی‌عمل — برای useSyncExternalStore در تشخیص hydration */
 const subscribeNoop = () => () => {};
@@ -120,7 +129,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
     const v = new URLSearchParams(window.location.search).get('view');
     if (!v) return 'dashboard';
     if (v.startsWith('custom:')) return v;
-    return NAV_ITEMS.some((n) => n.key === v && n.roles.includes(user.role)) ? v : 'dashboard';
+    return NAV_ITEMS.some((n) => n.key === v && sectionAllowed(user, v)) ? v : 'dashboard';
   });
   const setView = (v: string) => {
     setViewRaw(v);
@@ -141,9 +150,19 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
   const [syncTick, setSyncTick] = useState(0);
   const prevPendingRef = useRef(0);
   const [customSections, setCustomSections] = useState<CustomSectionData[]>([]);
+  // نام مدرسه، شعار و برچسب‌های قابل‌تغییر عناوین — از تنظیمات مدیر
+  const [titles, setTitles] = useState({
+    schoolName: 'مکتب خصوصی نداالقلم',
+    tagline: 'سیستم مدیریت تعلیمی',
+    nav: {} as Record<string, string>,
+  });
   const { toast } = useToast();
 
-  const visibleNav = NAV_ITEMS.filter((n) => n.roles.includes(user.role));
+  // فیلتر منو: دسترسی مؤثر کاربر (نقش پیش‌فرض + رونویسی مدیر) + برچسب‌های قابل‌تغییر
+  // sectionAllowed خودش نقش پیش‌فرض را چک می‌کند — رونویسی مدیر می‌تواند بخشی را به نقشی بدهد که پیش‌فرض نداشت
+  const visibleNav = NAV_ITEMS
+    .filter((n) => sectionAllowed(user, n.key))
+    .map((n) => ({ ...n, label: titles.nav[n.key] || n.label }));
 
   // بخش‌های دلخواهِ مجاز برای این نقش — به منوی اصلی افزوده می‌شوند
   useEffect(() => {
@@ -152,10 +171,21 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
       .catch(() => {});
   }, []);
 
-  // نام مدرسه برای سربرگ اسناد چاپی (کارنامه، حاضری، نتایج) از تنظیمات
   useEffect(() => {
     apiGet<{ settings: Record<string, string> }>('/api/settings')
-      .then((d) => configureExports({ schoolName: d.settings.schoolName }))
+      .then((d) => {
+        configureExports({ schoolName: d.settings.schoolName || undefined });
+        let nav: Record<string, string> = {};
+        try { nav = JSON.parse(d.settings.navLabels || '{}') as Record<string, string>; } catch { /* پیش‌فرض */ }
+        setTitles({
+          schoolName: d.settings.schoolName || 'مکتب خصوصی نداالقلم',
+          tagline: d.settings.tagline || 'سیستم مدیریت تعلیمی',
+          nav,
+        });
+        if (d.settings.schoolName) {
+          document.title = `${d.settings.schoolName} | سیستم مدیریت مکتب`;
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -250,8 +280,8 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
           <Image src="/logo.png" alt="لوگو" width={36} height={36} />
         </div>
         <div className="min-w-0">
-          <p className="font-bold text-primary text-sm leading-tight">مکتب خصوصی نداالقلم</p>
-          <p className="text-[11px] text-muted-foreground">سیستم مدیریت تعلیمی</p>
+          <p className="font-bold text-primary text-sm leading-tight">{titles.schoolName}</p>
+          <p className="text-[11px] text-muted-foreground">{titles.tagline}</p>
         </div>
       </div>
       <ScrollArea className="flex-1 px-2 py-3">
@@ -284,7 +314,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
         </nav>
       </ScrollArea>
       <div className="px-4 py-3 border-t text-[11px] text-muted-foreground">
-        نسخهٔ ۲.۰.۰ — حسام الدین سیدی
+        نسخهٔ ۲.۱.۰ — حسام الدین سیدی
       </div>
     </div>
   );
@@ -317,7 +347,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
             </div>
             <div className="min-w-0">
               <p className="font-bold leading-tight truncate bg-gradient-to-l from-emerald-700 to-emerald-500 dark:from-emerald-400 dark:to-emerald-300 bg-clip-text text-transparent">
-                مکتب خصوصی نداالقلم
+                {titles.schoolName}
               </p>
               <p className="text-[11px] text-muted-foreground truncate">{current?.label}</p>
             </div>
@@ -517,7 +547,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
       </div>
 
       <footer className="mt-auto border-t bg-card py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] text-center text-[11px] text-muted-foreground">
-        مکتب خصوصی نداالقلم — سیستم مدیریت تعلیمی | توسعه‌دهنده: حسام الدین سیدی | 0791680632
+        {titles.schoolName} — {titles.tagline} | توسعه‌دهنده: حسام الدین سیدی | 0791680632
       </footer>
     </div>
   );

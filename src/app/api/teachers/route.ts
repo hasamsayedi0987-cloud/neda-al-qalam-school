@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { requireUser, requireRole, ApiError } from '@/lib/auth';
+import { requireUser, requireRole, requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
 
 const POSITIONS = ['معلم', 'سرمعلم', 'مدیر', 'ملازم', 'کارمند', 'کتابخانه‌دار'];
@@ -45,7 +45,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireRole('ADMIN', 'HEADTEACHER');
+    const me = await requireSection('teachers');
+    if (!['ADMIN', 'HEADTEACHER'].includes(me.role)) throw new ApiError('فقط مدیر و سرمعلم می‌توانند معلم ثبت کنند', 403);
     const body = await req.json();
     const name = str(body.name);
     if (!name) throw new ApiError('نام لازم است');
@@ -69,7 +70,8 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    await requireRole('ADMIN', 'HEADTEACHER');
+    const me = await requireSection('teachers');
+    if (!['ADMIN', 'HEADTEACHER'].includes(me.role)) throw new ApiError('فقط مدیر و سرمعلم می‌توانند معلومات را ویرایش کنند', 403);
     const body = await req.json();
     const id = str(body.id);
     if (!id) throw new ApiError('شناسه لازم است');

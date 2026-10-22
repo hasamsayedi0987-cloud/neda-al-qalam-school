@@ -112,9 +112,10 @@ export function ResultsView({ user }: { user: SessionUser }) {
         const v = r.perSubject[s.id];
         return `<td>${v?.final != null ? toPersianDigits(v.final) : '—'} <small>(${v?.letter || '—'})</small></td>`;
       }).join('');
+      const lineage = `ولد ${r.student.fatherName}${r.student.grandFather ? ` — ولدیت ${r.student.grandFather}` : ''}`;
       return `<tr>
         <td>${toPersianDigits(r.student.rollNo ?? i + 1)}</td>
-        <td style="text-align:right">${fullName(r.student)} ولد ${r.student.fatherName}</td>
+        <td style="text-align:right">${fullName(r.student)} <small>(${lineage})</small></td>
         ${cells}
         <td>${r.total != null ? toPersianDigits(r.total) : '—'}</td>
         <td><b>${r.average != null ? toPersianDigits(r.average) : '—'}</b></td>
@@ -148,11 +149,11 @@ export function ResultsView({ user }: { user: SessionUser }) {
         const v = r.perSubject[s.id];
         return `<td>${v?.final ?? ''}</td>`;
       }).join('');
-      return `<tr><td>${i + 1}</td><td>${fullName(r.student)}</td><td>${r.student.fatherName}</td>${cells}<td>${r.total ?? ''}</td><td>${r.average ?? ''}</td><td>${r.rank ?? ''}</td><td>${r.result}</td></tr>`;
+      return `<tr><td>${i + 1}</td><td>${fullName(r.student)}</td><td>${r.student.fatherName || ''}</td><td>${r.student.grandFather || ''}</td>${cells}<td>${r.total ?? ''}</td><td>${r.average ?? ''}</td><td>${r.rank ?? ''}</td><td>${r.result}</td></tr>`;
     }).join('');
     exportExcel(
       `جدول نتایج ${data.classInfo.name}`,
-      `<table><thead><tr><th>شماره</th><th>اسم</th><th>شهرت</th>${head}<th>مجموع</th><th>اوسط</th><th>رتبه</th><th>نتیجه</th></tr></thead><tbody>${body}</tbody></table>`,
+      `<table><thead><tr><th>شماره</th><th>اسم</th><th>شهرت</th><th>ولد</th><th>ولدیت</th>${head}<th>مجموع</th><th>اوسط</th><th>رتبه</th><th>نتیجه</th></tr></thead><tbody>${body}</tbody></table>`,
       `جدول-نتایج-${data.classInfo.name}-${fileStamp()}`,
     );
   };
@@ -174,6 +175,7 @@ export function ResultsView({ user }: { user: SessionUser }) {
       <div class="doc-meta" style="justify-content:center; gap:24px">
         <span>شاگرد: <b>${rc.student.firstName} ${rc.student.lastName}</b></span>
         <span>ولد: ${rc.student.fatherName}</span>
+        ${rc.student.grandFather ? `<span>ولدیت: ${rc.student.grandFather}</span>` : ''}
         <span>صنف: ${rc.className || '—'}</span>
         <span>شماره: ${toPersianDigits(rc.student.rollNo ?? '—')}</span>
         <span>تاریخ: ${isoToJalaliDisplay(isoToday())}</span>
@@ -331,7 +333,9 @@ export function ResultsView({ user }: { user: SessionUser }) {
                     <TableRow key={r.student.id}>
                       <TableCell className="sticky right-0 bg-white z-10">
                         <span className="font-medium">{toPersianDigits(r.student.rollNo ?? i + 1)}. {fullName(r.student)}</span>
-                        <span className="block text-[10px] text-muted-foreground">ولد {r.student.fatherName}</span>
+                        <span className="block text-[10px] text-muted-foreground">
+                          ولد {r.student.fatherName}{r.student.grandFather ? ` — ولدیت ${r.student.grandFather}` : ''}
+                        </span>
                       </TableCell>
                       {data.subjects.map((s) => {
                         const v = r.perSubject[s.id];

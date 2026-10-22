@@ -7,11 +7,16 @@ import { db } from '@/lib/db';
 /** همهٔ صنف‌هایی که این معلم در آنها مضمون تدریس می‌کند یا نگران صنف است */
 export async function teacherClassIds(teacherId: string): Promise<string[]> {
   if (!teacherId) return [];
-  const [taught, supervised] = await Promise.all([
+  const [taught, supervised, acting] = await Promise.all([
     db.classSubject.findMany({ where: { teacherId }, select: { classId: true } }),
     db.class.findMany({ where: { supervisorId: teacherId }, select: { id: true } }),
+    db.class.findMany({ where: { actingSupervisorId: teacherId }, select: { id: true } }),
   ]);
-  return Array.from(new Set([...taught.map((t) => t.classId), ...supervised.map((s) => s.id)]));
+  return Array.from(new Set([
+    ...taught.map((t) => t.classId),
+    ...supervised.map((s) => s.id),
+    ...acting.map((s) => s.id),
+  ]));
 }
 
 /** آیا این «مضمون صنف» به این معلم سپرده شده است؟ */

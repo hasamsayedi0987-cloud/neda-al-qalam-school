@@ -10,6 +10,7 @@ import { PageHeader, Field } from './ui-bits';
 import { apiGet, apiSend } from '@/lib/client/api';
 import { toPersianDigits } from '@/lib/jalali';
 import { DEFAULT_SCALE, scaleRangesText, type GradeScaleEntry } from '@/lib/grading';
+import { SECTIONS } from '@/lib/access';
 import { useToast } from '@/hooks/use-toast';
 import { Switch } from '@/components/ui/switch';
 import type { SessionUser, AppSettings } from '@/lib/types';
@@ -21,6 +22,8 @@ const DEFAULTS: AppSettings = {
   directorName: '', directorPhone: '', directorEmail: '',
   maxWritten: '40', maxOral: '20', maxHomework: '20', maxActivity: '20',
   resultNote: '',
+  tagline: '',
+  navLabels: '{}',
   permTeacherGrades: '1', permTeacherGradeDelete: '1', permTeacherStudents: '1',
 };
 
@@ -35,6 +38,7 @@ export function SettingsView({ user }: { user: SessionUser }) {
   const [restoreConfirm, setRestoreConfirm] = useState(false);
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [scale, setScale] = useState<GradeScaleEntry[]>(DEFAULT_SCALE);
+  const [navLabels, setNavLabels] = useState<Record<string, string>>({});
 
   useEffect(() => {
     apiGet<{ settings: AppSettings }>('/api/settings')
@@ -44,6 +48,10 @@ export function SettingsView({ user }: { user: SessionUser }) {
           const parsed = JSON.parse(d.settings.gradeScale || '[]') as GradeScaleEntry[];
           if (Array.isArray(parsed) && parsed.length >= 2) setScale(parsed);
         } catch { /* پیش‌فرض */ }
+        try {
+          const nl = JSON.parse(d.settings.navLabels || '{}') as Record<string, string>;
+          if (nl && typeof nl === 'object') setNavLabels(nl);
+        } catch { /* پیش‌فرض */ }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -52,7 +60,7 @@ export function SettingsView({ user }: { user: SessionUser }) {
   const save = async () => {
     setSaving(true);
     const res = await apiSend('/api/settings', 'PUT', {
-      settings: { ...settings, gradeScale: JSON.stringify(scale) },
+      settings: { ...settings, gradeScale: JSON.stringify(scale), navLabels: JSON.stringify(navLabels) },
     });
     setSaving(false);
     if (res.error) {
@@ -146,6 +154,40 @@ export function SettingsView({ user }: { user: SessionUser }) {
             <Field label="نام مدیر"><Input value={settings.directorName} onChange={(e) => set('directorName', e.target.value)} /></Field>
             <Field label="تماس مدیر"><Input dir="ltr" className="text-left" value={settings.directorPhone} onChange={(e) => set('directorPhone', e.target.value)} /></Field>
             <Field label="ایمیل مدیر"><Input dir="ltr" className="text-left" value={settings.directorEmail} onChange={(e) => set('directorEmail', e.target.value)} /></Field>
+          </CardContent>
+        </Card>
+      )}
+
+      {isAdmin && (
+        <Card className="border-emerald-100">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-emerald-900">عناوین و نام‌ها — قابل تغییر توسط مدیر</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground leading-5">
+              نام مکتب، شعار و عنوان هر بخشِ منو را همین‌جا تغییر دهید — تغییرات برای همهٔ کاربران در منو، سربرگ و صفحهٔ ورود اعمال می‌شود. اگر فیلدی را خالی بگذارید، عنوان پیش‌فرض استفاده می‌شود.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="نام مکتب (همه‌جا نمایش داده می‌شود)">
+                <Input value={settings.schoolName} onChange={(e) => set('schoolName', e.target.value)} />
+              </Field>
+              <Field label="شعار زیر نام مکتب">
+                <Input value={settings.tagline || ''} onChange={(e) => set('tagline', e.target.value)} placeholder="سیستم مدیریت تعلیمی" />
+              </Field>
+            </div>
+            <Separator className="my-1" />
+            <p className="text-xs font-semibold text-emerald-800">عناوین بخش‌های منو:</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {Object.entries(SECTIONS).map(([key, def]) => (
+                <Field key={key} label={def.label}>
+                  <Input
+                    value={navLabels[key] || ''}
+                    placeholder={def.label}
+                    onChange={(e) => setNavLabels({ ...navLabels, [key]: e.target.value })}
+                  />
+                </Field>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}

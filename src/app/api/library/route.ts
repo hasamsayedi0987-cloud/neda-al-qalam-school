@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { requireUser, requireRole, ApiError } from '@/lib/auth';
+import { requireUser, requireRole, requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, optNum, str } from '@/lib/api-helpers';
 
 export async function GET() {
   try {
-    await requireUser();
+    await requireSection('library');
     const books = await db.book.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
@@ -39,7 +39,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireRole('ADMIN', 'LIBRARIAN');
+    const me = await requireSection('library');
+    if (!['ADMIN', 'LIBRARIAN'].includes(me.role)) throw new ApiError('فقط مدیر و کتابخانه‌دار می‌توانند ثبت کنند', 403);
     const body = await req.json();
     const action = str(body.action);
 
@@ -121,7 +122,8 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    await requireRole('ADMIN', 'LIBRARIAN');
+    const me = await requireSection('library');
+    if (!['ADMIN', 'LIBRARIAN'].includes(me.role)) throw new ApiError('فقط مدیر و کتابخانه‌دار می‌توانند حذف کنند', 403);
     const id = new NextRequest(req.url).nextUrl.searchParams.get('id') || '';
     if (!id) throw new ApiError('شناسه لازم است');
     const lent = await db.bookLoan.count({ where: { bookId: id, status: 'LENT' } });

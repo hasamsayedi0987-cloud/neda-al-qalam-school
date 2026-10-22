@@ -2,8 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireRole, hashPassword, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
+import { SECTIONS } from '@/lib/access';
 
 const VALID_ROLES = ['ADMIN', 'HEADTEACHER', 'TEACHER', 'STUDENT', 'GUARDIAN', 'STAFF', 'LIBRARIAN'];
+
+/** اعتبارسنجی JSON دسترسی بخش‌ها — فقط کلیدهای شناخته‌شده با مقدار بولین */
+function sanitizePerms(input: unknown): string | null {
+  if (input === null || input === undefined || input === '') return null;
+  if (typeof input === 'string') {
+    if (input.trim() === '' || input.trim() === '{}' ) return null;
+    try { input = JSON.parse(input); } catch { throw new ApiError('دسترسی‌های ارسالی نامعتبر است'); }
+  }
+  if (typeof input !== 'object' || Array.isArray(input)) throw new ApiError('دسترسی‌های ارسالی نامعتبر است');
+  const clean: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
+    if (!SECTIONS[k] || !SECTIONS[k].manageable) continue; // بخش‌های انحصار مدیر قابل رونویسی نیستند
+    if (typeof v === 'boolean') clean[k] = v;
+  }
+  return Object.keys(clean).length ? JSON.stringify(clean) : null;
+}
 
 export async function GET() {
   try {
@@ -18,6 +35,7 @@ export async function GET() {
       users: users.map((u) => ({
         id: u.id, username: u.username, name: u.name, role: u.role,
         active: u.active, phone: u.phone, teacherId: u.teacherId, studentId: u.studentId,
+        perms: u.perms,
         studentName: u.studentProfile ? `${u.studentProfile.firstName} ${u.studentProfile.lastName}` : null,
       })),
     });
@@ -46,6 +64,7 @@ export async function POST(req: NextRequest) {
         phone: str(body.phone) || null,
         teacherId: str(body.teacherId) || null,
         studentId: str(body.studentId) || null,
+        perms: sanitizePerms(body.perms),
         active: true,
       },
     });
@@ -93,6 +112,8 @@ export async function PATCH(req: NextRequest) {
     if (body.phone !== undefined) data.phone = str(body.phone) || null;
     if (body.teacherId !== undefined) data.teacherId = str(body.teacherId) || null;
     if (body.studentId !== undefined) data.studentId = str(body.studentId) || null;
+    // دسترسی بخش‌ها (رونویسی نقش) — توسط مدیر
+    if (body.perms !== undefined) data.perms = sanitizePerms(body.perms);
     // فعال/غیرفعال کردن — کاربر غیرفعال نمی‌تواند وارد شود
     if (body.active !== undefined) data.active = Boolean(body.active);
     // بازنشانی رمز توسط مدیر

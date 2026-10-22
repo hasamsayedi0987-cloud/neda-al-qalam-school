@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { requireUser, requireRole, ApiError } from '@/lib/auth';
+import { requireUser, requireRole, requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, num, str } from '@/lib/api-helpers';
 import { teacherClassIds } from '@/lib/teacher-scope';
 
@@ -14,6 +14,7 @@ export async function GET() {
       orderBy: { grade: 'asc' },
       include: {
         supervisor: { select: { id: true, name: true } },
+        actingSupervisor: { select: { id: true, name: true } },
         _count: { select: { students: { where: { status: 'ACTIVE' } } } },
         classSubjects: {
           include: { subject: true, teacher: { select: { id: true, name: true } } },
@@ -25,6 +26,8 @@ export async function GET() {
       classes: classes.map((c) => ({
         id: c.id, grade: c.grade, name: c.name, supervisorId: c.supervisorId,
         supervisorName: c.supervisor?.name || null,
+        actingSupervisorId: c.actingSupervisorId,
+        actingSupervisorName: c.actingSupervisor?.name || null,
         studentCount: c._count.students,
         classSubjects: c.classSubjects.map((cs) => ({
           id: cs.id, classId: cs.classId, subjectId: cs.subjectId, teacherId: cs.teacherId,
@@ -40,7 +43,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireRole('ADMIN', 'HEADTEACHER');
+    const me = await requireSection('classes');
+    if (!['ADMIN', 'HEADTEACHER'].includes(me.role)) throw new ApiError('فقط مدیر و سرمعلم می‌توانند صنف ثبت کنند', 403);
     const body = await req.json();
     const grade = num(body.grade);
     const name = str(body.name);
@@ -49,7 +53,11 @@ export async function POST(req: NextRequest) {
     const exists = await db.class.findFirst({ where: { name } });
     if (exists) throw new ApiError('صنفی با این نام قبلاً ثبت شده است');
     const cls = await db.class.create({
-      data: { grade, name, supervisorId: str(body.supervisorId) || null },
+      data: {
+        grade, name,
+        supervisorId: str(body.supervisorId) || null,
+        actingSupervisorId: str(body.actingSupervisorId) || null,
+      },
     });
     return NextResponse.json({ id: cls.id });
   } catch (e) {
@@ -59,7 +67,8 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    await requireRole('ADMIN', 'HEADTEACHER');
+    const me = await requireSection('classes');
+    if (!['ADMIN', 'HEADTEACHER'].includes(me.role)) throw new ApiError('فقط مدیر و سرمعلم می‌توانند صنف را ویرایش کنند', 403);
     const body = await req.json();
     const id = str(body.id);
     if (!id) throw new ApiError('شناسهٔ صنف لازم است');
@@ -73,6 +82,7 @@ export async function PATCH(req: NextRequest) {
       data.grade = grade;
     }
     if (body.supervisorId !== undefined) data.supervisorId = str(body.supervisorId) || null;
+    if (body.actingSupervisorId !== undefined) data.actingSupervisorId = str(body.actingSupervisorId) || null;
     await db.class.update({ where: { id }, data });
     return NextResponse.json({ ok: true });
   } catch (e) {

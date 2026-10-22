@@ -19,6 +19,7 @@ model User {
   phone     String?
   teacherId String? @unique // پیوند با معلم/کارمند
   studentId String? // پیوند با شاگرد (برای والد/سرپرست)
+  perms     String? // JSON — دسترسی بخش‌ها (رونویسی نقش): {"grades": false, "library": true}
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -34,10 +35,12 @@ model Class {
   grade        Int // ۱ تا ۱۲
   name         String // صنف اول، صنف دوم ...
   supervisorId String? // نگران صنف (معلم)
+  actingSupervisorId String? // نگران موقت (در غیاب نگران اصلی — تعیین توسط مدیر)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   supervisor    Teacher?       @relation("supervisor", fields: [supervisorId], references: [id])
+  actingSupervisor Teacher?     @relation("actingSupervisor", fields: [actingSupervisorId], references: [id])
   students      Student[]
   classSubjects ClassSubject[]
 }
@@ -84,6 +87,7 @@ model Teacher {
 
   user             User?
   supervised       Class[]        @relation("supervisor")
+  actingClasses    Class[]        @relation("actingSupervisor")
   classSubjects    ClassSubject[]
   attendances      StaffAttendance[]
   tasks            StaffTask[]    @relation("assignedTo")

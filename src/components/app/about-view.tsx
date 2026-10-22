@@ -10,7 +10,7 @@ import { PageHeader, Field } from './ui-bits';
 import { apiGet, apiSend } from '@/lib/client/api';
 import { toPersianDigits } from '@/lib/jalali';
 import { useToast } from '@/hooks/use-toast';
-import { GraduationCap, Phone, Mail, Code2, ShieldCheck, Wifi, DatabaseBackup, Printer, Pencil, Save } from 'lucide-react';
+import { GraduationCap, Phone, Mail, Code2, ShieldCheck, Wifi, DatabaseBackup, Printer, Pencil, Save, Smartphone } from 'lucide-react';
 import type { SessionUser } from '@/lib/types';
 
 /** عکس را به dataURL فشرده تبدیل می‌کند (حداکثر ۴۰۰ پیکسل — مناسب ذخیره در تنظیمات) */
@@ -224,6 +224,16 @@ export function AboutView({ user }: { user: SessionUser }) {
               </p>
               <p className="text-xs text-muted-foreground leading-6 mt-1">
                 مدیر می‌تواند از تمام داده‌ها فایل پشتیبان (Backup) تهیه کند و تنها مدیر اجازهٔ بازیابی عمومی را دارد.
+              </p>
+            </div>
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3">
+              <p className="flex items-center gap-1.5 font-semibold text-emerald-800 text-[13px]">
+                <Smartphone className="h-4 w-4" /> نصب روی گوشی (اندروید و آیفون)
+              </p>
+              <p className="text-xs text-muted-foreground leading-6 mt-1">
+                <b className="text-emerald-800">اندروید:</b> فایل APK را از صفحهٔ انتشار (Releases) گیت‌هاب دانلود و نصب کنید.
+                <b className="text-emerald-800"> آیفون (iOS):</b> سایت را با Safari باز کنید، دکمهٔ اشتراک (مربع با فلش به‌بالا) را بزنید و
+                «Add to Home Screen / افزودن به صفحهٔ اصلی» را انتخاب کنید — اپ مثل یک برنامهٔ واقعی تمام‌صفحه با آیکون خودش نصب می‌شود و آفلاین هم کار می‌کند.
               </p>
             </div>
           </div>

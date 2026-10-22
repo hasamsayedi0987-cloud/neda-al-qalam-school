@@ -8,6 +8,7 @@ export interface SessionUser {
   phone: string | null;
   teacherId: string | null;
   studentId: string | null;
+  perms?: string | null; // JSON دسترسی بخش‌ها (رونویسی نقش)
 }
 
 export interface ClassInfo {
@@ -16,6 +17,8 @@ export interface ClassInfo {
   name: string;
   supervisorId: string | null;
   supervisorName?: string | null;
+  actingSupervisorId?: string | null;
+  actingSupervisorName?: string | null;
   studentCount?: number;
   classSubjects?: ClassSubjectInfo[]; // مضامین سپرده‌شدهٔ صنف
 }
@@ -77,6 +80,7 @@ export interface UserInfo {
   phone?: string | null;
   teacherId?: string | null;
   studentId?: string | null;
+  perms?: string | null; // JSON دسترسی بخش‌ها
   studentName?: string | null;
 }
 
@@ -159,6 +163,8 @@ export interface AppSettings {
   permTeacherGrades?: string; // '1' | '0' — مجوز ثبت/ویرایش نمرات مضامین خود
   permTeacherGradeDelete?: string; // '1' | '0' — مجوز حذف نمرات
   permTeacherStudents?: string; // '1' | '0' — مجوز ثبت/ویرایش شاگردان صنف خود
+  tagline?: string; // شعار زیر نام مکتب
+  navLabels?: string; // JSON: برچسب‌های قابل‌تغییر منو {dashboard: 'خانه', ...}
 }
 
 export interface ResultsRow {

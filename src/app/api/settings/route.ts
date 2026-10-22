@@ -8,6 +8,8 @@ const EDITABLE_KEYS = [
   'directorName', 'directorPhone', 'directorEmail',
   'maxWritten', 'maxOral', 'maxHomework', 'maxActivity', 'resultNote',
   'gradeScale', 'aboutApp', 'aboutDev',
+  // عناوین قابل‌تغییر — شعار اپ و برچسب منوها
+  'tagline', 'navLabels',
   // مجوزهای معلمان — قابل کنترل توسط مدیر
   'permTeacherGrades', 'permTeacherGradeDelete', 'permTeacherStudents',
 ];
@@ -37,6 +39,14 @@ export async function PUT(req: NextRequest) {
       // اعتبارسنجی کلیدهای JSON و سقف حجم عکس‌ها (dataURL)
       if (key === 'gradeScale') {
         JSON.parse(value); // اگر نامعتبر باشد خطا می‌دهد
+      }
+      if (key === 'navLabels') {
+        const parsed = JSON.parse(value) as Record<string, unknown>; // اگر نامعتبر باشد خطا می‌دهد
+        const clean: Record<string, string> = {};
+        for (const [k, v] of Object.entries(parsed)) {
+          if (typeof v === 'string' && v.trim()) clean[k] = v.trim().slice(0, 60);
+        }
+        value = JSON.stringify(clean);
       }
       if (key === 'aboutApp' || key === 'aboutDev') {
         const parsed = JSON.parse(value) as Record<string, unknown>;

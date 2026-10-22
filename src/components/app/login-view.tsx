@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { apiSend, offlineLogin, saveOfflineCred, isOnline } from '@/lib/client/api';
+import { apiGet, apiSend, offlineLogin, saveOfflineCred, isOnline } from '@/lib/client/api';
 import { todayJalali, toPersianDigits } from '@/lib/jalali';
 import { BookOpenCheck, Eye, EyeOff, Lock, User, LogIn, CloudOff, ClipboardList, CalendarCheck, Library, ShieldCheck } from 'lucide-react';
 import type { SessionUser } from '@/lib/types';
@@ -30,6 +30,26 @@ export function LoginView({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [offlineMode, setOfflineMode] = useState(false);
+  // نام مکتب و شعار قابل‌تغییر توسط مدیر — با مقدار پیش‌فرض شروع می‌شود
+  const [titles, setTitles] = useState({
+    schoolName: 'مکتب خصوصی نداالقلم',
+    tagline: 'سیستم مدیریت تعلیمی — نمرات، حاضری، کتابخانه',
+  });
+
+  useEffect(() => {
+    if (!navigator.onLine) return; // آفلاین: مقدار پیش‌فرض/کش قبلی
+    apiGet<{ settings: Record<string, string> }>('/api/settings')
+      .then((d) => {
+        setTitles({
+          schoolName: d.settings.schoolName || 'مکتب خصوصی نداالقلم',
+          tagline: d.settings.tagline
+            ? `${d.settings.tagline} — نمرات، حاضری، کتابخانه`
+            : 'سیستم مدیریت تعلیمی — نمرات، حاضری، کتابخانه',
+        });
+        if (d.settings.schoolName) document.title = `${d.settings.schoolName} | سیستم مدیریت مکتب`;
+      })
+      .catch(() => {});
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,12 +98,12 @@ export function LoginView({
   const branding = (
     <div className="flex flex-col items-center text-center">
       <div className="relative h-24 w-24 mb-3 drop-shadow-lg animate-scale-in">
-        <Image src="/logo.png" alt="لوگوی مکتب خصوصی نداالقلم" fill priority className="object-contain" />
+        <Image src="/logo.png" alt={`لوگوی ${titles.schoolName}`} fill priority className="object-contain" />
       </div>
       <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-l from-emerald-800 to-emerald-600 dark:from-emerald-300 dark:to-emerald-500 bg-clip-text text-transparent">
-        مکتب خصوصی نداالقلم
+        {titles.schoolName}
       </h1>
-      <p className="text-sm text-muted-foreground mt-1.5">سیستم مدیریت تعلیمی — نمرات، حاضری، کتابخانه</p>
+      <p className="text-sm text-muted-foreground mt-1.5">{titles.tagline}</p>
       <p className="text-xs text-primary mt-1 font-medium">{toPersianDigits(todayJalali())}</p>
       {!isOnline() && (
         <p className="mt-3 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-full px-3 py-1.5">
@@ -110,8 +130,8 @@ export function LoginView({
               <Image src="/logo.png" alt="لوگو" width={52} height={52} className="rounded-xl" />
             </div>
             <div>
-              <p className="text-xl font-bold leading-tight">مکتب خصوصی نداالقلم</p>
-              <p className="text-sm text-white/75">نسخهٔ ۲.۰.۰</p>
+              <p className="text-xl font-bold leading-tight">{titles.schoolName}</p>
+              <p className="text-sm text-white/75">نسخهٔ ۲.۱.۰</p>
             </div>
           </div>
           <div className="space-y-4 stagger">

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { requireUser, requireRole, ApiError } from '@/lib/auth';
+import { requireUser, requireRole, requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
 
 export async function GET() {
@@ -16,7 +16,7 @@ export async function GET() {
       });
       return NextResponse.json({ tasks, staff: [] });
     }
-    await requireRole('ADMIN', 'HEADTEACHER');
+    await requireSection('tasks');
     const tasks = await db.staffTask.findMany({
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
       include: {
@@ -81,7 +81,8 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    await requireRole('ADMIN', 'HEADTEACHER');
+    const me = await requireSection('tasks');
+    if (!['ADMIN', 'HEADTEACHER'].includes(me.role)) throw new ApiError('فقط مدیر و سرمعلم می‌توانند وظیفه تعیین کنند', 403);
     const id = new NextRequest(req.url).nextUrl.searchParams.get('id') || '';
     if (!id) throw new ApiError('شناسه لازم است');
     await db.staffTask.delete({ where: { id } });

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import type { Prisma } from '@prisma/client';
-import { requireUser, requireRole, ApiError } from '@/lib/auth';
+import { requireUser, requireRole, requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
 import { clampComponent, componentTotal } from '@/lib/grading';
 import { getTeacherPerms, ownsClassSubject } from '@/lib/teacher-scope';
@@ -21,7 +21,7 @@ async function getWeights() {
 
 export async function GET(req: NextRequest) {
   try {
-    const me = await requireUser();
+    const me = await requireSection('grades');
     const sp = req.nextUrl.searchParams;
 
     // کارنامهٔ شاگرد (شاگرد/سرپرست یا پارامتر studentId)
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
     const students = await db.student.findMany({
       where: { classId: cs.classId, status: 'ACTIVE' },
       orderBy: { rollNo: 'asc' },
-      select: { id: true, firstName: true, lastName: true, fatherName: true, rollNo: true },
+      select: { id: true, firstName: true, lastName: true, fatherName: true, grandFather: true, rollNo: true },
     });
     const grades = await db.grade.findMany({
       where: { classSubjectId },
@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ─── ثبت/به‌روزرسانی نمرات (گروهی) ───
-    await requireRole('ADMIN', 'HEADTEACHER', 'TEACHER');
+    await requireSection('grades');
     const classSubjectId = str(body.classSubjectId);
     const period = str(body.period);
     const items = Array.isArray(body.items) ? body.items : [];

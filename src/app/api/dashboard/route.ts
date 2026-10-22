@@ -75,6 +75,42 @@ export async function GET() {
       ? await db.staffTask.count({ where: { staffId: me.teacherId, status: { not: 'DONE' } } })
       : 0;
 
+    // نظارت مدیر/سرمعلم: مضامین دارای نمرهٔ ثبت‌شده ولی تاییدنشده
+    let pendingApprovals: Array<{
+      classSubjectId: string; subjectName: string; className: string;
+      period: string; count: number;
+    }> = [];
+    if (me.role === 'ADMIN' || me.role === 'HEADTEACHER') {
+      const unapproved = await db.grade.findMany({
+        where: { approved: false },
+        select: {
+          classSubjectId: true, period: true,
+          classSubject: {
+            select: { subject: { select: { name: true } }, class: { select: { name: true } } },
+          },
+        },
+      });
+      const byKey = new Map<string, typeof unapproved[number]>();
+      const counts = new Map<string, number>();
+      for (const g of unapproved) {
+        counts.set(g.classSubjectId + g.period, (counts.get(g.classSubjectId + g.period) || 0) + 1);
+        byKey.set(g.classSubjectId + g.period, g);
+      }
+      pendingApprovals = [...counts.entries()]
+        .map(([key, count]) => {
+          const g = byKey.get(key)!;
+          return {
+            classSubjectId: g.classSubjectId,
+            subjectName: g.classSubject.subject.name,
+            className: g.classSubject.class.name,
+            period: g.period,
+            count,
+          };
+        })
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 8);
+    }
+
     // نمرات اخیر — معلم فقط نمرات صنف‌های خودش را می‌بیند
     const teacherScope = me.role === 'TEACHER' ? await teacherClassIds(me.teacherId || '') : null;
     const recentGrades = await db.grade.findMany({
@@ -106,6 +142,7 @@ export async function GET() {
       gradeDistribution: gradeCounts,
       lentBooks,
       pendingTasks,
+      pendingApprovals,
       recentGrades: visibleGrades.slice(0, 5).map((g) => ({
         id: g.id,
         studentName: `${g.student.firstName} ${g.student.lastName}`,

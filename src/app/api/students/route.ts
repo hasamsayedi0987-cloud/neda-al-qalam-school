@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { requireUser, requireRole, ApiError } from '@/lib/auth';
+import { requireUser, requireRole, requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, optNum, str } from '@/lib/api-helpers';
 import { teacherClassIds, getTeacherPerms, studentInTeacherScope } from '@/lib/teacher-scope';
 
 export async function GET(req: NextRequest) {
   try {
-    const me = await requireUser();
+    const me = await requireSection('students', ['LIBRARIAN', 'STUDENT', 'GUARDIAN']);
     const sp = req.nextUrl.searchParams;
     const classId = sp.get('classId');
     const search = sp.get('q');
@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const me = await requireRole('ADMIN', 'HEADTEACHER', 'TEACHER');
+    const me = await requireSection('students');
     const body = await req.json();
     const firstName = str(body.firstName);
     const lastName = str(body.lastName);
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const me = await requireRole('ADMIN', 'HEADTEACHER', 'TEACHER');
+    const me = await requireSection('students');
     const body = await req.json();
     const id = str(body.id);
     if (!id) throw new ApiError('شناسهٔ شاگرد لازم است');

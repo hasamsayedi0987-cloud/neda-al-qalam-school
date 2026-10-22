@@ -7,6 +7,7 @@ import { isoToday, isoToJalaliDisplay, toPersianDigits, isoToWeekday } from '@/l
 import { ATTENDANCE_LABELS, letterGrade } from '@/lib/grading';
 import type { SessionUser } from '@/lib/types';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Area, AreaChart } from 'recharts';
+import { Badge } from '@/components/ui/badge';
 import {
   BookOpen, CalendarCheck, ClipboardCheck, ClipboardList, GraduationCap, Library,
   School, TrendingUp, UserCog, Users, CalendarDays, FileSpreadsheet, BookMarked, Sparkles,
@@ -27,6 +28,10 @@ interface DashData {
   lentBooks?: number;
   pendingTasks?: number;
   recentGrades?: Array<{ id: string; studentName: string; subjectName: string; total: number; period: string }>;
+  pendingApprovals?: Array<{
+    classSubjectId: string; subjectName: string; className: string;
+    period: string; count: number;
+  }>;
   student?: {
     id: string; firstName: string; lastName: string; className: string | null; rollNo: number | null;
   } | null;
@@ -269,6 +274,32 @@ export function DashboardView({ user, onNavigate }: { user: SessionUser; onNavig
         </Card>
       )}
 
+      {/* نظارت مدیر/سرمعلم: نمرات در انتظار تایید */}
+      {!isStudentSide && data.pendingApprovals && data.pendingApprovals.length > 0 && (
+        <Card className="border-amber-500/30 bg-amber-500/5 animate-fade-up">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <ClipboardList className="h-5 w-5 text-amber-600" /> نمرات در انتظار بررسی و تایید
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            {data.pendingApprovals.map((p) => (
+              <button
+                key={p.classSubjectId + p.period}
+                onClick={() => onNavigate('grades')}
+                className="w-full flex items-center justify-between rounded-xl border bg-card px-3 py-2 text-sm hover:bg-accent/40 transition-colors"
+              >
+                <span className="font-medium">{p.subjectName} — {p.className}</span>
+                <span className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">{p.period === 'MIDTERM' ? 'چهارو‌نیم‌ماهه' : 'سالانه'}</span>
+                  <Badge variant="outline" className="border-amber-400 text-amber-700">{toPersianDigits(p.count)} شاگرد</Badge>
+                </span>
+              </button>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {/* دسترسی سریع */}
       <div className="animate-fade-up">
         <h2 className="text-sm font-semibold mb-2">دسترسی سریع</h2>
@@ -290,7 +321,7 @@ export function DashboardView({ user, onNavigate }: { user: SessionUser; onNavig
       {/* معلومات مکتب */}
       <Card className="animate-fade-up">
         <CardContent className="p-4 text-xs text-muted-foreground leading-6">
-          <p className="font-semibold text-primary text-sm mb-1">مکتب خصوصی نداالقلم</p>
+          <p className="font-semibold text-primary text-sm mb-1">سیستم مدیریت مکتب</p>
           <p>استفاده از این سیستم در حالت آنلاین و آفلاین ممکن است؛ داده‌های ثبت‌شده در حالت آفلاین پس از وصل شدن به شبکه خودکار همگام می‌گردد.</p>
           <p className="mt-1">تاریخ امروز: {isoToJalaliDisplay(today)} | سال تعلیمی جاری را مدیر از بخش تنظیمات تعیین می‌کند.</p>
         </CardContent>

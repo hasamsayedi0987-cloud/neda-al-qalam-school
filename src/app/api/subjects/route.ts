@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { requireUser, requireRole, ApiError } from '@/lib/auth';
+import { requireUser, requireRole, requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
 
 export async function GET() {
@@ -15,7 +15,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireRole('ADMIN', 'HEADTEACHER');
+    const me = await requireSection('subjects');
+    if (!['ADMIN', 'HEADTEACHER'].includes(me.role)) throw new ApiError('فقط مدیر و سرمعلم می‌توانند مضمون ثبت کنند', 403);
     const body = await req.json();
     const name = str(body.name);
     if (!name) throw new ApiError('نام مضمون لازم است');
@@ -30,7 +31,8 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    await requireRole('ADMIN', 'HEADTEACHER');
+    const me = await requireSection('subjects');
+    if (!['ADMIN', 'HEADTEACHER'].includes(me.role)) throw new ApiError('فقط مدیر و سرمعلم می‌توانند مضمون را ویرایش کنند', 403);
     const body = await req.json();
     const id = str(body.id);
     if (!id) throw new ApiError('شناسهٔ مضمون لازم است');
