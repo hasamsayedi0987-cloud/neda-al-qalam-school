@@ -775,7 +775,7 @@ export async function apiSend<T = unknown>(
         if (opts.allowQueue !== false) return enqueue<T>(url, method, body, opts);
         return { error: (json as Row).error ? String((json as Row).error) : 'سرور در دسترس نیست', network: true };
       }
-      return { error: (json as Row).error ? String((json as Row).error) : 'عملیات ناموفق بود' };
+      return { error: (json as Row).error ? String((json as Row).error) : 'عملیات ناموفق بود', status: res.status };
     }
     setOnlineState(true);
     return { data: json as T };
@@ -972,6 +972,8 @@ export interface ApiResult<T> {
   queued?: boolean;
   /** درست بودن یعنی مشکل از شبکه بود (نه رد شدن منطقی سرور) */
   network?: boolean;
+  /** کد وضعیت HTTP پاسخ سرور (برای منطق UI مثل تایید دوبارهٔ ۴۰۹) */
+  status?: number;
   /** برای ثبت‌های صف‌شدهٔ POST — شناسهٔ موقت محلی (برای ذخیرهٔ اعتبار آفلاین کاربر جدید) */
   tempId?: string;
 }

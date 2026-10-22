@@ -95,15 +95,23 @@ async function addUserViaUI(page, username, password, name) {
 }
 
 (async () => {
-  execSync('lsof -ti:3100 | xargs -r kill -9');
-  await new Promise((r) => setTimeout(r, 500));
-  const srv = spawn('bun', ['.next/standalone/server.js'], {
-    cwd: '/home/z/my-project',
-    env: { ...process.env, PORT: '3100', HOSTNAME: '127.0.0.1', NODE_ENV: 'production' },
-    detached: true, stdio: 'ignore',
-  });
-  srv.unref();
-  await new Promise((r) => setTimeout(r, 3500));
+  // سرور production از پیش روی 3100 اجرا شده است (بیلد .next-prod)
+  // اگر نبود، از standalone پیش‌فرض استفاده می‌کنیم
+  try {
+    const probe = await fetch('http://localhost:3100/api/auth');
+    if (!probe.ok) throw new Error('not ready');
+    console.log('سرور موجود روی 3100 استفاده می‌شود');
+  } catch {
+    execSync('lsof -ti:3100 | xargs -r kill -9');
+    await new Promise((r) => setTimeout(r, 500));
+    const srv = spawn('bun', ['.next-prod/standalone/server.js'], {
+      cwd: '/home/z/my-project',
+      env: { ...process.env, PORT: '3100', HOSTNAME: '127.0.0.1', NODE_ENV: 'production' },
+      detached: true, stdio: 'ignore',
+    });
+    srv.unref();
+    await new Promise((r) => setTimeout(r, 3500));
+  }
 
   const browser = await chromium.launch();
   const cookie = await serverCookie();

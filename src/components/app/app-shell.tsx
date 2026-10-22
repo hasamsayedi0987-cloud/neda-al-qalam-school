@@ -1,16 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Image from 'next/image';
+import dynamic from 'next/dynamic';
+import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { apiGet, apiSend, onSyncStateChange, pendingSyncCount, failedSyncItems, isOnline, isAuthRequired, flushQueue, tryAutoRelogin } from '@/lib/client/api';
+import { configureExports } from '@/lib/client/exports';
 import { isoToJalaliDisplay, toPersianDigits } from '@/lib/jalali';
 import { ROLE_LABELS } from '@/lib/grading';
 import { cn } from '@/lib/utils';
@@ -18,26 +20,41 @@ import type { SessionUser, NotificationInfo } from '@/lib/types';
 import type { CustomSectionData } from './custom-view';
 import {
   Bell, BellOff, BookOpen, CalendarCheck, CloudOff, ClipboardList, GraduationCap,
-  Home, LayoutDashboard, Library, LogOut, Menu, RefreshCw, School, Settings,
-  ShieldCheck, Upload, UserCog, Users, ClipboardCheck, BookMarked, Wifi, KeyRound,
+  Home, Library, LogOut, Menu, RefreshCw, School, Settings,
+  ShieldCheck, UserCog, Users, ClipboardCheck, BookMarked, Wifi, KeyRound,
   FileSpreadsheet, UserCheck, Award, LayoutGrid, AlertTriangle, Loader2,
+  Sun, Moon, Monitor,
 } from 'lucide-react';
-import { DashboardView } from './dashboard-view';
-import { StudentsView } from './students-view';
-import { TeachersView } from './teachers-view';
-import { ClassesView } from './classes-view';
-import { SubjectsView } from './subjects-view';
-import { AttendanceView } from './attendance-view';
-import { ActivitiesView } from './activities-view';
-import { GradesView } from './grades-view';
-import { ResultsView } from './results-view';
-import { LibraryView } from './library-view';
-import { UsersView } from './users-view';
-import { TasksView } from './tasks-view';
-import { SettingsView } from './settings-view';
-import { AboutView } from './about-view';
-import { CustomSectionsView } from './custom-view';
-import { CertificatesView } from './certificate-view';
+
+/* ─── بارگذاری تنبل ویوها: هر بخش فقط هنگام باز شدن دانلود می‌شود (بستهٔ اولیه سبک‌تر) ─── */
+const ViewSkeleton = () => (
+  <div className="space-y-4 animate-fade-up" aria-busy="true" aria-label="در حال بارگذاری">
+    <div className="h-9 w-48 rounded-lg bg-muted animate-pulse" />
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="h-24 rounded-xl bg-muted animate-pulse" />
+      ))}
+    </div>
+    <div className="h-72 rounded-xl bg-muted animate-pulse" />
+  </div>
+);
+
+const DashboardView = dynamic(() => import('./dashboard-view').then((m) => m.DashboardView), { loading: () => <ViewSkeleton /> });
+const StudentsView = dynamic(() => import('./students-view').then((m) => m.StudentsView), { loading: () => <ViewSkeleton /> });
+const TeachersView = dynamic(() => import('./teachers-view').then((m) => m.TeachersView), { loading: () => <ViewSkeleton /> });
+const ClassesView = dynamic(() => import('./classes-view').then((m) => m.ClassesView), { loading: () => <ViewSkeleton /> });
+const SubjectsView = dynamic(() => import('./subjects-view').then((m) => m.SubjectsView), { loading: () => <ViewSkeleton /> });
+const AttendanceView = dynamic(() => import('./attendance-view').then((m) => m.AttendanceView), { loading: () => <ViewSkeleton /> });
+const ActivitiesView = dynamic(() => import('./activities-view').then((m) => m.ActivitiesView), { loading: () => <ViewSkeleton /> });
+const GradesView = dynamic(() => import('./grades-view').then((m) => m.GradesView), { loading: () => <ViewSkeleton /> });
+const ResultsView = dynamic(() => import('./results-view').then((m) => m.ResultsView), { loading: () => <ViewSkeleton /> });
+const LibraryView = dynamic(() => import('./library-view').then((m) => m.LibraryView), { loading: () => <ViewSkeleton /> });
+const UsersView = dynamic(() => import('./users-view').then((m) => m.UsersView), { loading: () => <ViewSkeleton /> });
+const TasksView = dynamic(() => import('./tasks-view').then((m) => m.TasksView), { loading: () => <ViewSkeleton /> });
+const SettingsView = dynamic(() => import('./settings-view').then((m) => m.SettingsView), { loading: () => <ViewSkeleton /> });
+const AboutView = dynamic(() => import('./about-view').then((m) => m.AboutView), { loading: () => <ViewSkeleton /> });
+const CustomSectionsView = dynamic(() => import('./custom-view').then((m) => m.CustomSectionsView), { loading: () => <ViewSkeleton /> });
+const CertificatesView = dynamic(() => import('./certificate-view').then((m) => m.CertificatesView), { loading: () => <ViewSkeleton /> });
 
 export interface NavItem {
   key: string;
@@ -64,6 +81,37 @@ export const NAV_ITEMS: NavItem[] = [
   { key: 'settings', label: 'تنظیمات و پشتیبان‌گیری', icon: Settings, roles: ['ADMIN', 'HEADTEACHER', 'TEACHER', 'STUDENT', 'GUARDIAN', 'STAFF', 'LIBRARIAN'] },
   { key: 'about', label: 'دربارهٔ اپ و سازنده', icon: GraduationCap, roles: ['ADMIN', 'HEADTEACHER', 'TEACHER', 'STUDENT', 'GUARDIAN', 'STAFF', 'LIBRARIAN'] },
 ];
+
+/** اشتراک بی‌عمل — برای useSyncExternalStore در تشخیص hydration */
+const subscribeNoop = () => () => {};
+
+/** دکمهٔ تغییر تم روشن/تاریک — با محافظت از رندر سرور */
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme();
+  // تشخیص آب‌شدن (hydration) بدون setState در useEffect
+  const hydrated = useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false,
+  );
+  if (!hydrated) {
+    return <Button variant="outline" size="icon" aria-label="تغییر تم" className="opacity-0 pointer-events-none" />;
+  }
+  const next = theme === 'dark' ? 'light' : theme === 'light' ? 'system' : 'dark';
+  const label = theme === 'dark' ? 'تاریک' : theme === 'light' ? 'روشن' : 'سیستم';
+  return (
+    <Button
+      variant="outline"
+      size="icon"
+      onClick={() => setTheme(next)}
+      aria-label={`تم فعلی: ${label} — تغییر به ${next === 'dark' ? 'تاریک' : next === 'light' ? 'روشن' : 'هم‌گامی با سیستم'}`}
+      title={`تم: ${label}`}
+      className="shrink-0"
+    >
+      {theme === 'dark' ? <Moon className="h-5 w-5" /> : theme === 'light' ? <Sun className="h-5 w-5" /> : <Monitor className="h-5 w-5" />}
+    </Button>
+  );
+}
 
 export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () => void }) {
   // لینک‌پذیری عمیق: بازشدن مستقیم یک بخش با پارامتر آدرس (?view=grades)
@@ -101,6 +149,13 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
   useEffect(() => {
     apiGet<{ sections: CustomSectionData[] }>('/api/custom-sections')
       .then((d) => setCustomSections(d.sections))
+      .catch(() => {});
+  }, []);
+
+  // نام مدرسه برای سربرگ اسناد چاپی (کارنامه، حاضری، نتایج) از تنظیمات
+  useEffect(() => {
+    apiGet<{ settings: Record<string, string> }>('/api/settings')
+      .then((d) => configureExports({ schoolName: d.settings.schoolName }))
       .catch(() => {});
   }, []);
 
@@ -180,12 +235,22 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
     loadNotifications();
   };
 
+  const navButtonClass = (active: boolean) =>
+    cn(
+      'w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-right transition-all min-h-[44px] group',
+      active
+        ? 'bg-primary text-primary-foreground font-semibold shadow-sm shadow-primary/25'
+        : 'text-foreground/80 hover:bg-accent hover:text-accent-foreground',
+    );
+
   const navContent = (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2.5 px-4 py-4 border-b">
-        <Image src="/logo.png" alt="لوگو" width={42} height={42} />
+        <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+          <Image src="/logo.png" alt="لوگو" width={36} height={36} />
+        </div>
         <div className="min-w-0">
-          <p className="font-bold text-emerald-800 text-sm leading-tight">مکتب خصوصی نداالقلم</p>
+          <p className="font-bold text-primary text-sm leading-tight">مکتب خصوصی نداالقلم</p>
           <p className="text-[11px] text-muted-foreground">سیستم مدیریت تعلیمی</p>
         </div>
       </div>
@@ -195,14 +260,9 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
             <button
               key={item.key}
               onClick={() => { setView(item.key); setNavOpen(false); }}
-              className={cn(
-                'w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-right transition-colors min-h-[44px]',
-                view === item.key
-                  ? 'bg-emerald-600 text-white font-semibold shadow-sm'
-                  : 'text-emerald-950 hover:bg-emerald-50',
-              )}
+              className={navButtonClass(view === item.key)}
             >
-              <item.icon className="h-[18px] w-[18px] shrink-0" />
+              <item.icon className={cn('h-[18px] w-[18px] shrink-0 transition-transform group-hover:scale-110', view === item.key && 'drop-shadow-sm')} />
               <span className="truncate">{item.label}</span>
             </button>
           ))}
@@ -213,14 +273,9 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
                 <button
                   key={s.id}
                   onClick={() => { setView(`custom:${s.id}`); setNavOpen(false); }}
-                  className={cn(
-                    'w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-right transition-colors min-h-[44px]',
-                    view === `custom:${s.id}`
-                      ? 'bg-emerald-600 text-white font-semibold shadow-sm'
-                      : 'text-emerald-950 hover:bg-emerald-50',
-                  )}
+                  className={navButtonClass(view === `custom:${s.id}`)}
                 >
-                  <LayoutGrid className="h-[18px] w-[18px] shrink-0" />
+                  <LayoutGrid className="h-[18px] w-[18px] shrink-0 transition-transform group-hover:scale-110" />
                   <span className="truncate">{s.title}</span>
                 </button>
               ))}
@@ -229,7 +284,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
         </nav>
       </ScrollArea>
       <div className="px-4 py-3 border-t text-[11px] text-muted-foreground">
-        نسخهٔ ۱.۵.۱ — حسام الدین سیدی
+        نسخهٔ ۲.۰.۰ — حسام الدین سیدی
       </div>
     </div>
   );
@@ -239,9 +294,9 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
     || visibleNav[0];
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-emerald-50/50 to-white">
+    <div className="min-h-screen flex flex-col bg-background">
       {/* هدر */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-emerald-100 shadow-sm">
+      <header className="sticky top-0 z-40 bg-card/90 backdrop-blur-md border-b shadow-[0_1px_12px_-6px_rgb(0_0_0/0.15)] pt-[env(safe-area-inset-top)]">
         <div className="flex items-center gap-2 px-3 md:px-5 h-16">
           {/* منوی موبایل */}
           <Sheet open={navOpen} onOpenChange={setNavOpen}>
@@ -257,9 +312,13 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
           </Sheet>
 
           <div className="flex items-center gap-2 min-w-0">
-            <Image src="/logo.png" alt="لوگو" width={40} height={40} className="hidden sm:block" />
+            <div className="h-10 w-10 rounded-xl bg-primary/10 hidden sm:flex items-center justify-center shrink-0">
+              <Image src="/logo.png" alt="لوگو" width={32} height={32} />
+            </div>
             <div className="min-w-0">
-              <p className="font-bold text-emerald-800 leading-tight truncate">مکتب خصوصی نداالقلم</p>
+              <p className="font-bold leading-tight truncate bg-gradient-to-l from-emerald-700 to-emerald-500 dark:from-emerald-400 dark:to-emerald-300 bg-clip-text text-transparent">
+                مکتب خصوصی نداالقلم
+              </p>
               <p className="text-[11px] text-muted-foreground truncate">{current?.label}</p>
             </div>
           </div>
@@ -271,7 +330,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
             variant="outline"
             className={cn(
               'gap-1 shrink-0',
-              online ? 'text-emerald-700 border-emerald-300' : 'text-rose-600 border-rose-300',
+              online ? 'text-primary border-primary/40 bg-primary/5' : 'text-rose-600 border-rose-300 bg-rose-500/5',
             )}
             title={
               online
@@ -294,11 +353,14 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
             <span className="sm:hidden">{!online ? 'آفلاین' : pending > 0 ? toPersianDigits(pending) : ''}</span>
           </Badge>
 
+          {/* تغییر تم روشن/تاریک */}
+          <ThemeToggle />
+
           {/* اعلان‌ها */}
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="icon" className="relative" aria-label="اعلان‌ها">
-                {unread > 0 ? <Bell className="h-5 w-5 text-emerald-700" /> : <BellOff className="h-5 w-5 text-muted-foreground" />}
+                {unread > 0 ? <Bell className="h-5 w-5 text-primary" /> : <BellOff className="h-5 w-5 text-muted-foreground" />}
                 {unread > 0 && (
                   <span className="absolute -top-1.5 -left-1.5 h-5 min-w-5 px-1 rounded-full bg-rose-600 text-white text-[10px] flex items-center justify-center">
                     {toPersianDigits(unread)}
@@ -308,7 +370,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
             </PopoverTrigger>
             <PopoverContent align="end" className="w-80 p-0">
               <div className="flex items-center justify-between px-3 py-2 border-b">
-                <p className="font-semibold text-sm text-emerald-900">اعلان‌ها</p>
+                <p className="font-semibold text-sm">اعلان‌ها</p>
                 <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={markAllRead}>
                   خواندن همه
                 </Button>
@@ -320,9 +382,9 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
                   notifications.map((n) => (
                     <div
                       key={n.id}
-                      className={cn('px-3 py-2.5 border-b text-sm', !n.read && 'bg-emerald-50/60')}
+                      className={cn('px-3 py-2.5 border-b text-sm', !n.read && 'bg-accent/60')}
                     >
-                      <p className="font-medium text-emerald-900 text-[13px]">{n.title}</p>
+                      <p className="font-medium text-[13px]">{n.title}</p>
                       <p className="text-xs text-muted-foreground mt-0.5 leading-5">{n.body}</p>
                       <p className="text-[10px] text-muted-foreground mt-1">
                         {isoToJalaliDisplay(new Date(n.createdAt).toISOString().slice(0, 10))}
@@ -338,7 +400,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="gap-2 h-9 max-w-[190px]">
-                <div className="h-7 w-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-bold shrink-0">
+                <div className="h-7 w-7 rounded-full bg-gradient-to-br from-emerald-600 to-emerald-500 text-white flex items-center justify-center text-xs font-bold shrink-0">
                   {user.name.slice(0, 1)}
                 </div>
                 <div className="hidden md:flex flex-col items-start min-w-0">
@@ -380,10 +442,10 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
           className={cn(
             'px-3 md:px-6 py-2 flex flex-wrap items-center gap-2 text-xs border-b',
             failedItems.length > 0
-              ? 'bg-rose-50 border-rose-200 text-rose-800'
+              ? 'bg-rose-500/10 border-rose-500/25 text-rose-700 dark:text-rose-300'
               : authNeeded
-                ? 'bg-amber-50 border-amber-200 text-amber-800'
-                : 'bg-sky-50 border-sky-200 text-sky-800',
+                ? 'bg-amber-500/10 border-amber-500/25 text-amber-700 dark:text-amber-300'
+                : 'bg-sky-500/10 border-sky-500/25 text-sky-700 dark:text-sky-300',
           )}
         >
           {failedItems.length > 0 ? <AlertTriangle className="h-4 w-4 shrink-0" /> : online ? <RefreshCw className="h-4 w-4 shrink-0" /> : <CloudOff className="h-4 w-4 shrink-0" />}
@@ -414,7 +476,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
               disabled={syncing}
               className={cn(
                 'h-7 text-xs gap-1 shrink-0',
-                failedItems.length > 0 ? 'border-rose-300 text-rose-800' : 'border-sky-300 text-sky-800',
+                failedItems.length > 0 ? 'border-rose-400/40' : 'border-sky-400/40',
               )}
             >
               {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
@@ -426,12 +488,12 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
 
       <div className="flex flex-1">
         {/* سایدبار دسکتاپ */}
-        <aside className="hidden lg:block w-[270px] shrink-0 border-l border-emerald-100 bg-white sticky top-16 h-[calc(100vh-4rem)]">
+        <aside className="hidden lg:block w-[270px] shrink-0 border-l bg-sidebar sticky top-16 h-[calc(100vh-4rem)]">
           {navContent}
         </aside>
 
         {/* محتوا — syncTick پس از هر همگام‌سازی موفق، ویو را با دادهٔ تازهٔ سرور بازسازی می‌کند */}
-        <main key={syncTick} className="flex-1 min-w-0 p-3 md:p-6 max-w-[1400px]">
+        <main key={syncTick} className="flex-1 min-w-0 p-3 md:p-6 max-w-[1400px] w-full mx-auto animate-fade-up">
           {view === 'dashboard' && <DashboardView user={user} onNavigate={setView} />}
           {view === 'students' && <StudentsView user={user} />}
           {view === 'teachers' && <TeachersView user={user} />}
@@ -454,7 +516,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
         </main>
       </div>
 
-      <footer className="mt-auto border-t border-emerald-100 bg-white py-3 text-center text-[11px] text-muted-foreground">
+      <footer className="mt-auto border-t bg-card py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] text-center text-[11px] text-muted-foreground">
         مکتب خصوصی نداالقلم — سیستم مدیریت تعلیمی | توسعه‌دهنده: حسام الدین سیدی | 0791680632
       </footer>
     </div>

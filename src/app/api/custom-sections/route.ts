@@ -142,6 +142,8 @@ export async function DELETE(req: NextRequest) {
   try {
     await requireRole('ADMIN');
     const id = req.nextUrl.searchParams.get('id') || '';
+    const existing = await db.customSection.findUnique({ where: { id } });
+    if (!existing) throw new ApiError('بخش دلخواه یافت نشد', 404);
     await db.customSection.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (e) {

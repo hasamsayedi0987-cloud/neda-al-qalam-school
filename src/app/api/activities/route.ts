@@ -85,11 +85,51 @@ export async function POST(req: NextRequest) {
   }
 }
 
+export async function PATCH(req: NextRequest) {
+  try {
+    const me = await requireRole('ADMIN', 'HEADTEACHER', 'TEACHER');
+    const body = await req.json();
+    const id = str(body.id);
+    if (!id) throw new ApiError('شناسه لازم است');
+    const existing = await db.studentActivity.findUnique({ where: { id } });
+    if (!existing) throw new ApiError('فعالیت یافت نشد', 404);
+    // معلم: فقط فعالیت شاگردان صنف‌های تحت تدریس خود
+    if (me.role === 'TEACHER' && !(await studentInTeacherScope(me.teacherId || '', existing.studentId))) {
+      throw new ApiError('این فعالیت از شاگردان صنف‌های شما نیست', 403);
+    }
+    const data: Record<string, unknown> = {};
+    if (body.note !== undefined) {
+      const note = str(body.note);
+      if (!note) throw new ApiError('ملاحظات نمی‌تواند خالی باشد');
+      data.note = note;
+    }
+    if (body.type !== undefined) {
+      const type = str(body.type);
+      if (!['HOMEWORK', 'BEHAVIOR', 'PARTICIPATION', 'OTHER'].includes(type)) {
+        throw new ApiError('نوع فعالیت نامعتبر است');
+      }
+      data.type = type;
+    }
+    if (body.score !== undefined) data.score = optNum(body.score);
+    if (body.date !== undefined) data.date = str(body.date) || existing.date;
+    await db.studentActivity.update({ where: { id }, data });
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return handleApiError(e);
+  }
+}
+
 export async function DELETE(req: NextRequest) {
   try {
-    await requireRole('ADMIN', 'HEADTEACHER', 'TEACHER');
+    const me = await requireRole('ADMIN', 'HEADTEACHER', 'TEACHER');
     const id = new NextRequest(req.url).nextUrl.searchParams.get('id') || '';
     if (!id) throw new ApiError('شناسه لازم است');
+    const existing = await db.studentActivity.findUnique({ where: { id } });
+    if (!existing) throw new ApiError('فعالیت یافت نشد', 404);
+    // معلم: فقط فعالیت شاگردان صنف‌های تحت تدریس خود
+    if (me.role === 'TEACHER' && !(await studentInTeacherScope(me.teacherId || '', existing.studentId))) {
+      throw new ApiError('این فعالیت از شاگردان صنف‌های شما نیست', 403);
+    }
     await db.studentActivity.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (e) {

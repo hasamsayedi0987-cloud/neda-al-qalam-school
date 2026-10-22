@@ -107,6 +107,11 @@ export async function GET(req: NextRequest) {
     }
 
     // ─── کارنامهٔ شاگرد ───
+    // دسترسی کارنامه: مدیر/سرمعلم همه، معلم صنف‌های خود، شاگرد/سرپرست فقط خودشان
+    // (کارمند و کتابخانه‌دار به کارنامهٔ شاگردان دسترسی ندارند)
+    if (me.role === 'STAFF' || me.role === 'LIBRARIAN') {
+      throw new ApiError('شما به کارنامهٔ شاگردان دسترسی ندارید', 403);
+    }
     const studentId = me.role === 'STUDENT' || me.role === 'GUARDIAN' ? me.studentId : sp.get('studentId');
     if (!studentId) throw new ApiError('شناسهٔ شاگرد لازم است', 403);
     // معلم: کارنامهٔ شاگردان صنف‌های خودش

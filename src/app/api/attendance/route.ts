@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import type { Prisma } from '@prisma/client';
 import { requireUser, requireRole, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
 import { jalaliMonthRange } from '@/lib/jalali';
@@ -126,17 +127,19 @@ export async function POST(req: NextRequest) {
       const date = str(body.date);
       const items = Array.isArray(body.items) ? body.items : [];
       if (!date) throw new ApiError('تاریخ لازم است');
+      const staffOps: Prisma.PrismaPromise<unknown>[] = [];
       for (const item of items) {
         const teacherId = str(item.teacherId);
         const status = str(item.status);
         if (!teacherId || !['PRESENT', 'ABSENT', 'SICK', 'LEAVE'].includes(status)) continue;
-        await db.staffAttendance.upsert({
+        staffOps.push(db.staffAttendance.upsert({
           where: { teacherId_date: { teacherId, date } },
           update: { status },
           create: { teacherId, date, status },
-        });
+        }));
       }
-      return NextResponse.json({ ok: true, saved: items.length });
+      if (staffOps.length) await db.$transaction(staffOps);
+      return NextResponse.json({ ok: true, saved: staffOps.length });
     }
 
     // ─── ثبت حاضری شاگردان ───
@@ -150,18 +153,26 @@ export async function POST(req: NextRequest) {
 
     let saved = 0;
     const absentStudents: string[] = [];
+    // اعتبارسنجی: هر شاگرد باید عضو همین صنف باشد (جلوگیری از ثبت ناهم‌خوان)
+    const reqIds = items.map((item: { studentId?: unknown }) => str(item.studentId)).filter(Boolean);
+    const classStudents = reqIds.length
+      ? await db.student.findMany({ where: { id: { in: reqIds }, classId }, select: { id: true } })
+      : [];
+    const validIds = new Set(classStudents.map((s) => s.id));
+    const ops: Prisma.PrismaPromise<unknown>[] = [];
     for (const item of items) {
       const studentId = str(item.studentId);
       const status = str(item.status);
-      if (!studentId || !['PRESENT', 'ABSENT', 'SICK', 'LEAVE'].includes(status)) continue;
-      await db.attendanceRecord.upsert({
+      if (!studentId || !validIds.has(studentId) || !['PRESENT', 'ABSENT', 'SICK', 'LEAVE'].includes(status)) continue;
+      ops.push(db.attendanceRecord.upsert({
         where: { studentId_date: { studentId, date } },
         update: { status, recordedBy: me.id, classId },
         create: { studentId, classId, date, status, recordedBy: me.id },
-      });
+      }));
       if (status === 'ABSENT') absentStudents.push(studentId);
       saved += 1;
     }
+    if (ops.length) await db.$transaction(ops);
 
     // اعلان به سرپرست/والدین شاگردان غایب
     if (absentStudents.length > 0) {

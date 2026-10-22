@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PageHeader, LoadingBlock, EmptyState, Field } from './ui-bits';
+import { PageHeader, LoadingBlock, EmptyState, Field, JalaliDatePicker} from './ui-bits';
 import { apiGet, apiSend } from '@/lib/client/api';
 import { isoToJalaliDisplay, toPersianDigits } from '@/lib/jalali';
 import { useToast } from '@/hooks/use-toast';
@@ -425,6 +425,11 @@ export function CustomSectionsView({ user, initialSectionId }: { user: SessionUs
                       <option key={o} value={o}>{o}</option>
                     ))}
                   </select>
+                ) : f.type === 'date' ? (
+                  <JalaliDatePicker
+                    value={entryData[f.key] || ''}
+                    onChange={(iso) => setEntryData({ ...entryData, [f.key]: iso })}
+                  />
                 ) : (
                   <Input
                     type={f.type === 'number' ? 'number' : 'text'}
@@ -437,7 +442,7 @@ export function CustomSectionsView({ user, initialSectionId }: { user: SessionUs
               </Field>
             ))}
             <Field label="تاریخ ثبت (شمسی — اختیاری)">
-              <Input placeholder="۱۴۰۵/۰۷/۲۸" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} />
+              <JalaliDatePicker value={entryDate} onChange={setEntryDate} />
             </Field>
           </div>
           <DialogFooter>

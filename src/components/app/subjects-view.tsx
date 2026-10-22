@@ -54,7 +54,12 @@ export function SubjectsView({ user }: { user: SessionUser }) {
 
   const remove = async (s: SubjectInfo) => {
     if (!confirm(`آیا از حذف مضمون «${s.name}» مطمئن هستید؟ نمرات این مضمون در همهٔ صنف‌ها حذف می‌شود.`)) return;
-    const res = await apiSend(`/api/subjects?id=${s.id}`, 'DELETE');
+    let res = await apiSend(`/api/subjects?id=${s.id}`, 'DELETE');
+    // ۴۰۹ = مضمون نمرات ثبت‌شده دارد — با تایید صریح دوم حذف قطعی انجام می‌شود
+    if (res.error && res.status === 409) {
+      if (!confirm(res.error + '\n\nآیا مطمئن به حذف قطعی هستید؟ این عملیات بازگشت‌پذیر نیست.')) return;
+      res = await apiSend(`/api/subjects?id=${s.id}&force=1`, 'DELETE');
+    }
     if (res.error) {
       toast({ title: 'خطا', description: res.error, variant: 'destructive' });
       return;

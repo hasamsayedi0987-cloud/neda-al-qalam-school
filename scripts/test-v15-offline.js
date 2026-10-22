@@ -94,9 +94,10 @@ async function serverLogin() {
   await dialog.waitFor({ timeout: 5000 });
   const cityLabel = await dialog.locator('text=شهرت / تخلص').first().textContent().catch(() => '');
   (cityLabel && !cityLabel.includes('*')) ? ok('فیلد شهرت/تخلص اختیاری شد (بدون *)') : bad(`لیبل شهرت: ${cityLabel}`);
-  await dialog.locator('input').nth(0).fill('نصرت');
+  // فیلد عکس (input مخفی file) اول است — با نام فیلد هدف می‌گیریم
+  await dialog.locator('input:not([type="file"])').nth(0).fill('نصرت');
   // شهرت خالی می‌ماند
-  await dialog.locator('input').nth(2).fill('ولد تستی');
+  await dialog.locator('input:not([type="file"])').nth(2).fill('ولد تستی');
   const tSave = Date.now();
   await dialog.getByRole('button', { name: 'ثبت شاگرد' }).click();
   const toast1 = page.locator('[data-sonner-toast], [role="status"]').filter({ hasText: 'ذخیره شد' }).first();
@@ -138,7 +139,7 @@ async function serverLogin() {
   if (targetClass) {
     await page.locator('[role="dialog"]').waitFor({ state: 'detached', timeout: 3000 }).catch(() => {});
     await page.locator('button[role="combobox"]').first().click();
-    await page.getByRole('option', { name: targetClass.name }).click();
+    await page.getByRole('option', { name: targetClass.name }).first().click();
     await page.waitForSelector('table tbody tr', { timeout: 8000 });
     // اولین شاگرد → غایب
     await page.locator('table tbody tr').first().locator('button', { hasText: 'غایب' }).click();

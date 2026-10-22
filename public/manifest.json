@@ -1,4 +1,5 @@
 {
+  "id": "./",
   "name": "مکتب خصوصی نداالقلم — سیستم مدیریت مکتب",
   "short_name": "نداالقلم",
   "description": "سیستم جامع مدیریت مکتب خصوصی نداالقلم: نمرات، حاضری، فعالیت‌ها، کتابخانه و کارنامهٔ دیجیتال",
@@ -10,6 +11,12 @@
   "lang": "fa",
   "background_color": "#ffffff",
   "theme_color": "#047857",
+  "categories": ["education", "productivity"],
+  "shortcuts": [
+    { "name": "حاضری یومیه", "short_name": "حاضری", "url": "./?view=attendance" },
+    { "name": "ثبت نمرات", "short_name": "نمرات", "url": "./?view=grades" },
+    { "name": "شاگردان", "short_name": "شاگردان", "url": "./?view=students" }
+  ],
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },

@@ -29,10 +29,12 @@ function walk(dir, prefix) {
   }
 }
 
-const staticDir = path.join(root, '.next', 'static');
+const distDir = process.env.NEXT_DIST_DIR || '.next';
+const staticDir = path.join(root, distDir, 'static');
 if (existsSync(staticDir)) walk(staticDir, '');
 
 // فایل‌های عمومی (فونت، آیکون، لوگو) — خود sw.js و manifest حذف می‌شوند
+// پوشهٔ splash: اسپلش‌اسکرین مخصوص آیفون است (فقط هنگام نصب PWA استفاده می‌شود) — precache نمی‌شود
 const pubDir = path.join(root, 'public');
 if (existsSync(pubDir)) {
   const addPublic = (prefix) => {
@@ -52,7 +54,10 @@ if (existsSync(pubDir)) {
       } catch {
         continue;
       }
-      if (st.isDirectory()) addPublic(rel);
+      if (st.isDirectory()) {
+        if (rel === 'splash') continue;
+        addPublic(rel);
+      }
       else if (!['sw.js', 'sw-manifest.json', 'robots.txt'].includes(rel)) {
         urls.push(`/${rel}`);
       }

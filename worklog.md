@@ -334,3 +334,28 @@ Stage Summary:
 - وضعیت همگام‌سازی در موبایل همیشه قابل دیدن است + دکمهٔ اقدام دستی
 - یادآوری: نصب APK جدید فقط برای به‌روزرسانی پوسته است — fix اصلی وبی است و با یک بار باز کردن اپ با انترنت اعمال می‌شود
 - امنیت: توکن گیت‌هاب همچنان باید regenerate شود
+
+---
+Task ID: v20-upgrade
+Agent: main (Z.ai)
+Task: ارتقای حرفه‌ای جامع v2.0.0 — طراحی مدرن + تم تاریک، iOS/PWA، ویژگی‌های جدید، امنیت و عملکرد، انتشار با حفظ نسخه‌های قبلی
+
+Work Log:
+- ممیزی کامل با اکسپلورر-ایجنت: ۱۷ ویو، ۱۹ مسیر API، ۱۴ مدل Prisma + ۱۵ فرصت بهبود رتبه‌بندی‌شده
+- امنیت: کلید امضای نشست از کد حذف و در جدول Setting ذخیره شد (تولید تصادفی در اولین اجرا)؛ محدودیت نرخ ورود (۵/۱۰دقیقه → ۴۲۹ با پیام فارسی)؛ کوکی Secure روی HTTPS؛ گارد «آخرین مدیر فعال» در PATCH/DELETE کاربران
+- یکپارچگی داده: بازیابی پشتیبان اتمیک ($transaction با تایم‌اوت ۹۰ ثانیه) + CustomSection/CustomEntry/CertificateTemplate به پشتیبان اضافه شد + authSecret هرگز پشتیبان نمی‌شود؛ اعتبارسنجی عضویت شاگرد در صنف برای نمرات و حاضری؛ ثبت دسته‌ای با $transaction (حذف N+1)؛ حذف کد مردهٔ subjects؛ حذف مضمون دارای نمره نیازمند force با تایید دو-مرحله‌ای (۴۰۹)؛ rollNo = max+1؛ ۴۰۴ به‌جای ۵۰۰ در حذف‌ها؛ گارد scope معلم در DELETE/PATCH فعالیت‌ها؛ STAFF/LIBRARIAN از کارنامه منع شدند
+- طراحی: دارک‌مود کامل با next-themes (روشن/تاریک/سیستم + ذخیره)؛ پالت زمردی بازطراحی‌شده در هر دو تم؛ next/font/local برای وازیرمتن (preload)؛ انیمیشن‌های fade-up/scale-in + stagger + prefers-reduced-motion؛ چاپ همیشه روشن؛ app-shell مدرن (پیل فعال، گرادیان برند، آواتار) + صفحهٔ ورود دو-قسمتی با پنل معرفی؛ ui-bits با توکن‌های معنایی
+- iOS/PWA: viewportFit=cover + env(safe-area-inset) در body/هدر/فوتر؛ ۸ اسپلش‌اسکرین اپل با sharp (بشهر از precache SW مستثنی)؛ manifest با id/shortcuts/categories؛ status-bar black-translucent؛ راهنمای نصب PWA در README
+- ویژگی‌ها: داشبورد نموداری (روند حاضری ۷روز + توزیع مکتسبه با recharts؛ recentGrades برای معلم محدود به صنف‌های خودش)؛ /api/students/profile (پروفایل کامل با گارد scope)؛ /api/students/promote (انتقال/فراغت دسته‌جمعی)؛ ورود گروهی CSV با پیش‌نمایش و اعتبارسنجی صنف؛ عکس شاگرد (فشرده‌سازی canvas ۳۰۰px + آواتار در جدول/پروفایل)؛ دکمهٔ «همه حاضر»؛ ویرایش فعالیت (PATCH)؛ جستجوی کتابخانه؛ نام مدرسه/مقیاس/یادداشت چاپ از تنظیمات؛ JalaliDatePicker در بخش‌های دلخواه؛ رمز بازنشانی users به type=password
+- عملکرد: ۴۴ وابستگی بلااستفاده حذف (از ۶۵ به ۲۱) + ۲۹ کامپوننت UI استفاده‌نشده حذف؛ prisma/sharp → devDependencies؛ لوگو ۵۲۶KB→۸۱KB، حذف dev-photo تکراری ۱.۶MB؛ بارگذاری تنبل هر ۱۶ ویو با next/dynamic + اسکلتون؛ ignoreBuildErrors:false (tsc صفر خطا)؛ reactStrictMode:true؛ tsconfig exclude برای skills/scripts/apk-build
+- api.ts: فیلد status در ApiResult (برای منطق ۴۰۹)
+- Next 16 standalone: اسکریپت prepare-standalone.mjs (mirror کامل distDir داخل standalone — در ۱۶ پوشهٔ distDir دیگر ساخته نمی‌شود) + sw-manifest از NEXT_DIST_DIR پیروی می‌کند
+- سرویس‌ورکر → v6-0 (باطل‌کردن کش قدیمی پس از انتشار)
+- تست: ۴ سوئیت — test-v15-offline (۲۳ چک PASS)، test-offline-trap (۶ فاز PASS)، repro-users-sync (۳ سناریو PASS)، test-v2-features جدید (۱۵ چک: نمودارها، دارک‌مود و پایداری ریلود، پروفایل، CSV، همه‌حاضر، ارتقا، ویرایش فعالیت، گارد ۴۰۳ کارمند، rate-limit ۴۲۹) — همه PASS؛ صفر خطای کنسول؛ eslint و tsc پاک؛ تست بصری موبایل ۳۹۰px و دسکتاپ در هر دو تم
+- APK: versionCode 8 / versionName 2.0.0 با keystore پایدار مخزن (SHA-256 یکسان) — ۲۳۰KB، apksigner verify OK، URL جاسازی‌شده در dex
+- README: تازه‌های ۲.۰ + جدول تاریخچهٔ نسخه‌ها با همهٔ لینک‌های دانلود قدیمی + راهنمای نصب iOS
+
+Stage Summary:
+- نسخهٔ ۲.۰.۰: محصول مدرن، امن و کامل — همهٔ قابلیت‌های قبلی سالم (رگرسیون کامل PASS)
+- همهٔ لینک‌های دانلود نسخه‌های قبلی (v1.0.0 تا v1.5.1) در Releases فعال می‌مانند
+- امنیت: توکن گیت‌هاب همچنان باید regenerate شود

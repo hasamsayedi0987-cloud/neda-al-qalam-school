@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import type { Prisma } from '@prisma/client';
 import { requireUser, requireRole, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
 import { clampComponent, componentTotal } from '@/lib/grading';
@@ -187,16 +188,28 @@ export async function POST(req: NextRequest) {
     }
     const w = await getWeights();
 
+    // پیش‌واکشی: یک کوئری برای همهٔ نمرات موجود (قبلاً N+1 کوئری بود)
+    const reqStudentIds = items.map((item: { studentId?: unknown }) => str(item.studentId)).filter(Boolean);
+    const existingList = await db.grade.findMany({
+      where: { classSubjectId, period, studentId: { in: reqStudentIds } },
+    });
+    const existingMap = new Map(existingList.map((g) => [g.studentId, g]));
+    // اعتبارسنجی: شاگرد باید عضو صنفِ مضمون باشد
+    const classStudents = cs.classId
+      ? await db.student.findMany({ where: { classId: cs.classId }, select: { id: true } })
+      : [];
+    const validStudentIds = new Set(classStudents.map((s) => s.id));
+
     let saved = 0;
+    let skipped = 0; // شاگرد غیرعضو صنف
     let blockedDeletes = 0; // حذف‌های مسدودشده به‌خاطر نداشتن مجوز مدیر
+    const upserts: Prisma.PrismaPromise<unknown>[] = [];
+    const deletes: Prisma.PrismaPromise<unknown>[] = [];
     for (const item of items) {
       const studentId = str(item.studentId);
       if (!studentId) continue;
-      const existing = await db.grade.findUnique({
-        where: {
-          studentId_classSubjectId_period: { studentId, classSubjectId, period },
-        },
-      });
+      if (validStudentIds.size > 0 && !validStudentIds.has(studentId)) { skipped += 1; continue; }
+      const existing = existingMap.get(studentId);
       // پس از تایید، معلم اجازهٔ ویرایش ندارد (مدیر و سرمعلم دارند)
       if (existing?.approved && me.role === 'TEACHER') continue;
       const written = clampComponent(item.written, w.maxWritten);
@@ -212,11 +225,11 @@ export async function POST(req: NextRequest) {
           blockedDeletes += 1;
           continue;
         }
-        await db.grade.delete({ where: { id: existing.id } });
+        deletes.push(db.grade.delete({ where: { id: existing.id } }));
         saved += 1;
         continue;
       }
-      await db.grade.upsert({
+      upserts.push(db.grade.upsert({
         where: { studentId_classSubjectId_period: { studentId, classSubjectId, period } },
         update: {
           written, oral, homework, activity, total,
@@ -229,10 +242,13 @@ export async function POST(req: NextRequest) {
           approved: me.role === 'TEACHER' ? false : Boolean(body.approved),
           notes: str(item.notes) || null,
         },
-      });
+      }));
       saved += 1;
     }
-    return NextResponse.json({ ok: true, saved, blockedDeletes });
+    if (deletes.length || upserts.length) {
+      await db.$transaction([...deletes, ...upserts]);
+    }
+    return NextResponse.json({ ok: true, saved, blockedDeletes, skipped });
   } catch (e) {
     return handleApiError(e);
   }

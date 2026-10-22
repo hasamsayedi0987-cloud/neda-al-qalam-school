@@ -318,7 +318,7 @@ export function UsersView({ user: me }: { user: SessionUser }) {
             <DialogTitle>بازنشانی رمز — {pwDialog?.name}</DialogTitle>
           </DialogHeader>
           <Field label="رمز عبور جدید (حداقل ۶ حرف)">
-            <Input dir="ltr" className="text-left" type="text" value={newPw} onChange={(e) => setNewPw(e.target.value)} />
+            <Input dir="ltr" className="text-left" type="password" autoComplete="new-password" value={newPw} onChange={(e) => setNewPw(e.target.value)} />
           </Field>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPwDialog(null)}>انصراف</Button>

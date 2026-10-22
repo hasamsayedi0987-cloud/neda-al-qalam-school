@@ -6,6 +6,10 @@ import {
 } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
 import { ensureBootstrap } from '@/lib/bootstrap';
+import {
+  checkRateLimit, recordFailure, clearFailures, clientIp,
+  LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS,
+} from '@/lib/rate-limit';
 
 export async function GET() {
   try {
@@ -33,14 +37,32 @@ export async function POST(req: NextRequest) {
       const username = str(body.username).toLowerCase();
       const password = str(body.password);
       if (!username || !password) throw new ApiError('نام کاربری و رمز عبور را وارد کنید');
+      // ── محدودیت تلاش ورود (ضد جستجوی رمز) ──
+      const rlKey = `login:${username}:${clientIp(req)}`;
+      const rl = checkRateLimit(rlKey, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS);
+      if (!rl.allowed) {
+        const mins = Math.ceil(rl.retryAfterSec / 60);
+        throw new ApiError(
+          `به دلیل تلاش‌های ناموفق مکرر، ورود برای ${mins} دقیقه موقتاً مسدود شد. لطفاً کمی بعد دوباره تلاش کنید.`,
+          429,
+        );
+      }
       const user = await db.user.findUnique({ where: { username } });
       if (!user || !verifyPassword(password, user.password)) {
-        throw new ApiError('نام کاربری یا رمز عبور نادرست است', 401);
+        recordFailure(rlKey, LOGIN_WINDOW_MS);
+        const left = checkRateLimit(rlKey, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS).remaining;
+        throw new ApiError(
+          left <= 2
+            ? `نام کاربری یا رمز عبور نادرست است (تلاش باقی‌مانده: ${left})`
+            : 'نام کاربری یا رمز عبور نادرست است',
+          401,
+        );
       }
+      clearFailures(rlKey);
       if (!user.active) {
         throw new ApiError('حساب کاربری شما توسط مدیر غیرفعال شده است. لطفاً با مدیر مکتب تماس بگیرید.', 403);
       }
-      const token = createToken({ uid: user.id, role: user.role, iat: Math.floor(Date.now() / 1000) });
+      const token = await createToken({ uid: user.id, role: user.role, iat: Math.floor(Date.now() / 1000) });
       // بعد از اولین ورود مدیر، حساب‌های ابتدایی دیگر به هیچ‌کس نمایش داده نمی‌شود
       if (user.role === 'ADMIN') {
         await db.setting.upsert({
@@ -57,8 +79,12 @@ export async function POST(req: NextRequest) {
         setupDone: true,
       });
       // کوکی نشست: بدون maxAge — با بستن مرورگر/اپ، نشست خاتمه می‌یابد و ورود مجدد لازم است
+      // پرچم secure فقط وقتی درخواست از HTTPS آمده باشد (Vercel/پراکسی)
+      const isHttps =
+        req.nextUrl.protocol === 'https:' ||
+        (req.headers.get('x-forwarded-proto') || '').split(',')[0].trim() === 'https';
       res.cookies.set(SESSION_COOKIE, token, {
-        httpOnly: true, sameSite: 'lax', path: '/',
+        httpOnly: true, sameSite: 'lax', path: '/', secure: isHttps,
       });
       return res;
     }

@@ -14,9 +14,10 @@ const nextConfig: NextConfig = {
   basePath: process.env.NEXT_PUBLIC_BASE_PATH || undefined,
   images: { unoptimized: true },
   typescript: {
-    ignoreBuildErrors: true,
+    // خطاهای تایپ در ساخت نادیده گرفته نمی‌شوند — کیفیت تضمین‌شده
+    ignoreBuildErrors: false,
   },
-  reactStrictMode: false,
+  reactStrictMode: true,
 };
 
 export default nextConfig;

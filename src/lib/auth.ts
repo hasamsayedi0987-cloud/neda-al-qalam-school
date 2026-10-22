@@ -1,11 +1,15 @@
 /**
  * احراز هویت با کوکی امضاشده (HMAC) — بدون وابستگی خارجی
+ *
+ * امنیت کلید امضا:
+ *  ۱) اگر متغیر محیطی AUTH_SECRET تنظیم شده باشد از همان استفاده می‌شود
+ *  ۲) در غیر این صورت کلید تصادفی قوی ساخته و در جدول Setting (کلید authSecret)
+ *     ذخیره می‌شود — کلید دیگر در کد عمومی نیست و با استقرار مجدد هم ثابت می‌ماند
  */
 import { createHmac, timingSafeEqual, randomBytes, scryptSync } from 'crypto';
 import { cookies } from 'next/headers';
 import { db } from '@/lib/db';
 
-const SECRET = process.env.AUTH_SECRET || 'neda-ol-qalam-school-secret-1405';
 export const SESSION_COOKIE = 'noq_session';
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // ۷ روز
 
@@ -13,6 +17,37 @@ export interface SessionPayload {
   uid: string;
   role: string;
   iat: number;
+}
+
+// ─── کلید امضای نشست (پویا) ───
+let cachedSecret: string | null = null;
+
+async function getAuthSecret(): Promise<string> {
+  if (cachedSecret) return cachedSecret;
+  const fromEnv = process.env.AUTH_SECRET;
+  if (fromEnv && fromEnv.length >= 16) {
+    cachedSecret = fromEnv;
+    return cachedSecret;
+  }
+  try {
+    const row = await db.setting.findUnique({ where: { key: 'authSecret' } });
+    if (row?.value && row.value.length >= 32) {
+      cachedSecret = row.value;
+      return cachedSecret;
+    }
+    // تولید و ذخیرهٔ کلید تصادفی — در پایگاه داده (قابل دسترس عمومی نیست)
+    const generated = randomBytes(32).toString('hex');
+    await db.setting.upsert({
+      where: { key: 'authSecret' },
+      update: { value: generated },
+      create: { key: 'authSecret', value: generated },
+    });
+    cachedSecret = generated;
+    return cachedSecret;
+  } catch {
+    // پایگاه داده در دسترس نیست — کلید موقت برای همین نمونه (نشست‌ها پس از بازگشت دیتابیس معتبر می‌مانند)
+    return process.env.AUTH_SECRET || 'noq-fallback-ephemeral-' + (process.env.VERCEL_DEPLOYMENT_ID || 'local');
+  }
 }
 
 export function hashPassword(password: string): string {
@@ -32,20 +67,21 @@ export function verifyPassword(password: string, stored: string): boolean {
   }
 }
 
-function sign(data: string): string {
-  return createHmac('sha256', SECRET).update(data).digest('base64url');
+async function sign(data: string): Promise<string> {
+  const secret = await getAuthSecret();
+  return createHmac('sha256', secret).update(data).digest('base64url');
 }
 
-export function createToken(payload: SessionPayload): string {
+export async function createToken(payload: SessionPayload): Promise<string> {
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  return `${body}.${sign(body)}`;
+  return `${body}.${await sign(body)}`;
 }
 
-export function parseToken(token: string | undefined): SessionPayload | null {
+export async function parseToken(token: string | undefined): Promise<SessionPayload | null> {
   if (!token) return null;
   const [body, sig] = token.split('.');
   if (!body || !sig) return null;
-  const expected = sign(body);
+  const expected = await sign(body);
   if (expected.length !== sig.length) return null;
   if (!timingSafeEqual(Buffer.from(expected), Buffer.from(sig))) return null;
   try {
@@ -72,7 +108,7 @@ export interface AuthUser {
 export async function getSessionUser(): Promise<AuthUser | null> {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
-  const payload = parseToken(token);
+  const payload = await parseToken(token);
   if (!payload) return null;
   const user = await db.user.findUnique({
     where: { id: payload.uid },

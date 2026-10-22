@@ -44,10 +44,20 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     await requireRole('ADMIN');
-    const id = new NextRequest(req.url).nextUrl.searchParams.get('id') || '';
+    const url = new NextRequest(req.url);
+    const id = url.nextUrl.searchParams.get('id') || '';
+    const force = url.nextUrl.searchParams.get('force') === '1';
     if (!id) throw new ApiError('شناسهٔ مضمون لازم است');
-    const gradesCount = await db.grade.count({ where: { classSubjectId: { contains: id } } });
-    void gradesCount;
+    const existing = await db.subject.findUnique({
+      where: { id },
+      include: { classSubjects: { include: { _count: { select: { grades: true } } } } },
+    });
+    if (!existing) throw new ApiError('مضمون یافت نشد', 404);
+    // نمرات ثبت‌شدهٔ این مضمون با حذف، برای همیشه پاک می‌شوند — تایید صریح لازم است
+    const gradesCount = existing.classSubjects.reduce((sum, cs) => sum + cs._count.grades, 0);
+    if (gradesCount > 0 && !force) {
+      throw new ApiError(`این مضمون ${gradesCount} نمرهٔ ثبت‌شده دارد. برای حذف تایید صریح لازم است.`, 409);
+    }
     await db.subject.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (e) {

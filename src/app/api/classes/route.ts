@@ -65,7 +65,13 @@ export async function PATCH(req: NextRequest) {
     if (!id) throw new ApiError('شناسهٔ صنف لازم است');
     const data: Record<string, unknown> = {};
     if (body.name !== undefined) data.name = str(body.name);
-    if (body.grade !== undefined) data.grade = num(body.grade);
+    if (body.grade !== undefined) {
+      const grade = num(body.grade);
+      if (!Number.isInteger(grade) || grade < 1 || grade > 12) {
+        throw new ApiError('صنف باید عددی بین ۱ تا ۱۲ باشد');
+      }
+      data.grade = grade;
+    }
     if (body.supervisorId !== undefined) data.supervisorId = str(body.supervisorId) || null;
     await db.class.update({ where: { id }, data });
     return NextResponse.json({ ok: true });

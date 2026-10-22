@@ -51,6 +51,18 @@ export function ResultsView({ user }: { user: SessionUser }) {
   const [reportCard, setReportCard] = useState<ReportCardData | null>(null);
   const [rcOpen, setRcOpen] = useState(false);
 
+  // مقیاس نمرات و یادداشت مقررات از تنظیمات مدیر — به‌جای متن ثابت
+  const [scaleNote, setScaleNote] = useState('مقیاس نمرات: الف ۹۰-۱۰۰ | ب ۸۰-۹۰ | ج ۷۰-۸۰ | د ۶۰-۷۰ | هـ ۵۰-۶۰ | زیر ۵۰ تکرار صنف');
+  const [resultNote, setResultNote] = useState('مقررات: هر شاگرد که در یک مضمون نمرهٔ کمتر از ۵۰ بگیرد، تکرار صنف می‌گردد. مکتسبه: الف ۹۰-۱۰۰ | ب ۸۰-۹۰ | ج ۷۰-۸۰ | د ۶۰-۷۰ | هـ ۵۰-۶۰.');
+  useEffect(() => {
+    apiGet<{ settings: Record<string, string> }>('/api/settings')
+      .then((d) => {
+        if (d.settings.gradeScale) setScaleNote(`مقیاس نمرات: ${d.settings.gradeScale}`);
+        if (d.settings.resultNote) setResultNote(d.settings.resultNote);
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (isStudentSide) return;
     apiGet<{ classes: ClassInfo[] }>('/api/classes')
@@ -117,7 +129,7 @@ export function ResultsView({ user }: { user: SessionUser }) {
         <thead><tr><th>شماره</th><th>شهرت شاگرد</th>${head}<th>مجموع</th><th>اوسط</th><th>رتبه</th><th>نتیجه</th></tr></thead>
         <tbody>${body}</tbody>
       </table>
-      <p class="note">مقیاس نمرات: الف ۹۰-۱۰۰ | ب ۸۰-۹۰ | ج ۷۰-۸۰ | د ۶۰-۷۰ | هـ ۵۰-۶۰ | زیر ۵۰ تکرار صنف — نمرهٔ نهائی هر مضمون = میانگین چهارو‌نیم‌ماهه و سالانه</p>
+      <p class="note">${scaleNote} — نمرهٔ نهائی هر مضمون = میانگین چهارو‌نیم‌ماهه و سالانه</p>
       <div class="doc-footer">
         <div class="sign-box"><div class="sign-line">امضاء معلم</div></div>
         <div class="sign-box"><div class="sign-line">امضاء سرمعلم</div></div>
@@ -175,7 +187,7 @@ export function ResultsView({ user }: { user: SessionUser }) {
         <span>اوسط: <b>${rc.average != null ? toPersianDigits(rc.average) : '—'}</b></span>
         <span>نتیجه: <b class="${rc.result === RESULT_PROMOTED ? 'pass' : 'fail'}">${rc.result}</b></span>
       </div>
-      <p class="note">مقررات: هر شاگرد که در یک مضمون نمرهٔ کمتر از ۵۰ بگیرد، تکرار صنف می‌گردد. مکتسبه: الف ۹۰-۱۰۰ | ب ۸۰-۹۰ | ج ۷۰-۸۰ | د ۶۰-۷۰ | هـ ۵۰-۶۰.</p>
+      <p class="note">${resultNote}</p>
       <div class="doc-footer">
         <div class="sign-box"><div class="sign-line">امضاء نگران صنف</div></div>
         <div class="sign-box"><div class="sign-line">امضاء سرمعلم</div></div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,7 +15,7 @@ import { apiGet, apiSend } from '@/lib/client/api';
 import { isoToJalaliDisplay, isoToday, toPersianDigits } from '@/lib/jalali';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, BookInfo, LoanInfo, StudentInfo } from '@/lib/types';
-import { Plus, BookOpen, BookMarked, Undo2, Trash2, AlertTriangle } from 'lucide-react';
+import { Plus, BookOpen, BookMarked, Undo2, Trash2, AlertTriangle, Search } from 'lucide-react';
 
 const EMPTY_BOOK = { id: '', title: '', author: '', category: '', copies: '1', shelfNo: '' };
 const EMPTY_LEND = { bookId: '', borrowerName: '', borrowerType: 'STUDENT', studentId: '', loanDate: isoToday(), dueDate: '', notes: '' };
@@ -23,6 +23,7 @@ const EMPTY_LEND = { bookId: '', borrowerName: '', borrowerType: 'STUDENT', stud
 export function LibraryView({ user }: { user: SessionUser }) {
   const { toast } = useToast();
   const canManage = user.role === 'ADMIN' || user.role === 'LIBRARIAN';
+  const [bookSearch, setBookSearch] = useState('');
 
   const [books, setBooks] = useState<BookInfo[]>([]);
   const [loans, setLoans] = useState<LoanInfo[]>([]);
@@ -102,6 +103,12 @@ export function LibraryView({ user }: { user: SessionUser }) {
     load();
   };
 
+  const filteredBooks = useMemo(() => {
+    const q = bookSearch.trim();
+    if (!q) return books;
+    return books.filter((b) => [b.title, b.author, b.category, b.shelfNo].some((f) => f?.includes(q)));
+  }, [books, bookSearch]);
+
   if (loading) return <LoadingBlock rows={5} />;
 
   const activeLoans = loans.filter((l) => l.status === 'LENT');
@@ -136,9 +143,18 @@ export function LibraryView({ user }: { user: SessionUser }) {
         </TabsList>
 
         <TabsContent value="books">
+          <div className="relative mb-3">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="جستجوی کتاب: عنوان، مولف، دسته، قفسه..."
+              value={bookSearch}
+              onChange={(e) => setBookSearch(e.target.value)}
+              className="pr-9"
+            />
+          </div>
           <Card className="border-emerald-100">
             <CardContent className="p-0">
-              {books.length === 0 ? (
+              {filteredBooks.length === 0 ? (
                 <EmptyState message="هیچ کتابی ثبت نشده است." icon={BookOpen} />
               ) : (
                 <div className="overflow-x-auto nice-scroll max-h-[60vh] overflow-y-auto">
@@ -155,7 +171,7 @@ export function LibraryView({ user }: { user: SessionUser }) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {books.map((b, i) => (
+                      {filteredBooks.map((b, i) => (
                         <TableRow key={b.id}>
                           <TableCell className="text-muted-foreground">{toPersianDigits(i + 1)}</TableCell>
                           <TableCell className="font-medium">{b.title}</TableCell>

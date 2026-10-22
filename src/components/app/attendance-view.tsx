@@ -15,7 +15,7 @@ import { printDocument, exportExcel, fileStamp } from '@/lib/client/exports';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, ClassInfo, StudentInfo } from '@/lib/types';
 import { cn, fullName } from '@/lib/utils';
-import { CalendarCheck, CalendarDays, Save, Printer, FileSpreadsheet, Users } from 'lucide-react';
+import { CalendarCheck, CalendarDays, Save, Printer, FileSpreadsheet, Users, UserCheck } from 'lucide-react';
 
 const STATUSES = ['PRESENT', 'ABSENT', 'SICK', 'LEAVE'] as const;
 type Status = (typeof STATUSES)[number];
@@ -270,6 +270,23 @@ export function AttendanceView({ user }: { user: SessionUser }) {
               <EmptyState message="این صنف شاگرد فعال ندارد." icon={Users} />
             ) : (
               <>
+                <div className="flex flex-wrap items-center justify-between gap-2 no-print">
+                  <p className="text-xs text-muted-foreground">
+                    {toPersianDigits(students.length)} شاگرد — وضعیت پیش‌فرض «حاضر» است؛ فقط غایب‌ها را تغییر دهید
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => {
+                      const all: Record<string, Status> = {};
+                      for (const s of students) all[s.id] = 'PRESENT';
+                      setMarks(all);
+                    }}
+                  >
+                    <UserCheck className="h-4 w-4" /> همه حاضر
+                  </Button>
+                </div>
                 <Card className="border-emerald-100">
                   <CardContent className="p-0">
                     <Table>

@@ -95,6 +95,8 @@ export async function DELETE(req: NextRequest) {
   try {
     await requireRole('ADMIN');
     const id = req.nextUrl.searchParams.get('id') || '';
+    const existing = await db.certificateTemplate.findUnique({ where: { id } });
+    if (!existing) throw new ApiError('قالب تقدیرنامه یافت نشد', 404);
     await db.certificateTemplate.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (e) {

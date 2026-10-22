@@ -61,6 +61,21 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const id = str(body.id);
     if (!id) throw new ApiError('شناسهٔ کاربر لازم است');
+    const target = await db.user.findUnique({ where: { id } });
+    if (!target) throw new ApiError('کاربر یافت نشد', 404);
+    // ── گارد آخرین مدیر فعال: نمی‌توان تنها مدیر را تنزل داد یا غیرفعال کرد ──
+    if (target.role === 'ADMIN') {
+      const demoting = body.role !== undefined && str(body.role) !== 'ADMIN';
+      const deactivating = body.active !== undefined && !Boolean(body.active);
+      if (demoting || deactivating) {
+        const otherAdmins = await db.user.count({
+          where: { role: 'ADMIN', active: true, NOT: { id } },
+        });
+        if (otherAdmins === 0) {
+          throw new ApiError('حداقل یک مدیر فعال باید باقی بماند — ابتدا مدیر دیگری تعیین کنید');
+        }
+      }
+    }
     const data: Record<string, unknown> = {};
     // تغییر نام کاربری — باید یکتا باشد
     if (body.username !== undefined) {
@@ -99,6 +114,16 @@ export async function DELETE(req: NextRequest) {
     const id = new NextRequest(req.url).nextUrl.searchParams.get('id') || '';
     if (!id) throw new ApiError('شناسهٔ کاربر لازم است');
     if (id === admin.id) throw new ApiError('نمی‌توانید حساب خودتان را حذف کنید');
+    const target = await db.user.findUnique({ where: { id } });
+    if (!target) throw new ApiError('کاربر یافت نشد', 404);
+    if (target.role === 'ADMIN') {
+      const otherAdmins = await db.user.count({
+        where: { role: 'ADMIN', active: true, NOT: { id } },
+      });
+      if (otherAdmins === 0) {
+        throw new ApiError('حداقل یک مدیر فعال باید باقی بماند — ابتدا مدیر دیگری تعیین کنید');
+      }
+    }
     await db.notification.deleteMany({ where: { userId: id } });
     await db.user.delete({ where: { id } });
     return NextResponse.json({ ok: true });

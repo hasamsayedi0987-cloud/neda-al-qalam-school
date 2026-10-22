@@ -16,7 +16,7 @@ import { isoToJalaliDisplay, toPersianDigits } from '@/lib/jalali';
 import { ACTIVITY_TYPE_LABELS } from '@/lib/grading';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, ActivityInfo, StudentInfo, ClassInfo } from '@/lib/types';
-import { Plus, Trash2, ClipboardCheck, CalendarDays } from 'lucide-react';
+import { Plus, Trash2, ClipboardCheck, CalendarDays, Pencil } from 'lucide-react';
 
 export function ActivitiesView({ user }: { user: SessionUser }) {
   const { toast } = useToast();
@@ -29,7 +29,7 @@ export function ActivitiesView({ user }: { user: SessionUser }) {
   const [activities, setActivities] = useState<ActivityInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState({ studentId: '', type: 'HOMEWORK', score: '', note: '', date: new Date().toISOString().slice(0, 10) });
+  const [form, setForm] = useState({ id: '', studentId: '', type: 'HOMEWORK', score: '', note: '', date: new Date().toISOString().slice(0, 10) });
 
   useEffect(() => {
     if (!canEdit) return;
@@ -56,24 +56,35 @@ export function ActivitiesView({ user }: { user: SessionUser }) {
     return s ? `${fullName(s)}` : 'شاگرد';
   };
 
+  const openNew = () => {
+    setForm({ id: '', studentId: '', type: 'HOMEWORK', score: '', note: '', date: new Date().toISOString().slice(0, 10) });
+    setDialogOpen(true);
+  };
+
+  const openEdit = (a: ActivityInfo) => {
+    setForm({ id: a.id, studentId: a.studentId, type: a.type, score: a.score != null ? String(a.score) : '', note: a.note, date: a.date });
+    setDialogOpen(true);
+  };
+
   const save = async () => {
     if (!form.studentId || !form.note.trim()) {
       toast({ title: 'خطا', description: 'شاگرد و ملاحظات لازم است', variant: 'destructive' });
       return;
     }
-    const res = await apiSend('/api/activities', 'POST', {
+    const editing = Boolean(form.id);
+    const res = await apiSend('/api/activities', editing ? 'PATCH' : 'POST', {
       ...form, score: form.score ? Number(form.score) : null,
-    }, { queueLabel: 'ثبت فعالیت' });
+    }, { queueLabel: editing ? 'ویرایش فعالیت' : 'ثبت فعالیت' });
     if (res.error) {
       toast({ title: 'خطا', description: res.error, variant: 'destructive' });
       return;
     }
     toast({
       title: 'ذخیره شد',
-      description: res.queued ? 'در حافظهٔ گوشی ذخیره شد — پس از اتصال به سرور منتقل می‌شود' : 'فعالیت ثبت گردید',
+      description: res.queued ? 'در حافظهٔ گوشی ذخیره شد — پس از اتصال به سرور منتقل می‌شود' : editing ? 'فعالیت ویرایش شد' : 'فعالیت ثبت گردید',
     });
     setDialogOpen(false);
-    setForm({ studentId: '', type: 'HOMEWORK', score: '', note: '', date: new Date().toISOString().slice(0, 10) });
+    setForm({ id: '', studentId: '', type: 'HOMEWORK', score: '', note: '', date: new Date().toISOString().slice(0, 10) });
     load();
   };
 
@@ -97,7 +108,7 @@ export function ActivitiesView({ user }: { user: SessionUser }) {
         subtitle={isSelf ? 'کارخانگی، رفتار و شرکت در درس شما' : 'کارخانگی، رفتار، شرکت در درس و ملاحظات روزانه'}
         icon={ClipboardCheck}
         actions={canEdit && (
-          <Button onClick={() => setDialogOpen(true)} className="gap-1.5" disabled={!classId && canEdit}>
+          <Button onClick={openNew} className="gap-1.5" disabled={!classId && canEdit && !isSelf}>
             <Plus className="h-4 w-4" /> ثبت فعالیت
           </Button>
         )}
@@ -153,9 +164,14 @@ export function ActivitiesView({ user }: { user: SessionUser }) {
                         <TableCell className="text-xs leading-5">{a.note}</TableCell>
                         {canEdit && (
                           <TableCell className="text-left">
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => remove(a)} aria-label="حذف">
-                              <Trash2 className="h-4 w-4 text-rose-600" />
-                            </Button>
+                            <div className="flex gap-1 justify-end">
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(a)} aria-label="ویرایش" title="ویرایش">
+                                <Pencil className="h-4 w-4 text-primary" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => remove(a)} aria-label="حذف" title="حذف">
+                                <Trash2 className="h-4 w-4 text-rose-600" />
+                              </Button>
+                            </div>
                           </TableCell>
                         )}
                       </TableRow>
@@ -172,10 +188,10 @@ export function ActivitiesView({ user }: { user: SessionUser }) {
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>ثبت فعالیت جدید</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{form.id ? 'ویرایش فعالیت' : 'ثبت فعالیت جدید'}</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <Field label="شاگرد *">
-              <Select value={form.studentId} onValueChange={(v) => setForm({ ...form, studentId: v })}>
+              <Select value={form.studentId} onValueChange={(v) => setForm({ ...form, studentId: v })} disabled={Boolean(form.id)}>
                 <SelectTrigger><SelectValue placeholder="انتخاب شاگرد" /></SelectTrigger>
                 <SelectContent>
                   {students.map((s) => (
@@ -206,7 +222,7 @@ export function ActivitiesView({ user }: { user: SessionUser }) {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>انصراف</Button>
-            <Button onClick={save}>ثبت</Button>
+            <Button onClick={save}>{form.id ? 'ذخیرهٔ تغییرات' : 'ثبت'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

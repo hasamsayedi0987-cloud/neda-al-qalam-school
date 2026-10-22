@@ -29,8 +29,16 @@ const BASE_CSS = `
   @page { size: A4 landscape; margin: 12mm; }
 `;
 
+/** نام مدرسه از تنظیمات — به‌صورت پیش‌فرض نام رسمی */
+let configuredSchoolName = 'مکتب خصوصی نداالقلم';
+
+/** نام مدرسهٔ چاپ‌شده در سربرگ اسناد را از تنظیمات تعیین می‌کند (app-shell صدا می‌زند) */
+export function configureExports(opts: { schoolName?: string; academicYear?: string }) {
+  if (opts.schoolName && opts.schoolName.trim()) configuredSchoolName = opts.schoolName.trim();
+}
+
 function buildDocument(title: string, bodyHtml: string, withLogo = true): string {
-  const schoolName = 'مکتب خصوصی نداالقلم';
+  const schoolName = configuredSchoolName;
   return `<!DOCTYPE html>
 <html dir="rtl" lang="fa">
 <head><meta charset="utf-8"><title>${title}</title><style>${BASE_CSS}</style></head>

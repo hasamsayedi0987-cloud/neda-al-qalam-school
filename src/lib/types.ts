@@ -46,6 +46,7 @@ export interface StudentInfo {
   guardianName?: string | null;
   guardianPhone?: string | null;
   address?: string | null;
+  photo?: string | null;
   classId?: string | null;
   rollNo?: number | null;
   status: string;

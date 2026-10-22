@@ -76,8 +76,9 @@ export async function POST(req: NextRequest) {
     }
     let rollNo: number | null = optNum(body.rollNo);
     if (classId && rollNo == null) {
-      const count = await db.student.count({ where: { classId } });
-      rollNo = count + 1;
+      // بزرگ‌ترین شمارهٔ فعلی + ۱ — پس از حذف شاگردان، شماره تکراری نمی‌شود
+      const agg = await db.student.aggregate({ where: { classId }, _max: { rollNo: true } });
+      rollNo = (agg._max.rollNo ?? 0) + 1;
     }
     const student = await db.student.create({
       data: {
@@ -89,6 +90,7 @@ export async function POST(req: NextRequest) {
         guardianName: str(body.guardianName) || null,
         guardianPhone: str(body.guardianPhone) || null,
         address: str(body.address) || null,
+        photo: str(body.photo) || null,
         classId,
         rollNo,
         enrolledYear: str(body.enrolledYear) || null,
@@ -133,6 +135,7 @@ export async function PATCH(req: NextRequest) {
       data.classId = newClassId;
     }
     if (body.rollNo !== undefined) data.rollNo = optNum(body.rollNo);
+    if (body.photo !== undefined) data.photo = str(body.photo) || null;
     if (body.status !== undefined && ['ACTIVE', 'LEFT', 'GRADUATED'].includes(str(body.status))) {
       data.status = str(body.status);
     }

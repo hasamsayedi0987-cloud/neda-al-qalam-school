@@ -102,6 +102,7 @@ model Student {
   guardianName  String?
   guardianPhone String?
   address       String?
+  photo         String? // عکس شاگرد (dataURL فشرده)
   classId       String?
   rollNo        Int? // شماره در جدول
   status        String   @default("ACTIVE") // ACTIVE | LEFT | GRADUATED
