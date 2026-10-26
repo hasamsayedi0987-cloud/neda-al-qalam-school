@@ -904,6 +904,11 @@ function isDuplicateError(msg: string): boolean {
   return msg.includes('قبلاً ثبت شده') || msg.includes('قبلاً گرفته شده');
 }
 
+/** پیام «یافت نشد» — رکورد هدف روی سرور وجود ندارد (برای DELETE بی‌خطر است) */
+function notFoundError(msg: string): boolean {
+  return msg.includes('یافت نشد') || msg.includes('یافت نشدند');
+}
+
 /**
  * یافتن شناسهٔ واقعی یک رکوردِ ثبت‌شده با شناسهٔ موقت — با تطبیق مشخصات روی دادهٔ فعلی سرور.
  * کاربرد: وقتی POST آفلاین «تکراری» تشخیص داده شد (رکورد از قبل روی سرور هست) یا
@@ -989,6 +994,7 @@ async function flushQueueInner(attempt = 0): Promise<number> {
         cache: 'no-store',
       }, 15000);
       const json = await res.json().catch(() => ({}));
+      const msg = (json as Row).error ? String((json as Row).error) : `خطای ${res.status}`;
       if (res.ok) {
         sent += 1;
         if (item.method === 'POST' && (json as Row)?.id && item.tempId) {
@@ -999,9 +1005,8 @@ async function flushQueueInner(attempt = 0): Promise<number> {
         // نشست معتبر نیست — داده حذف نمی‌شود؛ با ورود خودکار/دوباره ارسال می‌شود
         remaining.push(item);
         authFailed = true;
-      } else if (res.status === 404 && item.method === 'DELETE') {
+      } else if (item.method === 'DELETE' && res.status === 404) {
         // حذف رکوردی که روی سرور وجود ندارد = بی‌خطر و بی‌اثر — از صف حذف می‌شود
-        // (مثلاً ثبت آفلاین که قبلاً به‌عنوان تکراری حذف شده یا هرگز ثبت نشده)
         affected.add(collectionOf(item.url));
       } else if (res.status === 404 && item.tempId) {
         // PATCH با شناسهٔ موقتِ آدرسی که هنوز به شناسهٔ واقعی نگاشت نشده —
@@ -1020,8 +1025,8 @@ async function flushQueueInner(attempt = 0): Promise<number> {
       } else {
         // خطای منطقی سرور — داده هرگز بی‌صدا نابود نمی‌شود:
         //  • تکراری (روی سرور هست) → حذف از صف بی‌خطر است (+ نگاشت شناسهٔ واقعی برای پیوندها)
+        //  • DELETE «یافت نشد» → رکورد سرور نیست — حذف بی‌خطر (ریشهٔ هشدار قرمز همیشگی)
         //  • سایر ۴xx → با شمار شکست در صف می‌ماند تا مدیر ببیند و اصلاح کند
-        const msg = (json as Row).error ? String((json as Row).error) : `خطای ${res.status}`;
         if (isDuplicateError(msg)) {
           affected.add(collectionOf(item.url));
           if (item.method === 'POST' && item.tempId) {
@@ -1031,6 +1036,8 @@ async function flushQueueInner(attempt = 0): Promise<number> {
               idMap[item.tempId] = resolved;
             }
           }
+        } else if (item.method === 'DELETE' && notFoundError(msg)) {
+          affected.add(collectionOf(item.url));
         } else {
           const failCount = (item.failCount || 0) + 1;
           remaining.push({ ...item, failCount, lastError: msg });

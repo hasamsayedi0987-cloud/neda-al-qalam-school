@@ -463,3 +463,27 @@ Stage Summary:
 - تقدیرنامه‌ساز اکنون ابزار طراحی آزاد کامل است: کاغذ چندسایز + سفارشی، بلوک‌های متنی نامحدود با جای‌گذاری آزاد، جدول قابل‌ویرایش، لوگوی دلخواه، رنگ/قاب کامل، ۲ خط امضا — پیش‌نمایش زنده = خروجی چاپ (هم‌اندازهٔ mm)
 - قالب‌های قبلی بدون کوچک‌ترین شکستی بار و چاپ می‌شوند؛ API دست‌نخورده ماند؛ ذخیره‌سازی آفلاین و صف همگام‌سازی مثل بقیهٔ اپ کار می‌کند
 - نکته: لوگوی آپلودی به‌صورت dataURL داخل config قالب ذخیره می‌شود (تا ~۱۰۰–۲۰۰KB برای JSON) — طبیعی و در حد کش آفلاین
+
+---
+Task ID: v22-fifteen-issues
+Agent: main (Z.ai)
+Task: حل ۱۵ مشکل/پیشنهاد کاربر — ریشه‌کنی هشدار قرمز همگام‌سازی، مالی، ارتباطات، برنامهٔ هفتگی و ۱۲ ارتقای دیگر + APK ۲.۲.۰
+
+Work Log:
+- ریشهٔ هشدار قرمز (از اسکرین‌شات: آیتم گیرکرده با ?id=…): سه ایراد صف آفلاین — بازنویسی نشدن شناسهٔ موقت داخل پارامترهای URL، ۴۰۴/«یافت نشد» DELETE که بی‌خطر است ولی صف را می‌گرفت، و نبود خروج دستی
+- api.ts: rewriteUrl برای پارامترهای آدرس + DELETE «یافت نشد» → تخلیهٔ خودکار + resolveTempRecord (یافتن شناسهٔ واقعی کاربر/شاگرد برای پیوندها) + discardQueueItem/discardAllFailedItems
+- app-shell: هشدار قرمز قابل‌بازشدن با فهرست خطاها + «حذف از صف» تک‌تک و گروهی (فقط با تأیید — دادهٔ سرور دست‌نخورده)
+- شِما: Subject.code/credits، Class.capacity/monthlyFee، ScheduleSlot، FeePayment، Message (+رابطهٔ fromUser)، BookLoan.fineAmount، StudentActivity.image — db push دو اسکیما
+- API جدید: /api/fees (ثبت/حذف پرداخت + خلاصه)، /api/messages (مستقیم + همگانی نقش/صنف با گارد دامنهٔ معلم)، /api/schedule (تداخل ۴۰۹ با نام صنف)، DELETE /api/backup (پاک‌سازی حاضری سال‌های گذشته)، copy-division در classes/assign، جریمه در library return، کد/واحد در subjects، عکس در activities (+اعلان والد)، annual در attendance
+- viewهای جدید: fees-view (خلاصهٔ چهارکارتی + جدول + پیام به والد با sms:) و messages-view (ورودی/ارسال/نوشتن با دسته‌ها)
+- ارتقا: students (فیلتر وضعیت/جنسیت + اکسل/PDF)، teachers (حجم کاری + تماس سریع)، classes (ظرفیت + برنامهٔ هفتگی با پیش‌هشدار تداخل + کپی تقسیم)، subjects (کد/واحد)، attendance (سالانه + خلاصهٔ پیش از ذخیره + sms غایب‌ها)، activities (عکس فشرده + دسته + sms)، grades (پیش‌نویس/نهایی + هشدار سقف)، library (هشدار سررسید + جریمه + کارت شاگرد)
+- خروجی‌ها در APK: ریشهٔ واقعی — WebView دانلود blob: را بی‌اثر رها می‌کرد → DownloadListener + پل saveFile (MediaStore Downloads، API≥29) + window.__noqDownloadName در exports.ts
+- access.ts: finance + messages | تنظیمات: feeDeadlineDay/finePerDay/backupReminderDays | پشتیبان v3 شامل مدل‌های جدید
+- ویوهای محول‌شده: certificate-view (طراح آزاد ۵ تب)، custom-view (۷ نوع فیلد + مدیریت داده)، settings-view (پشتیبان زمان‌بندی + منطقهٔ خطر)
+- SW → v8-0 | APK: versionCode 10 / versionName 2.2.0 — امضای پایدار مخزن (SHA-256 e4bafcbecda72807… یکسان) + apksigner verify OK — ۲۲۸KB
+- تست: test-v22 جدید ۵۳/۵۳ PASS (سینک، مالی، پیام، تداخل، ظرفیت، annual، جریمه، عکس، پشتیبان، دسترسی، discard UI) + UI-smoke ۱۰/۱۰ روی بیلد نهایی + رگرسیون کامل: v15، trap، repro-sync، v2، v21 (۳۷/۳۷) — همه PASS؛ tsc و eslint صفر خطا
+
+Stage Summary:
+- هر ۱۵ مورد حل/پیاده شد و با تست خودکار اثبات شد؛ آفلاین و همگام‌سازی قبلی سالم ماند
+- APK: /home/z/my-project/download/nedaalqalam-school.apk (v2.2.0)
+- یادآوری امنیتی: توکن گیت‌هاب همچنان باید regenerate شود

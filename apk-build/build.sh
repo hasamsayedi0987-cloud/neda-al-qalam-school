@@ -11,8 +11,8 @@ set -e
 cd "$(dirname "$0")"
 
 SDK=/home/z/android-sdk
-BT="$SDK/build-tools/34.0.0"
-PLATFORM="$SDK/platforms/android-34/android.jar"
+BT="$SDK/android-14"
+PLATFORM="$SDK/android-34/android.jar"
 OUT="build"
 KEYSTORE="$OUT/noq.keystore"
 PKG="af/nedaalqalam/school"

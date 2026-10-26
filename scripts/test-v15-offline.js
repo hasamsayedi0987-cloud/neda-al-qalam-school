@@ -145,6 +145,12 @@ async function serverLogin() {
     await page.locator('table tbody tr').first().locator('button', { hasText: 'غایب' }).click();
     const tA = Date.now();
     await page.getByRole('button', { name: /ذخیرهٔ حاضری/ }).click();
+    // v2.2: خلاصهٔ آمار پیش از ذخیره نمایش داده می‌شود — تایید نهایی لازم است
+    try {
+      await page.waitForSelector('text=خلاصهٔ حاضری', { timeout: 3000 });
+      ok('خلاصهٔ آمار پیش از ذخیره نمایش داده شد (v2.2)');
+      await page.getByRole('button', { name: /تأیید و ذخیره/ }).click();
+    } catch { bad('دیالوگ خلاصهٔ حاضری نیامد'); }
     try {
       await page.waitForSelector('text=ذخیره شد', { timeout: 3000 });
       ok(`حاضری آفلاین ذخیره شد (${Date.now() - tA}ms)`);
