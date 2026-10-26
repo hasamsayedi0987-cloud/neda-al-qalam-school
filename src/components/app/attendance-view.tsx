@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -15,7 +16,7 @@ import { printDocument, exportExcel, fileStamp } from '@/lib/client/exports';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, ClassInfo, StudentInfo } from '@/lib/types';
 import { cn, fullName } from '@/lib/utils';
-import { CalendarCheck, CalendarDays, Save, Printer, FileSpreadsheet, Users, UserCheck } from 'lucide-react';
+import { CalendarCheck, CalendarDays, Save, Printer, FileSpreadsheet, Users, UserCheck, BarChart3, MessageSquare, AlertTriangle } from 'lucide-react';
 
 const STATUSES = ['PRESENT', 'ABSENT', 'SICK', 'LEAVE'] as const;
 type Status = (typeof STATUSES)[number];
@@ -35,6 +36,8 @@ export function AttendanceView({ user }: { user: SessionUser }) {
   const [records, setRecords] = useState<DailyRecord[]>([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  // خلاصهٔ پیش از ذخیره — تأیید با آمار کلی و پیام به والدین غایب
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   // گزارش ماهانه
   const [nowJ] = useState(() => {
@@ -56,6 +59,13 @@ export function AttendanceView({ user }: { user: SessionUser }) {
   // حاضری خود کارمند (ملازم)
   const [myStaffRecords, setMyStaffRecords] = useState<Array<{ id: string; date: string; status: string }>>([]);
   const isStaffSelf = user.role === 'STAFF';
+
+  // آمار سالانه
+  const [annualYear, setAnnualYear] = useState(nowJ.jy || 1405);
+  const [annualClass, setAnnualClass] = useState('');
+  const [annualStudents, setAnnualStudents] = useState<StudentInfo[]>([]);
+  const [annualRecords, setAnnualRecords] = useState<DailyRecord[]>([]);
+  const [annualLoading, setAnnualLoading] = useState(false);
 
   useEffect(() => {
     if (!isStaffSelf) return;
@@ -102,6 +112,25 @@ export function AttendanceView({ user }: { user: SessionUser }) {
 
   useEffect(() => { queueMicrotask(loadDaily); }, [loadDaily]);
 
+  const loadAnnual = useCallback(async () => {
+    if (!annualClass) return;
+    setAnnualLoading(true);
+    try {
+      const data = await apiGet<{ students: StudentInfo[]; records: DailyRecord[] }>(
+        `/api/attendance?mode=annual&classId=${annualClass}&jy=${annualYear}`,
+      );
+      setAnnualStudents(data.students);
+      setAnnualRecords(data.records);
+    } catch (e) {
+      toast({ title: 'خطا', description: e instanceof Error ? e.message : 'بارگذاری ناموفق', variant: 'destructive' });
+    }
+    setAnnualLoading(false);
+  }, [annualClass, annualYear, toast]);
+
+  useEffect(() => {
+    if (annualClass) queueMicrotask(loadAnnual);
+  }, [annualClass, loadAnnual]);
+
   const loadMonthly = useCallback(async () => {
     if (!repClass && !isSelf) return;
     setRepLoading(true);
@@ -122,6 +151,19 @@ export function AttendanceView({ user }: { user: SessionUser }) {
     if (isSelf || repClass) queueMicrotask(loadMonthly);
   }, [isSelf, repClass, repYear, repMonth, loadMonthly]);
 
+  /** خلاصهٔ آمار قبل از ذخیره */
+  const marksSummary = useMemo(() => {
+    const count = (st: Status) => Object.values(marks).filter((v) => v === st).length;
+    return {
+      total: Object.keys(marks).length,
+      present: count('PRESENT'),
+      absent: count('ABSENT'),
+      sick: count('SICK'),
+      leave: count('LEAVE'),
+      absentees: students.filter((s) => marks[s.id] === 'ABSENT'),
+    };
+  }, [marks, students]);
+
   const saveDaily = async () => {
     if (!classId) return;
     setSaving(true);
@@ -130,15 +172,25 @@ export function AttendanceView({ user }: { user: SessionUser }) {
       classId, date, items,
     }, { queueLabel: 'ثبت حاضری یومیه' });
     setSaving(false);
+    setConfirmOpen(false);
     if (res.error) {
       toast({ title: 'خطا', description: res.error, variant: 'destructive' });
       return;
     }
     toast({
       title: 'ذخیره شد',
-      description: res.queued ? 'در حافظهٔ گوشی ذخیره شد — پس از اتصال به سرور منتقل می‌شود' : `حاضری ${toPersianDigits(items.length)} شاگرد ثبت گردید`,
+      description: res.queued
+        ? 'در حافظهٔ گوشی ذخیره شد — پس از اتصال به سرور منتقل می‌شود'
+        : `حاضری ${toPersianDigits(items.length)} شاگرد ثبت گردید${marksSummary.absent > 0 ? ` — ${toPersianDigits(marksSummary.absent)} غایب` : ''}`,
     });
     loadDaily();
+  };
+
+  /** پیام آماده به والد غایب */
+  const absentSmsLink = (s: StudentInfo) => {
+    if (!s.guardianPhone) return null;
+    const text = `والد محترم ${s.guardianName || ''} — شاگرد شما ${fullName(s)} امروز (${isoToJalaliDisplay(date)}) در مکتب خصوصی نداالقلم حاضر نبود. لطفاً علت غیبت را به مکتب اطلاع دهید.`;
+    return `sms:${s.guardianPhone.replace(/\s+/g, '')}?body=${encodeURIComponent(text)}`;
   };
 
   const saveStaff = async () => {
@@ -225,6 +277,33 @@ export function AttendanceView({ user }: { user: SessionUser }) {
     );
   };
 
+  // ─── آمار سالانه: محاسبه و خروجی ───
+  const annualSummary = useMemo(() => {
+    return annualStudents.map((s) => {
+      const recs = annualRecords.filter((r) => r.studentId === s.id);
+      const count = (st: string) => recs.filter((r) => r.status === st).length;
+      return {
+        student: s,
+        present: count('PRESENT'),
+        absent: count('ABSENT'),
+        sick: count('SICK'),
+        leave: count('LEAVE'),
+        total: recs.length,
+      };
+    });
+  }, [annualStudents, annualRecords]);
+
+  const exportAnnualExcel = () => {
+    const rows = annualSummary.map((r, i) =>
+      `<tr><td>${i + 1}</td><td>${fullName(r.student)}</td><td>${r.student.fatherName}</td><td>${r.present}</td><td>${r.absent}</td><td>${r.sick}</td><td>${r.leave}</td><td>${r.total}</td></tr>`,
+    ).join('');
+    exportExcel(
+      `آمار سالانهٔ حاضری ${toPersianDigits(annualYear)}`,
+      `<table><thead><tr><th>شماره</th><th>اسم</th><th>شهرت</th><th>حاضر</th><th>غایب</th><th>مریض</th><th>رخصت</th><th>مجموع</th></tr></thead><tbody>${rows}</tbody></table>`,
+      `حاضری-سالانه-${annualYear}-${fileStamp()}`,
+    );
+  };
+
   if (loading) return <LoadingBlock rows={4} />;
 
   const todayJ = isoToJalaliDisplay(date);
@@ -242,6 +321,7 @@ export function AttendanceView({ user }: { user: SessionUser }) {
           <TabsList className="mb-4">
             <TabsTrigger value="daily">حاضری یومیه</TabsTrigger>
             <TabsTrigger value="report">گزارش ماهانه</TabsTrigger>
+            <TabsTrigger value="annual" className="gap-1"><BarChart3 className="h-3.5 w-3.5" /> آمار سالانه</TabsTrigger>
             {['ADMIN', 'HEADTEACHER'].includes(user.role) && <TabsTrigger value="staff">حاضری کارمندان</TabsTrigger>}
           </TabsList>
         )}
@@ -328,10 +408,55 @@ export function AttendanceView({ user }: { user: SessionUser }) {
                   </CardContent>
                 </Card>
                 <div className="flex justify-end">
-                  <Button onClick={saveDaily} disabled={saving} className="gap-1.5">
+                  <Button onClick={() => setConfirmOpen(true)} disabled={saving} className="gap-1.5">
                     <Save className="h-4 w-4" /> {saving ? 'در حال ذخیره...' : 'ذخیرهٔ حاضری'}
                   </Button>
                 </div>
+
+                {/* خلاصهٔ آمار پیش از ذخیره + پیام به والدین غایب */}
+                <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>خلاصهٔ حاضری — تأیید و ذخیره</DialogTitle>
+                    </DialogHeader>
+                    <p className="text-xs text-muted-foreground">{todayJ} — {isoToWeekday(date)}</p>
+                    <div className="grid grid-cols-4 gap-2 text-center">
+                      <div className="rounded-lg border p-2"><p className="text-lg font-bold text-emerald-700">{toPersianDigits(marksSummary.present)}</p><p className="text-[10px] text-muted-foreground">حاضر</p></div>
+                      <div className="rounded-lg border p-2"><p className="text-lg font-bold text-rose-600">{toPersianDigits(marksSummary.absent)}</p><p className="text-[10px] text-muted-foreground">غایب</p></div>
+                      <div className="rounded-lg border p-2"><p className="text-lg font-bold text-amber-600">{toPersianDigits(marksSummary.sick)}</p><p className="text-[10px] text-muted-foreground">مریض</p></div>
+                      <div className="rounded-lg border p-2"><p className="text-lg font-bold text-sky-700">{toPersianDigits(marksSummary.leave)}</p><p className="text-[10px] text-muted-foreground">رخصت</p></div>
+                    </div>
+                    {marksSummary.absent > 0 ? (
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-medium flex items-center gap-1"><MessageSquare className="h-3.5 w-3.5" /> پیام به والدین غایب‌ها (پیام‌رسان تلفن):</p>
+                        <div className="max-h-32 overflow-y-auto space-y-1">
+                          {marksSummary.absentees.map((s) => {
+                            const link = absentSmsLink(s);
+                            return link ? (
+                              <a key={s.id} href={link} className="flex items-center justify-between rounded-md border px-2.5 py-1.5 text-xs hover:bg-accent">
+                                <span>{fullName(s)}</span>
+                                <span className="text-[10px] text-muted-foreground" dir="ltr">{s.guardianPhone}</span>
+                              </a>
+                            ) : (
+                              <div key={s.id} className="flex items-center justify-between rounded-md border px-2.5 py-1.5 text-xs opacity-60">
+                                <span>{fullName(s)}</span>
+                                <span className="text-[10px] text-amber-600">شمارهٔ والد ثبت نشده</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-emerald-700 flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" /> غایبی نیست — آمار کامل است</p>
+                    )}
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="outline" onClick={() => setConfirmOpen(false)}>بازگشت</Button>
+                      <Button onClick={saveDaily} disabled={saving} className="gap-1.5">
+                        <Save className="h-4 w-4" /> تأیید و ذخیره
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </>
             )}
           </TabsContent>
@@ -468,6 +593,84 @@ export function AttendanceView({ user }: { user: SessionUser }) {
             </Card>
           )}
         </TabsContent>
+
+        {/* ─── آمار سالانه ─── */}
+        {canMark && (
+          <TabsContent value="annual" className="space-y-4">
+            <div className="flex flex-wrap items-end gap-2">
+              <Field label="صنف">
+                <Select value={annualClass} onValueChange={setAnnualClass}>
+                  <SelectTrigger className="w-[180px]"><SelectValue placeholder="انتخاب صنف" /></SelectTrigger>
+                  <SelectContent>
+                    {classes.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="سال شمسی">
+                <Input type="number" className="w-[110px]" value={annualYear} onChange={(e) => setAnnualYear(Number(e.target.value))} />
+              </Field>
+            </div>
+            {annualLoading ? (
+              <LoadingBlock rows={4} />
+            ) : !annualClass ? (
+              <EmptyState message="برای آمار سالانه، صنف را انتخاب کنید." icon={BarChart3} />
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">مجموع روزهای ثبت‌شده در سال {toPersianDigits(annualYear)}: {toPersianDigits(new Set(annualRecords.map((r) => r.date)).size)} روز</p>
+                  <Button variant="outline" size="sm" onClick={exportAnnualExcel} className="gap-1 no-print">
+                    <FileSpreadsheet className="h-4 w-4" /> Excel
+                  </Button>
+                </div>
+                <Card className="border-emerald-100">
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto nice-scroll max-h-[60vh] overflow-y-auto">
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-emerald-50">
+                          <TableRow>
+                            <TableHead>شماره</TableHead>
+                            <TableHead>شهرت شاگرد</TableHead>
+                            <TableHead>حاضر</TableHead>
+                            <TableHead>غایب</TableHead>
+                            <TableHead>مریض</TableHead>
+                            <TableHead>رخصت</TableHead>
+                            <TableHead>نسبت حاضری</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {annualSummary.map((r, i) => {
+                            const pct = r.total > 0 ? Math.round((r.present / r.total) * 100) : 0;
+                            return (
+                              <TableRow key={r.student.id}>
+                                <TableCell>{toPersianDigits(i + 1)}</TableCell>
+                                <TableCell className="font-medium">{fullName(r.student)}</TableCell>
+                                <TableCell className="text-emerald-700 font-semibold">{toPersianDigits(r.present)}</TableCell>
+                                <TableCell className="text-rose-600 font-semibold">{toPersianDigits(r.absent)}</TableCell>
+                                <TableCell className="text-amber-600">{toPersianDigits(r.sick)}</TableCell>
+                                <TableCell className="text-sky-700">{toPersianDigits(r.leave)}</TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
+                                      <div className={cn('h-full', pct >= 80 ? 'bg-emerald-600' : pct >= 60 ? 'bg-amber-500' : 'bg-rose-500')} style={{ width: `${pct}%` }} />
+                                    </div>
+                                    <span className="text-xs">{toPersianDigits(pct)}٪</span>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                          {annualSummary.length === 0 && (
+                            <TableRow><TableCell colSpan={7} className="p-6 text-center text-sm text-muted-foreground">دادهٔ حاضری برای این سال موجود نیست</TableCell></TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </TabsContent>
+        )}
 
         {/* ─── حاضری کارمندان ─── */}
         {['ADMIN', 'HEADTEACHER'].includes(user.role) && (

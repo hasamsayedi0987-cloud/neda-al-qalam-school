@@ -104,14 +104,22 @@ export async function POST(req: NextRequest) {
       if (!loan) throw new ApiError('امانت یافت نشد');
       if (loan.status === 'RETURNED') throw new ApiError('این کتاب قبلاً پس داده شده است');
       const today = new Date().toISOString().slice(0, 10);
+      // جریمهٔ دیرکرد — روزهای تأخیر × نرخ روزانه از تنظیمات (پیش‌فرض ۵ افغانی)
+      let fine: number | null = null;
+      if (today > loan.dueDate) {
+        const lateDays = Math.ceil((new Date(today).getTime() - new Date(loan.dueDate).getTime()) / 86_400_000);
+        const rateSetting = await db.setting.findUnique({ where: { key: 'finePerDay' } });
+        const rate = Number(rateSetting?.value ?? 5) || 0;
+        fine = Math.max(0, Math.round(lateDays * rate));
+      }
       await db.$transaction([
         db.bookLoan.update({
           where: { id: loanId },
-          data: { status: 'RETURNED', returnDate: today },
+          data: { status: 'RETURNED', returnDate: today, fineAmount: fine },
         }),
         db.book.update({ where: { id: loan.bookId }, data: { available: { increment: 1 } } }),
       ]);
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({ ok: true, fine });
     }
 
     throw new ApiError('عملیات نامعلوم');

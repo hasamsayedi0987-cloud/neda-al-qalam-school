@@ -24,6 +24,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   notifications Notification[]
+  sentMessages Message[] @relation("sentMessages")
   teacherProfile Teacher?  @relation(fields: [teacherId], references: [id])
   studentProfile Student?  @relation("StudentUsers", fields: [studentId], references: [id])
 }
@@ -34,6 +35,8 @@ model Class {
   id           String   @id @default(cuid())
   grade        Int // ۱ تا ۱۲
   name         String // صنف اول، صنف دوم ...
+  capacity     Int? // ظرفیت صنف — هشدار در صورت پر شدن
+  monthlyFee   Float? // فیس ماهانهٔ پیش‌فرض این صنف (افغانی)
   supervisorId String? // نگران صنف (معلم)
   actingSupervisorId String? // نگران موقت (در غیاب نگران اصلی — تعیین توسط مدیر)
   createdAt    DateTime @default(now())
@@ -43,15 +46,19 @@ model Class {
   actingSupervisor Teacher?     @relation("actingSupervisor", fields: [actingSupervisorId], references: [id])
   students      Student[]
   classSubjects ClassSubject[]
+  scheduleSlots ScheduleSlot[]
 }
 
 model Subject {
   id        String   @id @default(cuid())
   name      String
+  code      String? // کد اختصاصی مضمون (برای کارنامه و اسناد)
+  credits   Int? // تعداد واحد درسی
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   classSubjects ClassSubject[]
+  scheduleSlots ScheduleSlot[]
 }
 
 // تقسیم مضامین به صنف و معلم
@@ -69,6 +76,25 @@ model ClassSubject {
   grades   Grade[]
 
   @@unique([classId, subjectId])
+}
+
+// برنامهٔ هفتگی صنف‌ها — با هشدار تداخل زمانی معلم
+model ScheduleSlot {
+  id        String  @id @default(cuid())
+  classId   String
+  subjectId String
+  teacherId String?
+  day       Int     // ۰=شنبه … ۵=جمعه
+  period    Int     // پریود دورهٔ درسی (۱، ۲، …)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  class   Class         @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject Subject       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher Teacher?      @relation(fields: [teacherId], references: [id])
+
+  @@unique([classId, day, period])
+  @@index([teacherId, day, period])
 }
 
 // ═══════════════ اشخاص ═══════════════
@@ -89,6 +115,7 @@ model Teacher {
   supervised       Class[]        @relation("supervisor")
   actingClasses    Class[]        @relation("actingSupervisor")
   classSubjects    ClassSubject[]
+  scheduleSlots    ScheduleSlot[]
   attendances      StaffAttendance[]
   tasks            StaffTask[]    @relation("assignedTo")
   assignedTasks    StaffTask[]    @relation("assignedBy")
@@ -119,6 +146,7 @@ model Student {
   activities StudentActivity[]
   grades     Grade[]
   loans      BookLoan[]
+  feePayments FeePayment[]
   users      User[] @relation("StudentUsers")
 }
 
@@ -162,6 +190,7 @@ model StudentActivity {
   type       String // HOMEWORK | BEHAVIOR | PARTICIPATION | OTHER
   score      Int? // نمره یا امتیاز ۰-۱۰۰
   note       String
+  image      String? // عکس فعالیت (dataURL فشرده — اختیاری)
   recordedBy String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -220,6 +249,7 @@ model BookLoan {
   dueDate      String
   returnDate   String?
   status       String   @default("LENT") // LENT | RETURNED
+  fineAmount   Float? // جریمهٔ دیرکرد (ثبت هنگام پس‌دادن)
   notes        String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -259,6 +289,46 @@ model StaffTask {
 
   staff      Teacher? @relation("assignedTo", fields: [staffId], references: [id])
   assigner   Teacher? @relation("assignedBy", fields: [assignedBy], references: [id])
+}
+
+// ═══════════════ مدیریت مالی و فیس ═══════════════
+
+model FeePayment {
+  id         String   @id @default(cuid())
+  studentId  String
+  month      String   // ماه شمسی «1405-10»
+  amount     Float    // مبلغ پرداختی (افغانی)
+  paidAt     String   // تاریخ پرداخت ISO yyyy-mm-dd
+  method     String   @default("CASH") // CASH | BANK
+  note       String?
+  recordedBy String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, month])
+  @@index([month])
+}
+
+// ═══════════════ پیام‌ها و ارتباطات ═══════════════
+
+model Message {
+  id        String   @id @default(cuid())
+  fromUserId String
+  toUserId  String?  // مستقیم — برای پیام همگانی null است
+  toRole    String?  // همگانی به یک نقش (ADMIN | TEACHER | GUARDIAN | …)
+  toClassId String?  // همگانی به والدین یک صنف
+  subject   String?
+  body      String
+  category  String   @default("GENERAL") // GENERAL | ACADEMIC | DISCIPLINARY | ANNOUNCEMENT
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  fromUser User @relation("sentMessages", fields: [fromUserId], references: [id], onDelete: Cascade)
+
+  @@index([toUserId, read])
+  @@index([fromUserId])
 }
 
 // ═══════════════ تنظیمات (کلید-مقدار) ═══════════════

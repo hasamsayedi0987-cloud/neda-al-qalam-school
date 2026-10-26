@@ -15,9 +15,20 @@ import { toPersianDigits } from '@/lib/jalali';
 import { gradeName } from '@/lib/grading';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, ClassInfo, TeacherInfo, SubjectInfo } from '@/lib/types';
-import { Plus, Pencil, Trash2, School, BookOpen, UserLock } from 'lucide-react';
+import { Plus, Pencil, Trash2, School, BookOpen, UserLock, CalendarDays, Copy, AlertTriangle } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-const EMPTY_FORM = { id: '', grade: '1', name: '', supervisorId: '', actingSupervisorId: '' };
+const EMPTY_FORM = { id: '', grade: '1', name: '', supervisorId: '', actingSupervisorId: '', capacity: '', monthlyFee: '' };
+
+const DAYS = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
+const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8];
+
+interface ScheduleSlotInfo {
+  id: string; classId: string; className: string;
+  subjectId: string; subjectName: string;
+  teacherId: string | null; teacherName: string | null;
+  day: number; period: number;
+}
 
 export function ClassesView({ user }: { user: SessionUser }) {
   const [classes, setClasses] = useState<ClassInfo[]>([]);
@@ -29,6 +40,14 @@ export function ClassesView({ user }: { user: SessionUser }) {
   const [assignClass, setAssignClass] = useState<ClassInfo | null>(null);
   const [assignSubject, setAssignSubject] = useState('');
   const [assignTeacher, setAssignTeacher] = useState('');
+  // برنامهٔ هفتگی + دیالوگ ویرایش یک اسلات
+  const [schedClass, setSchedClass] = useState<ClassInfo | null>(null);
+  const [slots, setSlots] = useState<ScheduleSlotInfo[]>([]);
+  const [slotEdit, setSlotEdit] = useState<{ day: number; period: number; existing?: ScheduleSlotInfo } | null>(null);
+  const [slotSubject, setSlotSubject] = useState('');
+  const [slotTeacher, setSlotTeacher] = useState('');
+  // کپی تقسیم مضامین از صنف دیگر
+  const [copyFrom, setCopyFrom] = useState('');
   const { toast } = useToast();
 
   const canEdit = ['ADMIN', 'HEADTEACHER'].includes(user.role);
@@ -44,6 +63,10 @@ export function ClassesView({ user }: { user: SessionUser }) {
       setClasses(c.classes);
       setTeachers(t.teachers);
       setSubjects(s.subjects);
+      try {
+        const sch = await apiGet<{ slots: ScheduleSlotInfo[] }>('/api/schedule');
+        setSlots(sch.slots || []);
+      } catch { /* برنامهٔ هفتگی هنوز خالی است */ }
     } catch (e) {
       toast({ title: 'خطا', description: e instanceof Error ? e.message : 'بارگذاری ناموفق', variant: 'destructive' });
     }
@@ -57,12 +80,14 @@ export function ClassesView({ user }: { user: SessionUser }) {
       ...form, grade: Number(form.grade),
       supervisorId: form.supervisorId || null,
       actingSupervisorId: form.actingSupervisorId || null,
+      capacity: form.capacity ? Number(form.capacity) : null,
+      monthlyFee: form.monthlyFee ? Number(form.monthlyFee) : null,
     });
     if (res.error) {
       toast({ title: 'خطا', description: res.error, variant: 'destructive' });
       return;
     }
-    toast({ title: 'ذخیره شد' });
+    toast({ title: res.queued ? 'در حافظهٔ گوشی — پس از اتصال همگام می‌شود' : 'ذخیره شد' });
     setDialogOpen(false);
     load();
   };
@@ -105,6 +130,77 @@ export function ClassesView({ user }: { user: SessionUser }) {
     load();
   };
 
+  // ─── برنامهٔ هفتگی ───
+  const openSchedule = (c: ClassInfo) => {
+    setSchedClass(c);
+    void apiGet<{ slots: ScheduleSlotInfo[] }>('/api/schedule').then((d) => setSlots(d.slots || [])).catch(() => {});
+  };
+
+  const openSlot = (day: number, period: number) => {
+    if (!schedClass) return;
+    const existing = slots.find((s) => s.classId === schedClass.id && s.day === day && s.period === period);
+    setSlotEdit({ day, period, existing });
+    setSlotSubject(existing?.subjectId || '');
+    setSlotTeacher(existing?.teacherId || '');
+  };
+
+  /** پیش‌هشدار تداخل معلم — سرور هم با ۴۰۹ گارد می‌کند */
+  const clashInfo = (teacherId: string, day: number, period: number, exceptClassId?: string) => {
+    if (!teacherId) return null;
+    const hit = slots.find((s) => s.teacherId === teacherId && s.day === day && s.period === period && s.classId !== exceptClassId);
+    return hit ? `${hit.className} (${hit.subjectName})` : null;
+  };
+
+  const saveSlot = async () => {
+    if (!schedClass || !slotEdit) return;
+    if (!slotSubject) {
+      toast({ title: 'مضمون را انتخاب کنید', variant: 'destructive' });
+      return;
+    }
+    const clash = clashInfo(slotTeacher, slotEdit.day, slotEdit.period, schedClass.id);
+    if (clash && !window.confirm(`تداخل زمانی: این معلم در همین وقت در صنف ${clash} است. آیا باز هم ذخیره شود؟\n(تداخل روی سرور رد می‌شود — ابتدا برنامهٔ آن صنف را اصلاح کنید)`)) return;
+    const res = await apiSend('/api/schedule', 'POST', {
+      classId: schedClass.id, subjectId: slotSubject, teacherId: slotTeacher || null,
+      day: slotEdit.day, period: slotEdit.period,
+    }, { queueLabel: `برنامهٔ هفتگی ${schedClass.name}` });
+    if (res.error) {
+      toast({ title: res.error, variant: 'destructive' });
+      return;
+    }
+    toast({ title: res.queued ? 'در حافظهٔ گوشی — پس از اتصال همگام می‌شود' : 'برنامهٔ هفتگی ذخیره شد' });
+    setSlotEdit(null);
+    void load();
+    void apiGet<{ slots: ScheduleSlotInfo[] }>('/api/schedule').then((d) => setSlots(d.slots || [])).catch(() => {});
+  };
+
+  const clearSlot = async () => {
+    if (!schedClass || !slotEdit?.existing) return;
+    const res = await apiSend(`/api/schedule?id=${slotEdit.existing.id}`, 'DELETE');
+    if (res.error) {
+      toast({ title: res.error, variant: 'destructive' });
+      return;
+    }
+    setSlotEdit(null);
+    void load();
+    void apiGet<{ slots: ScheduleSlotInfo[] }>('/api/schedule').then((d) => setSlots(d.slots || [])).catch(() => {});
+  };
+
+  // ─── کپی تقسیم مضامین از صنف دیگر ───
+  const copyDivision = async () => {
+    if (!assignClass || !copyFrom) return;
+    if (!window.confirm(`تقسیم مضامین از صنف انتخابی به «${assignClass.name}» کپی شود؟ مضامین موجود دست نمی‌خورند.`)) return;
+    const res = await apiSend<{ copied?: number }>('/api/classes/assign', 'POST', {
+      action: 'copy-division', fromClassId: copyFrom, toClassId: assignClass.id,
+    });
+    if (res.error) {
+      toast({ title: res.error, variant: 'destructive' });
+      return;
+    }
+    toast({ title: res.queued ? 'در حافظهٔ گوشی — پس از اتصال همگام می‌شود' : `${toPersianDigits(res.data?.copied ?? 0)} مضمون کپی شد` });
+    setCopyFrom('');
+    load();
+  };
+
   if (loading) return <LoadingBlock rows={5} />;
 
   return (
@@ -131,8 +227,16 @@ export function ClassesView({ user }: { user: SessionUser }) {
                   <div>
                     <p className="font-bold text-emerald-900">{c.name}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      شاگردان: {toPersianDigits(c.studentCount || 0)} | نگران صنف: {c.supervisorName || 'تعیین نشده'}
+                      شاگردان: {toPersianDigits(c.studentCount || 0)}
+                      {c.capacity ? ` از ${toPersianDigits(c.capacity)}` : ''}
+                      {' | '}نگران صنف: {c.supervisorName || 'تعیین نشده'}
                     </p>
+                    {c.capacity != null && c.studentCount != null && c.studentCount >= c.capacity && (
+                      <p className="text-xs text-rose-600 mt-1 flex items-center gap-1 font-medium">
+                        <AlertTriangle className="h-3 w-3" />
+                        ظرفیت تکمیل است ({toPersianDigits(c.studentCount)}/{toPersianDigits(c.capacity)})
+                      </p>
+                    )}
                     {c.actingSupervisorName && (
                       <p className="text-xs text-amber-700 mt-0.5 flex items-center gap-1">
                         <UserLock className="h-3 w-3" /> نگران موقت: {c.actingSupervisorName}
@@ -147,6 +251,8 @@ export function ClassesView({ user }: { user: SessionUser }) {
                           setForm({
                             id: c.id, grade: String(c.grade), name: c.name, supervisorId: c.supervisorId || '',
                             actingSupervisorId: c.actingSupervisorId || '',
+                            capacity: c.capacity != null ? String(c.capacity) : '',
+                            monthlyFee: c.monthlyFee != null ? String(c.monthlyFee) : '',
                           });
                           setDialogOpen(true);
                         }}
@@ -188,10 +294,16 @@ export function ClassesView({ user }: { user: SessionUser }) {
                 </div>
 
                 {canEdit && (
-                  <Button variant="outline" size="sm" className="w-full mt-3 gap-1 text-emerald-800 border-emerald-300"
-                    onClick={() => { setAssignClass(c); setAssignSubject(''); setAssignTeacher(''); }}>
-                    <Plus className="h-3.5 w-3.5" /> سپردن مضمون به این صنف
-                  </Button>
+                  <div className="grid grid-cols-2 gap-2 mt-3">
+                    <Button variant="outline" size="sm" className="gap-1 text-emerald-800 border-emerald-300"
+                      onClick={() => { setAssignClass(c); setAssignSubject(''); setAssignTeacher(''); setCopyFrom(''); }}>
+                      <Plus className="h-3.5 w-3.5" /> سپردن مضمون
+                    </Button>
+                    <Button variant="outline" size="sm" className="gap-1 text-teal-800 border-teal-300"
+                      onClick={() => openSchedule(c)}>
+                      <CalendarDays className="h-3.5 w-3.5" /> برنامهٔ هفتگی
+                    </Button>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -241,6 +353,14 @@ export function ClassesView({ user }: { user: SessionUser }) {
                 </SelectContent>
               </Select>
             </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="ظرفیت صنف" hint="خالی = بدون حد — در صورت تکمیل هشدار می‌دهد">
+                <Input type="number" min="1" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} placeholder="مثال: ۴۰" />
+              </Field>
+              <Field label="فیس ماهانه (افغانی)" hint="پیش‌فرض بخش مالی">
+                <Input type="number" min="0" value={form.monthlyFee} onChange={(e) => setForm({ ...form, monthlyFee: e.target.value })} placeholder="مثال: ۳۰۰" />
+              </Field>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>انصراف</Button>
@@ -260,7 +380,7 @@ export function ClassesView({ user }: { user: SessionUser }) {
               <Select value={assignSubject} onValueChange={setAssignSubject}>
                 <SelectTrigger><SelectValue placeholder="انتخاب مضمون" /></SelectTrigger>
                 <SelectContent>
-                  {subjects.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                  {subjects.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}{s.code ? ` (${s.code})` : ''}</SelectItem>)}
                 </SelectContent>
               </Select>
             </Field>
@@ -275,6 +395,25 @@ export function ClassesView({ user }: { user: SessionUser }) {
                 </SelectContent>
               </Select>
             </Field>
+            <Separator />
+            <Field
+              label="کپی تقسیم مضامین از صنف دیگر"
+              hint="برای سال تحصیلی جدید: همهٔ مضامین و معلمان صنف مبدأ به این صنف کپی می‌شود (مضامین موجود دست نمی‌خورند)"
+            >
+              <div className="flex gap-2">
+                <Select value={copyFrom} onValueChange={setCopyFrom}>
+                  <SelectTrigger><SelectValue placeholder="انتخاب صنف مبدأ…" /></SelectTrigger>
+                  <SelectContent>
+                    {classes.filter((x) => x.id !== assignClass?.id).map((x) => (
+                      <SelectItem key={x.id} value={x.id}>{x.name} ({toPersianDigits(x.classSubjects?.length || 0)} مضمون)</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" className="gap-1 shrink-0" disabled={!copyFrom} onClick={copyDivision}>
+                  <Copy className="h-4 w-4" /> کپی
+                </Button>
+              </div>
+            </Field>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAssignClass(null)}>انصراف</Button>
@@ -282,6 +421,121 @@ export function ClassesView({ user }: { user: SessionUser }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* دیالوگ برنامهٔ هفتگی */}
+      <Dialog open={!!schedClass} onOpenChange={(v) => !v && setSchedClass(null)}>
+        <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>برنامهٔ هفتگی — {schedClass?.name}</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            روی هر خانه بزنید تا مضمون و معلم آن وقت ثبت شود؛ اگر همان معلم در همین وقت در صنف دیگر باشد، هشدار تداخل زمانی می‌بینید.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-xs">
+              <thead>
+                <tr>
+                  <th className="border p-1.5 bg-muted">پریود</th>
+                  {DAYS.map((d) => <th key={d} className="border p-1.5 bg-muted min-w-[90px]">{d}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {PERIODS.map((p) => (
+                  <tr key={p}>
+                    <td className="border p-1.5 text-center font-semibold bg-muted/50">{toPersianDigits(p)}</td>
+                    {DAYS.map((_, di) => {
+                      const slot = schedClass ? slots.find((s) => s.classId === schedClass.id && s.day === di && s.period === p) : undefined;
+                      return (
+                        <td key={di} className="border p-0">
+                          {canEdit ? (
+                            <button
+                              type="button"
+                              onClick={() => openSlot(di, p)}
+                              className={cn('w-full min-h-[44px] p-1 text-center hover:bg-accent/60 transition-colors',
+                                slot ? 'bg-emerald-50 dark:bg-emerald-950/40' : 'text-muted-foreground/50')}
+                            >
+                              {slot ? (
+                                <>
+                                  <span className="block font-medium text-[11px] leading-4">{slot.subjectName}</span>
+                                  <span className="block text-[10px] text-muted-foreground leading-4">{slot.teacherName || 'بدون معلم'}</span>
+                                </>
+                              ) : '+'}
+                            </button>
+                          ) : (
+                            <div className={cn('w-full min-h-[44px] p-1 text-center', slot && 'bg-emerald-50 dark:bg-emerald-950/40')}>
+                              {slot ? (
+                                <>
+                                  <span className="block font-medium text-[11px] leading-4">{slot.subjectName}</span>
+                                  <span className="block text-[10px] text-muted-foreground leading-4">{slot.teacherName || ''}</span>
+                                </>
+                              ) : <span className="text-muted-foreground/30">—</span>}
+                            </div>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* دیالوگ ویرایش یک اسلات */}
+      <Dialog open={!!slotEdit} onOpenChange={(v) => !v && setSlotEdit(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {slotEdit ? `${DAYS[slotEdit.day]} — پریود ${toPersianDigits(slotEdit.period)}` : ''}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <Field label="مضمون *">
+              <Select value={slotSubject} onValueChange={setSlotSubject}>
+                <SelectTrigger><SelectValue placeholder="انتخاب مضمون" /></SelectTrigger>
+                <SelectContent>
+                  {(schedClass?.classSubjects || []).map((cs) => (
+                    <SelectItem key={cs.subjectId} value={cs.subjectId}>{cs.subject.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {(schedClass?.classSubjects || []).length === 0 && (
+                <p className="text-[11px] text-amber-600">اول برای این صنف مضمون سپرده شود (دکمهٔ «سپردن مضمون»)</p>
+              )}
+            </Field>
+            <Field label="معلم">
+              <Select value={slotTeacher || 'none'} onValueChange={setSlotTeacher}>
+                <SelectTrigger><SelectValue placeholder="انتخاب معلم" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">بدون معلم</SelectItem>
+                  {teachers.filter((t) => t.active).map((t) => {
+                    const clash = slotEdit && slotTeacher === t.id ? clashInfo(t.id, slotEdit.day, slotEdit.period, schedClass?.id) : null;
+                    return (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}{clash ? ` — تداخل با ${clash}` : ''}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+              {slotEdit && slotTeacher && clashInfo(slotTeacher, slotEdit.day, slotEdit.period, schedClass?.id) && (
+                <p className="text-[11px] text-rose-600 flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  این معلم در همین وقت در صنف {clashInfo(slotTeacher, slotEdit.day, slotEdit.period, schedClass?.id)} است
+                </p>
+              )}
+            </Field>
+          </div>
+          <DialogFooter>
+            {slotEdit?.existing && (
+              <Button variant="ghost" className="text-rose-600 ms-auto" onClick={clearSlot}>خالی کردن این وقت</Button>
+            )}
+            <Button variant="outline" onClick={() => setSlotEdit(null)}>انصراف</Button>
+            <Button onClick={saveSlot}>ذخیره</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

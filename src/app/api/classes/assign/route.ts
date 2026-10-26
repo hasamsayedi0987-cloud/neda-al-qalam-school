@@ -3,11 +3,35 @@ import { db } from '@/lib/db';
 import { requireRole, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
 
-/** تقسیم مضامین به صنف و معلم */
+/** تقسیم مضامین به صنف و معلم + کپی تقسیم از صنف دیگر (انتقال به سال تحصیلی جدید) */
 export async function POST(req: NextRequest) {
   try {
     await requireRole('ADMIN', 'HEADTEACHER');
     const body = await req.json();
+
+    // ─── کپی تقسیم مضامین از یک صنف به صنف دیگر ───
+    if (str(body.action) === 'copy-division') {
+      const fromClassId = str(body.fromClassId);
+      const toClassId = str(body.toClassId);
+      if (!fromClassId || !toClassId) throw new ApiError('صنف مبدأ و مقصد لازم است');
+      if (fromClassId === toClassId) throw new ApiError('صنف مبدأ و مقصد نباید یکی باشد');
+      const [from, to] = await Promise.all([
+        db.class.findUnique({ where: { id: fromClassId }, include: { classSubjects: true } }),
+        db.class.findUnique({ where: { id: toClassId }, include: { classSubjects: true } }),
+      ]);
+      if (!from || !to) throw new ApiError('صنف یافت نشد');
+      let copied = 0;
+      for (const cs of from.classSubjects) {
+        const exists = to.classSubjects.some((x) => x.subjectId === cs.subjectId);
+        if (exists) continue; // مضامین موجود دست نمی‌خورند
+        await db.classSubject.create({
+          data: { classId: toClassId, subjectId: cs.subjectId, teacherId: cs.teacherId },
+        });
+        copied += 1;
+      }
+      return NextResponse.json({ ok: true, copied });
+    }
+
     const classId = str(body.classId);
     const subjectId = str(body.subjectId);
     const teacherId = str(body.teacherId) || null;

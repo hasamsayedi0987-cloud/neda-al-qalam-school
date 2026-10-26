@@ -11,7 +11,7 @@ import { handleApiError, str } from '@/lib/api-helpers';
 export interface CustomField {
   key: string;
   label: string;
-  type: 'text' | 'number' | 'date' | 'textarea' | 'select';
+  type: 'text' | 'number' | 'date' | 'textarea' | 'select' | 'checkbox' | 'file';
   options?: string;
   required?: boolean;
 }
@@ -69,7 +69,7 @@ function validateFieldList(fields: unknown): CustomField[] {
     const key = str(f.key).replace(/[^a-zA-Z0-9_]/g, '');
     const label = str(f.label);
     if (!key || !label) continue;
-    const type = ['text', 'number', 'date', 'textarea', 'select'].includes(str(f.type))
+    const type = ['text', 'number', 'date', 'textarea', 'select', 'checkbox', 'file'].includes(str(f.type))
       ? (str(f.type) as CustomField['type']) : 'text';
     clean.push({
       key, label, type,

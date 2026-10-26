@@ -13,7 +13,9 @@ import { PageHeader, LoadingBlock, EmptyState, Field } from './ui-bits';
 import { apiGet, apiSend } from '@/lib/client/api';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, TeacherInfo } from '@/lib/types';
-import { Plus, Pencil, Trash2, UserCog, BookOpen, UserPlus } from 'lucide-react';
+import { Plus, Pencil, Trash2, UserCog, BookOpen, UserPlus, Phone, MessageSquare, CalendarClock } from 'lucide-react';
+import { toPersianDigits } from '@/lib/jalali';
+import { cn } from '@/lib/utils';
 
 const POSITIONS = ['معلم', 'سرمعلم', 'مدیر', 'ملازم', 'کارمند', 'کتابخانه‌دار'];
 
@@ -28,6 +30,8 @@ export function TeachersView({ user }: { user: SessionUser }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const { toast } = useToast();
+  // حجم کاری: تعداد پریودهای هفتگی هر معلم از برنامهٔ هفتگی
+  const [weeklyPeriods, setWeeklyPeriods] = useState<Record<string, number>>({});
   // ساخت سریع حساب کاربری برای معلم بدون حساب (رفع «بدون حساب» — ریشهٔ دیده‌نشدن مضامین)
   const [accDialog, setAccDialog] = useState<TeacherInfo | null>(null);
   const [accForm, setAccForm] = useState({ username: '', password: '', role: 'TEACHER' });
@@ -39,6 +43,15 @@ export function TeachersView({ user }: { user: SessionUser }) {
     try {
       const data = await apiGet<{ teachers: TeacherInfo[] }>('/api/teachers');
       setTeachers(data.teachers);
+      // برنامهٔ هفتگی برای حجم کاری — اگر در دسترس نبود، ستون از دسترسی می‌گذرد
+      try {
+        const sch = await apiGet<{ slots: { teacherId: string | null }[] }>('/api/schedule');
+        const per: Record<string, number> = {};
+        for (const s of sch.slots || []) {
+          if (s.teacherId) per[s.teacherId] = (per[s.teacherId] || 0) + 1;
+        }
+        setWeeklyPeriods(per);
+      } catch { /* برنامهٔ هفتگی خالی یا در دسترس نیست */ }
     } catch (e) {
       toast({ title: 'خطا', description: e instanceof Error ? e.message : 'بارگذاری ناموفق', variant: 'destructive' });
     }
@@ -143,8 +156,9 @@ export function TeachersView({ user }: { user: SessionUser }) {
                     <TableHead>ولد</TableHead>
                     <TableHead>وظیفه</TableHead>
                     <TableHead className="hidden md:table-cell">تحصیلات</TableHead>
-                    <TableHead className="hidden md:table-cell">تماس</TableHead>
+                    <TableHead className="hidden md:table-cell">تماس سریع</TableHead>
                     <TableHead className="hidden lg:table-cell">حساب کاربری</TableHead>
+                    <TableHead>حجم کاری</TableHead>
                     <TableHead>مضامین سپرده‌شده</TableHead>
                     <TableHead>فعال</TableHead>
                     {canEdit && <TableHead className="text-left">عملیات</TableHead>}
@@ -162,7 +176,19 @@ export function TeachersView({ user }: { user: SessionUser }) {
                         </Badge>
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-xs">{t.education || '—'}</TableCell>
-                      <TableCell className="hidden md:table-cell text-xs" dir="ltr">{t.phone ? t.phone : '—'}</TableCell>
+                      <TableCell className="hidden md:table-cell text-xs" dir="ltr">
+                        {t.phone ? (
+                          <div className="flex items-center gap-1">
+                            <a href={`tel:${t.phone}`} className="inline-flex h-6 w-6 items-center justify-center rounded-md border hover:bg-accent" aria-label={`تماس با ${t.name}`}>
+                              <Phone className="h-3 w-3 text-emerald-700" />
+                            </a>
+                            <a href={`sms:${t.phone}`} className="inline-flex h-6 w-6 items-center justify-center rounded-md border hover:bg-accent" aria-label={`پیام به ${t.name}`}>
+                              <MessageSquare className="h-3 w-3 text-emerald-700" />
+                            </a>
+                            <span>{t.phone}</span>
+                          </div>
+                        ) : '—'}
+                      </TableCell>
                       <TableCell className="hidden lg:table-cell text-xs" dir="ltr">
                         {t.username ? (
                           <span className={t.userActive ? 'text-emerald-700' : 'text-rose-600'}>
@@ -178,6 +204,16 @@ export function TeachersView({ user }: { user: SessionUser }) {
                             </Button>
                           ) : 'بدون حساب'
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-0.5 text-xs" title="واحدها و پریودهای هفتگی">
+                          <span className={cn((weeklyPeriods[t.id] || 0) > 20 && 'text-amber-600 font-semibold')}>
+                            <CalendarClock className="inline h-3 w-3 ml-1 opacity-60" />
+                            {toPersianDigits(t.assignments?.length || 0)} مضمون
+                            {weeklyPeriods[t.id] != null && ` — ${toPersianDigits(weeklyPeriods[t.id])} پریود/هفته`}
+                          </span>
+                          {(weeklyPeriods[t.id] || 0) > 20 && <span className="text-[10px] text-amber-600">تراکم کاری بالا!</span>}
+                        </div>
                       </TableCell>
                       <TableCell>
                         {(t.assignments?.length || 0) === 0 ? (

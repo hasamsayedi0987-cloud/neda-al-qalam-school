@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import type { Prisma } from '@prisma/client';
 import { requireUser, requireRole, requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
-import { jalaliMonthRange } from '@/lib/jalali';
+import { jalaliMonthRange, jalaliToGregorian } from '@/lib/jalali';
 import { teacherClassIds } from '@/lib/teacher-scope';
 
 /** بررسی دسترسی معلم به صنف — مدیر و سرمعلم همه صنف‌ها */
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
       const students = await db.student.findMany({
         where: { classId, status: 'ACTIVE' },
         orderBy: { rollNo: 'asc' },
-        select: { id: true, firstName: true, lastName: true, fatherName: true, rollNo: true },
+        select: { id: true, firstName: true, lastName: true, fatherName: true, rollNo: true, guardianName: true, guardianPhone: true },
       });
       const records = await db.attendanceRecord.findMany({
         where: { classId, ...(date ? { date } : {}) },
@@ -105,6 +105,31 @@ export async function GET(req: NextRequest) {
       });
       const records = await db.attendanceRecord.findMany({
         where: { classId, date: { gte: startIso, lte: endIso } },
+      });
+      return NextResponse.json({ students, records });
+    }
+
+    // ─── آمار سالانه ───
+    if (mode === 'annual') {
+      const jy = Number(sp.get('jy'));
+      if (!jy) throw new ApiError('سال شمسی را انتخاب کنید');
+      const classId = sp.get('classId') || '';
+      if (!classId) throw new ApiError('صنف را انتخاب کنید');
+      await assertClassScope(me, classId);
+      // مرز سال شمسی: از ۱/۱ تا ۱۲/آخر (مبدل به ISO)
+      const startG = jalaliToGregorian(jy, 1, 1);
+      const endG = jalaliToGregorian(jy + 1, 1, 1);
+      const fmt = (g: { gy: number; gm: number; gd: number }) =>
+        `${g.gy}-${String(g.gm).padStart(2, '0')}-${String(g.gd).padStart(2, '0')}`;
+      const startIso = fmt(startG);
+      const endIso = fmt(endG); // بعد از پایان سال — مرز باز
+      const students = await db.student.findMany({
+        where: { classId, status: 'ACTIVE' },
+        orderBy: { rollNo: 'asc' },
+        select: { id: true, firstName: true, lastName: true, fatherName: true, rollNo: true },
+      });
+      const records = await db.attendanceRecord.findMany({
+        where: { classId, date: { gte: startIso, lt: endIso } },
       });
       return NextResponse.json({ students, records });
     }

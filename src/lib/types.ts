@@ -15,6 +15,8 @@ export interface ClassInfo {
   id: string;
   grade: number;
   name: string;
+  capacity?: number | null; // ظرفیت صنف
+  monthlyFee?: number | null; // فیس ماهانهٔ پیش‌فرض
   supervisorId: string | null;
   supervisorName?: string | null;
   actingSupervisorId?: string | null;
@@ -26,6 +28,8 @@ export interface ClassInfo {
 export interface SubjectInfo {
   id: string;
   name: string;
+  code?: string | null; // کد اختصاصی مضمون
+  credits?: number | null; // تعداد واحد درسی
 }
 
 export interface ClassSubjectInfo {
@@ -108,6 +112,7 @@ export interface ActivityInfo {
   type: string;
   score?: number | null;
   note: string;
+  image?: string | null; // عکس فعالیت (dataURL)
 }
 
 export interface BookInfo {
@@ -132,6 +137,8 @@ export interface LoanInfo {
   dueDate: string;
   returnDate?: string | null;
   status: string;
+  fineAmount?: number | null; // جریمهٔ دیرکرد ثبت‌شده
+  overdue?: boolean; // آیا موعد برگشت گذشته؟
 }
 
 export interface NotificationInfo {

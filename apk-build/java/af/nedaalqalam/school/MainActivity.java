@@ -12,13 +12,17 @@ import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Base64;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
+import android.webkit.DownloadListener;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -71,7 +75,7 @@ public class MainActivity extends Activity {
         }
     };
 
-    /** پل جاوااسکریپت — دکمهٔ «تلاش مجدد» صفحهٔ خطا */
+    /** پل جاوااسکریپت — دکمهٔ «تلاش مجدد» صفحهٔ خطا + ذخیرهٔ فایل‌های خروجی (Word/Excel/PDF) */
     private class Bridge {
         @JavascriptInterface
         public void retry() {
@@ -84,6 +88,65 @@ public class MainActivity extends Activity {
                 }
             });
         }
+
+        /** ذخیرهٔ فایل خروجی اپ (blob → base64 از جاوااسکریپت) در پوشهٔ Downloads گوشی */
+        @JavascriptInterface
+        public void saveFile(String base64, String mime, String suggestedName) {
+            try {
+                byte[] bytes = Base64.decode(base64, Base64.DEFAULT);
+                String safeName = (suggestedName == null || suggestedName.trim().isEmpty())
+                        ? "nedaalqalam-" + String.valueOf(System.currentTimeMillis()) : suggestedName;
+                safeName = safeName.replaceAll("[\\\\/:*?\"<>|]", "-");
+                String ext = mimeToExt(mime);
+                if (ext != null && !safeName.toLowerCase().endsWith(ext)) safeName += ext;
+                String savedPath;
+                if (Build.VERSION.SDK_INT >= 29) {
+                    android.content.ContentValues cv = new android.content.ContentValues();
+                    cv.put(android.provider.MediaStore.Downloads.DISPLAY_NAME, safeName);
+                    cv.put(android.provider.MediaStore.Downloads.MIME_TYPE, mime == null ? "application/octet-stream" : mime);
+                    Uri uri = getContentResolver().insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
+                    if (uri == null) throw new Exception("insert failed");
+                    java.io.OutputStream os = getContentResolver().openOutputStream(uri);
+                    if (os == null) throw new Exception("stream failed");
+                    os.write(bytes);
+                    os.close();
+                    savedPath = "Downloads/" + safeName;
+                } else {
+                    java.io.File dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                    if (dir == null) dir = getFilesDir();
+                    java.io.File f = new java.io.File(dir, safeName);
+                    java.io.FileOutputStream fo = new java.io.FileOutputStream(f);
+                    fo.write(bytes);
+                    fo.close();
+                    savedPath = "Android/data/af.nedaalqalam.school/files/Download/" + safeName;
+                }
+                final String msg = "ذخیره شد: " + savedPath;
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Toast.makeText(MainActivity.this, msg, Toast.LENGTH_LONG).show();
+                    }
+                });
+            } catch (final Exception e) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Toast.makeText(MainActivity.this, "ذخیرهٔ فایل ناموفق بود: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    }
+                });
+            }
+        }
+    }
+
+    private static String mimeToExt(String mime) {
+        if (mime == null) return null;
+        if (mime.contains("msword")) return ".doc";
+        if (mime.contains("excel") || mime.contains("spreadsheet")) return ".xls";
+        if (mime.contains("pdf")) return ".pdf";
+        if (mime.contains("json")) return ".json";
+        if (mime.contains("image/png")) return ".png";
+        if (mime.contains("image/jpeg")) return ".jpg";
+        return null;
     }
 
     @Override
@@ -273,6 +336,31 @@ public class MainActivity extends Activity {
         });
 
         webView.addJavascriptInterface(new Bridge(), "AndroidBridge");
+
+        // ─── دانلودهای خروجی (Word/Excel/PDF از blob:) در اپ واقعی ذخیره می‌شوند ───
+        webView.setDownloadListener(new DownloadListener() {
+            @Override
+            public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimetype, long contentLength) {
+                if (url.startsWith("blob:") || url.startsWith("data:")) {
+                    // blob را در صفحه به base64 تبدیل و به پل می‌فرستیم — فایل واقعی در Downloads ذخیره می‌شود
+                    String mime = (mimetype == null || mimetype.isEmpty()) ? "application/octet-stream" : mimetype;
+                    String js = "(function(){"
+                            + "var nm=window.__noqDownloadName||'';"
+                            + "window.__noqDownloadName='';"
+                            + "fetch('" + url + "').then(function(r){return r.blob();}).then(function(b){"
+                            + "var fr=new FileReader();fr.onload=function(){AndroidBridge.saveFile(String(fr.result).split(',')[1],'" + mime + "',nm);};"
+                            + "fr.readAsDataURL(b);}).catch(function(){});})();";
+                    try {
+                        webView.evaluateJavascript(js, null);
+                        Toast.makeText(MainActivity.this, "در حال آماده‌سازی فایل…", Toast.LENGTH_SHORT).show();
+                    } catch (Exception ignored) { }
+                } else if (url.startsWith("http") || url.startsWith("https")) {
+                    try {
+                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+                    } catch (Exception ignored) { }
+                }
+            }
+        });
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override

@@ -13,12 +13,14 @@ import { Separator } from '@/components/ui/separator';
 import { PageHeader, LoadingBlock, EmptyState, Field } from './ui-bits';
 import { fullName } from '@/lib/utils';
 import { apiGet, apiSend } from '@/lib/client/api';
+import { exportExcel, printDocument, fileStamp } from '@/lib/client/exports';
 import { isoToJalaliDisplay, toPersianDigits } from '@/lib/jalali';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, StudentInfo, ClassInfo } from '@/lib/types';
 import {
   Plus, Pencil, Search, Trash2, Users, Phone, FilterX, BookOpen, UserRound,
   Upload, ArrowLeftRight, GraduationCap, IdCard, CalendarCheck, ClipboardCheck, FileUp,
+  FileDown, Printer,
 } from 'lucide-react';
 
 const EMPTY_FORM = {
@@ -63,6 +65,8 @@ export function StudentsView({ user }: { user: SessionUser }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [classFilter, setClassFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('ACTIVE');
+  const [genderFilter, setGenderFilter] = useState('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [permStudents, setPermStudents] = useState(true); // مجوز ثبت/ویرایش شاگردان برای معلم
@@ -115,6 +119,8 @@ export function StudentsView({ user }: { user: SessionUser }) {
   const filtered = useMemo(() => {
     let list = students;
     if (classFilter !== 'all') list = list.filter((s) => s.classId === classFilter);
+    if (statusFilter !== 'all') list = list.filter((s) => (s.status || 'ACTIVE') === statusFilter);
+    if (genderFilter !== 'all') list = list.filter((s) => s.gender === genderFilter);
     if (search.trim()) {
       const q = search.trim();
       list = list.filter((s) =>
@@ -122,7 +128,21 @@ export function StudentsView({ user }: { user: SessionUser }) {
       );
     }
     return list;
-  }, [students, classFilter, search]);
+  }, [students, classFilter, statusFilter, genderFilter, search]);
+
+  /** فیلتر پیشرفته: وضعیت تحصیلی و جنسیت + خروجی اکسل/PDF از لیست فیلترشده */
+  const exportStudents = (mode: 'excel' | 'pdf') => {
+    const rows = filtered.map((s, i) => {
+      const cls = classes.find((c) => c.id === s.classId)?.name || '—';
+      const status = s.status === 'GRADUATED' ? 'فراغت' : s.status === 'LEFT' ? 'ترک تحصیل' : 'فعال';
+      const gender = s.gender === 'F' ? 'اناث' : 'ذکور';
+      return `<tr><td>${toPersianDigits(i + 1)}</td><td>${fullName(s)}</td><td>${s.fatherName}</td><td>${s.grandFather || '—'}</td><td>${cls}</td><td>${gender}</td><td>${status}</td><td>${s.guardianPhone || '—'}</td></tr>`;
+    });
+    const title = `فهرست شاگردان (${toPersianDigits(filtered.length)} نفر)`;
+    const table = `<table><thead><tr><th>شماره</th><th>اسم</th><th>ولد</th><th>ولدیت</th><th>صنف</th><th>جنسیت</th><th>وضعیت</th><th>تماس سرپرست</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
+    if (mode === 'excel') exportExcel(title, table, `شاگردان-${fileStamp()}`);
+    else printDocument(title, `<div class="doc-title">${title}</div>${table}`);
+  };
 
   const openNew = () => {
     setForm({ ...EMPTY_FORM });
@@ -349,8 +369,35 @@ export function StudentsView({ user }: { user: SessionUser }) {
             ))}
           </SelectContent>
         </Select>
-        {(classFilter !== 'all' || search) && (
-          <Button variant="ghost" onClick={() => { setClassFilter('all'); setSearch(''); }} className="gap-1">
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[140px]" aria-label="وضعیت تحصیلی">
+            <SelectValue placeholder="وضعیت" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ACTIVE">شاگردان فعال</SelectItem>
+            <SelectItem value="GRADUATED">فراغت‌یافته</SelectItem>
+            <SelectItem value="LEFT">ترک تحصیل</SelectItem>
+            <SelectItem value="all">همهٔ حالت‌ها</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={genderFilter} onValueChange={setGenderFilter}>
+          <SelectTrigger className="w-[120px]" aria-label="جنسیت">
+            <SelectValue placeholder="جنسیت" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">پسر و دختر</SelectItem>
+            <SelectItem value="M">ذکور</SelectItem>
+            <SelectItem value="F">اناث</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button variant="outline" size="sm" className="gap-1" onClick={() => exportStudents('excel')} disabled={filtered.length === 0}>
+          <FileDown className="h-4 w-4" /> اکسل
+        </Button>
+        <Button variant="outline" size="sm" className="gap-1" onClick={() => exportStudents('pdf')} disabled={filtered.length === 0}>
+          <Printer className="h-4 w-4" /> PDF
+        </Button>
+        {(classFilter !== 'all' || search || statusFilter !== 'ACTIVE' || genderFilter !== 'all') && (
+          <Button variant="ghost" onClick={() => { setClassFilter('all'); setSearch(''); setStatusFilter('ACTIVE'); setGenderFilter('all'); }} className="gap-1">
             <FilterX className="h-4 w-4" /> پاک کردن
           </Button>
         )}

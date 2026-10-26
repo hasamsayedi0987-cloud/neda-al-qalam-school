@@ -8,6 +8,10 @@ const EDITABLE_KEYS = [
   'directorName', 'directorPhone', 'directorEmail',
   'maxWritten', 'maxOral', 'maxHomework', 'maxActivity', 'resultNote',
   'gradeScale', 'aboutApp', 'aboutDev',
+  // مالی — ضرب‌الاجل فیس و جریمهٔ کتابخانه
+  'feeDeadlineDay', 'finePerDay',
+  // پشتیبان‌گیری — یادآوری خودکار
+  'backupReminderDays',
   // عناوین قابل‌تغییر — شعار اپ و برچسب منوها
   'tagline', 'navLabels',
   // مجوزهای معلمان — قابل کنترل توسط مدیر

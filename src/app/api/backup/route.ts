@@ -20,6 +20,7 @@ export async function GET() {
       users, classes, subjects, classSubjects, teachers, students,
       attendance, staffAttendance, activities, grades, books, loans,
       notifications, tasks, settings, customSections, customEntries, certificates,
+      feePayments, messages, scheduleSlots,
     ] = await Promise.all([
       db.user.findMany(),
       db.class.findMany(),
@@ -39,9 +40,12 @@ export async function GET() {
       db.customSection.findMany({ orderBy: { sortOrder: 'asc' } }),
       db.customEntry.findMany(),
       db.certificateTemplate.findMany(),
+      db.feePayment.findMany(),
+      db.message.findMany(),
+      db.scheduleSlot.findMany(),
     ]);
     const backup = {
-      version: 2,
+      version: 3,
       app: 'مکتب خصوصی نداالقلم',
       createdAt: new Date().toISOString(),
       data: {
@@ -49,6 +53,7 @@ export async function GET() {
         classes, subjects, classSubjects, teachers, students,
         attendance, staffAttendance, activities, grades,
         books, loans, notifications, tasks,
+        feePayments, messages, scheduleSlots,
         // کلید امنیتی نشست هرگز پشتیبان نمی‌شود
         settings: settings.filter((s) => s.key !== 'authSecret'),
         customSections, customEntries, certificates,
@@ -60,6 +65,29 @@ export async function GET() {
         'Content-Disposition': `attachment; filename="neda-ol-qalam-backup-${new Date().toISOString().slice(0, 10)}.json"`,
       },
     });
+  } catch (e) {
+    return handleApiError(e);
+  }
+}
+
+/** پاک‌سازی حاضری سال‌های گذشته — فقط مدیر، با سال جلالی مشخص */
+export async function DELETE(req: NextRequest) {
+  try {
+    await requireRole('ADMIN');
+    const body = await req.json().catch(() => ({}));
+    const action = typeof body?.action === 'string' ? body.action : '';
+    const year = Number(body?.beforeJalaliYear);
+    if (action !== 'clear-attendance') throw new ApiError('عملیات نامعلوم');
+    if (!Number.isInteger(year) || year < 1380 || year > 1450) {
+      throw new ApiError('سال جلالی نامعتبر است');
+    }
+    // تبدیل اول فروردین سال بعد (مرز شمسی) به میلادی — حاضری‌های قدیمی‌تر از این تاریخ حذف می‌شوند
+    // 21 مارس تقریب آغاز سال شمسی است؛ برای حاشیهٔ امن از ۲۰ مارس استفاده می‌کنیم (حذف کمی کمتر، هرگز بیشتر نیست)
+    const cutoffISO = `${year + 1}-03-20`;
+    const deleted = await db.attendanceRecord.deleteMany({
+      where: { date: { lt: cutoffISO } },
+    });
+    return NextResponse.json({ ok: true, deleted: deleted.count, cutoff: cutoffISO });
   } catch (e) {
     return handleApiError(e);
   }
@@ -80,6 +108,9 @@ export async function POST(req: NextRequest) {
 
     await db.$transaction(async (tx) => {
       // پاک‌سازی جدول‌ها (به ترتیب وابستگی)
+      await tx.message.deleteMany({});
+      await tx.feePayment.deleteMany({});
+      await tx.scheduleSlot.deleteMany({});
       await tx.notification.deleteMany({});
       await tx.grade.deleteMany({});
       await tx.studentActivity.deleteMany({});
@@ -110,7 +141,7 @@ export async function POST(req: NextRequest) {
       // ترتیب کلیدهای خارجی: مضامین و معلمان قبل از صنف‌ها (سازگار با PostgreSQL)
       if (Array.isArray(data.subjects)) {
         for (const s of data.subjects) {
-          await tx.subject.create({ data: { id: s.id, name: s.name } });
+          await tx.subject.create({ data: { id: s.id, name: s.name, code: s.code ?? null, credits: s.credits ?? null } });
         }
       }
       if (Array.isArray(data.teachers)) {
@@ -126,7 +157,13 @@ export async function POST(req: NextRequest) {
       }
       if (Array.isArray(data.classes)) {
         for (const c of data.classes) {
-          await tx.class.create({ data: { id: c.id, grade: c.grade, name: c.name, supervisorId: c.supervisorId ?? null } });
+          await tx.class.create({
+            data: {
+              id: c.id, grade: c.grade, name: c.name,
+              capacity: c.capacity ?? null, monthlyFee: c.monthlyFee ?? null,
+              supervisorId: c.supervisorId ?? null, actingSupervisorId: c.actingSupervisorId ?? null,
+            },
+          });
         }
       }
       if (Array.isArray(data.students)) {
@@ -154,7 +191,7 @@ export async function POST(req: NextRequest) {
             data: {
               id: u.id, username: u.username, password: u.password, name: u.name,
               role: u.role, active: u.active ?? true, phone: u.phone ?? null,
-              teacherId: u.teacherId ?? null, studentId: u.studentId ?? null,
+              teacherId: u.teacherId ?? null, studentId: u.studentId ?? null, perms: u.perms ?? null,
             },
           });
         }
@@ -171,7 +208,7 @@ export async function POST(req: NextRequest) {
       }
       if (Array.isArray(data.activities)) {
         for (const a of data.activities) {
-          await tx.studentActivity.create({ data: { id: a.id, studentId: a.studentId, date: a.date, type: a.type, score: a.score ?? null, note: a.note, recordedBy: a.recordedBy ?? null } });
+          await tx.studentActivity.create({ data: { id: a.id, studentId: a.studentId, date: a.date, type: a.type, score: a.score ?? null, note: a.note, image: a.image ?? null, recordedBy: a.recordedBy ?? null } });
         }
       }
       if (Array.isArray(data.grades)) {
@@ -193,7 +230,7 @@ export async function POST(req: NextRequest) {
       }
       if (Array.isArray(data.loans)) {
         for (const l of data.loans) {
-          await tx.bookLoan.create({ data: { id: l.id, bookId: l.bookId, borrowerName: l.borrowerName, borrowerType: l.borrowerType ?? 'STUDENT', studentId: l.studentId ?? null, loanDate: l.loanDate, dueDate: l.dueDate, returnDate: l.returnDate ?? null, status: l.status ?? 'LENT', notes: l.notes ?? null } });
+          await tx.bookLoan.create({ data: { id: l.id, bookId: l.bookId, borrowerName: l.borrowerName, borrowerType: l.borrowerType ?? 'STUDENT', studentId: l.studentId ?? null, loanDate: l.loanDate, dueDate: l.dueDate, returnDate: l.returnDate ?? null, status: l.status ?? 'LENT', fineAmount: l.fineAmount ?? null, notes: l.notes ?? null } });
         }
       }
       if (Array.isArray(data.tasks)) {
@@ -204,6 +241,28 @@ export async function POST(req: NextRequest) {
       if (Array.isArray(data.notifications)) {
         for (const n of data.notifications) {
           await tx.notification.create({ data: { id: n.id, userId: n.userId, title: n.title, body: n.body, type: n.type ?? 'INFO', read: n.read ?? false } });
+        }
+      }
+      // مالی، پیام‌ها و برنامهٔ هفتگی
+      if (Array.isArray(data.feePayments)) {
+        for (const f of data.feePayments) {
+          await tx.feePayment.create({
+            data: { id: f.id, studentId: f.studentId, month: f.month, amount: f.amount, paidAt: f.paidAt, method: f.method ?? 'CASH', note: f.note ?? null, recordedBy: f.recordedBy ?? null },
+          });
+        }
+      }
+      if (Array.isArray(data.messages)) {
+        for (const m of data.messages) {
+          await tx.message.create({
+            data: { id: m.id, fromUserId: m.fromUserId, toUserId: m.toUserId ?? null, toRole: m.toRole ?? null, toClassId: m.toClassId ?? null, subject: m.subject ?? null, body: m.body, category: m.category ?? 'GENERAL', read: m.read ?? false },
+          });
+        }
+      }
+      if (Array.isArray(data.scheduleSlots)) {
+        for (const s of data.scheduleSlots) {
+          await tx.scheduleSlot.create({
+            data: { id: s.id, classId: s.classId, subjectId: s.subjectId, teacherId: s.teacherId ?? null, day: s.day, period: s.period },
+          });
         }
       }
       // بخش‌های دلخواه + ثبت‌ها (قبلاً در پشتیبان نبودند = گم می‌شدند!)

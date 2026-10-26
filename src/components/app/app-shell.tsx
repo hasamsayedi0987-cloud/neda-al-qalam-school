@@ -11,7 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import { apiGet, apiSend, onSyncStateChange, pendingSyncCount, failedSyncItems, isOnline, isAuthRequired, flushQueue, tryAutoRelogin } from '@/lib/client/api';
+import { apiGet, apiSend, onSyncStateChange, pendingSyncCount, failedSyncItems, isOnline, isAuthRequired, flushQueue, tryAutoRelogin, discardQueueItem, discardAllFailedItems } from '@/lib/client/api';
 import { configureExports } from '@/lib/client/exports';
 import { SECTIONS, sectionAllowed } from '@/lib/access';
 import { isoToJalaliDisplay, toPersianDigits } from '@/lib/jalali';
@@ -24,7 +24,7 @@ import {
   Home, Library, LogOut, Menu, RefreshCw, School, Settings,
   ShieldCheck, UserCog, Users, ClipboardCheck, BookMarked, Wifi, KeyRound,
   FileSpreadsheet, UserCheck, Award, LayoutGrid, AlertTriangle, Loader2,
-  Sun, Moon, Monitor,
+  Sun, Moon, Monitor, Wallet, MessageSquare,
 } from 'lucide-react';
 
 /* ─── بارگذاری تنبل ویوها: هر بخش فقط هنگام باز شدن دانلود می‌شود (بستهٔ اولیه سبک‌تر) ─── */
@@ -56,6 +56,8 @@ const SettingsView = dynamic(() => import('./settings-view').then((m) => m.Setti
 const AboutView = dynamic(() => import('./about-view').then((m) => m.AboutView), { loading: () => <ViewSkeleton /> });
 const CustomSectionsView = dynamic(() => import('./custom-view').then((m) => m.CustomSectionsView), { loading: () => <ViewSkeleton /> });
 const CertificatesView = dynamic(() => import('./certificate-view').then((m) => m.CertificatesView), { loading: () => <ViewSkeleton /> });
+const FeesView = dynamic(() => import('./fees-view').then((m) => m.FeesView), { loading: () => <ViewSkeleton /> });
+const MessagesView = dynamic(() => import('./messages-view').then((m) => m.MessagesView), { loading: () => <ViewSkeleton /> });
 
 export interface NavItem {
   key: string;
@@ -74,6 +76,8 @@ const SECTION_ICONS: Record<string, React.ComponentType<{ className?: string }>>
   attendance: CalendarCheck,
   activities: ClipboardCheck,
   grades: ClipboardList,
+  finance: Wallet,
+  messages: MessageSquare,
   results: FileSpreadsheet,
   certificates: Award,
   customs: LayoutGrid,
@@ -145,6 +149,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
   const [pending, setPending] = useState(0);
   const [authNeeded, setAuthNeeded] = useState(false);
   const [failedItems, setFailedItems] = useState<{ id: string; label: string; error: string }[]>([]);
+  const [failedOpen, setFailedOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   // پس از تخلیهٔ موفق صف، ویوهای باز دوباره بارگذاری می‌شوند (دادهٔ واقعی سرور)
   const [syncTick, setSyncTick] = useState(0);
@@ -258,6 +263,20 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
     // خروج هرگز صف نمی‌شود — صف‌شدنش بعد از ورود مجدد نشست را می‌شکند
     await apiSend('/api/auth', 'POST', { action: 'logout' }, { allowQueue: false });
     onLogout();
+  };
+
+  /** حذف دستی یک ثبت گیرکرده از صف — با تأیید مدیر؛ دادهٔ سرور دست‌نخورده می‌ماند */
+  const discardItem = (id: string, label: string) => {
+    if (!window.confirm(`«${label}» از صف همگام‌سازی حذف شود؟\nاین ثبت دیگر به سرور ارسال نمی‌شود و نمایش محلی آن هم پاک می‌گردد. داده‌های موجود روی سرور دست‌نخورده می‌ماند.`)) return;
+    discardQueueItem(id);
+    toast({ title: 'از صف حذف شد', description: 'اگر این ثبت روی سرور لازم است، دوباره وارد کنید' });
+  };
+
+  /** حذف همهٔ ثبت‌های خطاخورده — فقط با تأیید */
+  const discardAllFailed = () => {
+    if (!window.confirm(`${toPersianDigits(failedItems.length)} ثبت خطاخورده از صف حذف شود؟\nاین ثبت‌ها دیگر به سرور ارسال نمی‌شوند و نمایش محلی‌شان پاک می‌گردد.`)) return;
+    const n = discardAllFailedItems();
+    toast({ title: `${toPersianDigits(n)} ثبت از صف حذف شد`, description: 'صف همگام‌سازی پاک شد' });
   };
 
   const markAllRead = async () => {
@@ -481,10 +500,47 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
           {failedItems.length > 0 ? <AlertTriangle className="h-4 w-4 shrink-0" /> : online ? <RefreshCw className="h-4 w-4 shrink-0" /> : <CloudOff className="h-4 w-4 shrink-0" />}
           {failedItems.length > 0 ? (
             <div className="min-w-0 flex-1">
-              <p className="font-semibold">{toPersianDigits(failedItems.length)} ثبت توسط سرور پذیرفته نشد — داده حذف نشده است:</p>
+              <button
+                type="button"
+                onClick={() => setFailedOpen((v) => !v)}
+                className="font-semibold text-right hover:underline underline-offset-2"
+                aria-expanded={failedOpen}
+              >
+                {toPersianDigits(failedItems.length)} ثبت توسط سرور پذیرفته نشد — داده حذف نشده است {failedOpen ? '▲' : '▼'}
+              </button>
               <p className="truncate text-[11px] opacity-80">
                 {failedItems.slice(0, 2).map((f) => `${f.label}: ${f.error}`).join(' | ')}
               </p>
+              {failedOpen && (
+                <div className="mt-2 space-y-1.5 max-h-44 overflow-y-auto">
+                  {failedItems.map((f) => (
+                    <div key={f.id} className="rounded-lg border border-rose-500/25 bg-background/60 px-2.5 py-1.5 text-[11px]">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium truncate flex-1" dir="auto">{f.label}</span>
+                        <button
+                          type="button"
+                          onClick={() => discardItem(f.id, f.label)}
+                          className="shrink-0 rounded-md border border-rose-400/40 px-2 py-0.5 hover:bg-rose-500/10"
+                        >
+                          حذف از صف
+                        </button>
+                      </div>
+                      <p className="opacity-75 mt-0.5 break-words" dir="auto">{f.error}</p>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={discardAllFailed}
+                    className="w-full rounded-lg border border-rose-400/40 px-2 py-1 text-[11px] hover:bg-rose-500/10"
+                  >
+                    حذف همهٔ ثبت‌های خطاخورده از صف
+                  </button>
+                  <p className="text-[10px] opacity-70 leading-4">
+                    «حذف از صف» یعنی این ثبت دیگر ارسال نمی‌شود و نمایش محلی‌اش پاک می‌شود — داده‌های موجود روی سرور دست‌نخورده می‌ماند.
+                    اگر خطا مربوط به دادهٔ ناقص است، آن را از منبع اصلی اصلاح و دوباره ثبت کنید.
+                  </p>
+                </div>
+              )}
             </div>
           ) : !online ? (
             <p className="flex-1 font-medium">
@@ -532,6 +588,8 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
           {view === 'attendance' && <AttendanceView user={user} />}
           {view === 'activities' && <ActivitiesView user={user} />}
           {view === 'grades' && <GradesView user={user} />}
+          {view === 'finance' && <FeesView user={user} />}
+          {view === 'messages' && <MessagesView user={user} />}
           {view === 'results' && <ResultsView user={user} />}
           {view === 'certificates' && <CertificatesView user={user} />}
           {view === 'customs' && <CustomSectionsView user={user} />}

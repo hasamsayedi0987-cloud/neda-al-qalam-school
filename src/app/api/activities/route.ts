@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
       const students = await db.student.findMany({
         where: { classId, status: 'ACTIVE' },
         orderBy: { rollNo: 'asc' },
-        select: { id: true, firstName: true, lastName: true, rollNo: true },
+        select: { id: true, firstName: true, lastName: true, rollNo: true, guardianName: true, guardianPhone: true },
       });
       const activities = await db.studentActivity.findMany({
         where: { student: { classId } },
@@ -76,9 +76,27 @@ export async function POST(req: NextRequest) {
         studentId, type, note,
         score: optNum(body.score),
         date: str(body.date) || new Date().toISOString().slice(0, 10),
+        // عکس فعالیت — dataURL فشرده (حداکثر ۴۰۰ کیلوبایت)
+        image: str(body.image).startsWith('data:image') && str(body.image).length <= 400_000 ? str(body.image) : null,
         recordedBy: me.id,
       },
     });
+
+    // هشدار لحظه‌ای به والد/سرپرست شاگرد
+    const guardians = await db.user.findMany({
+      where: { studentId: studentId, active: true, role: { in: ['GUARDIAN', 'STUDENT'] } },
+    });
+    if (guardians.length > 0) {
+      const label = { HOMEWORK: 'کارخانگی', BEHAVIOR: 'رفتار و انضباط', PARTICIPATION: 'شرکت در درس', OTHER: 'فعالیت' }[type] || 'فعالیت';
+      await db.notification.createMany({
+        data: guardians.map((g) => ({
+          userId: g.id,
+          title: `${label} جدید ثبت شد`,
+          body: note.slice(0, 140),
+          type: 'INFO',
+        })),
+      });
+    }
     return NextResponse.json({ id: activity.id });
   } catch (e) {
     return handleApiError(e);
@@ -112,6 +130,10 @@ export async function PATCH(req: NextRequest) {
     }
     if (body.score !== undefined) data.score = optNum(body.score);
     if (body.date !== undefined) data.date = str(body.date) || existing.date;
+    if (body.image !== undefined) {
+      const img = str(body.image);
+      data.image = img.startsWith('data:image') && img.length <= 400_000 ? img : null;
+    }
     await db.studentActivity.update({ where: { id }, data });
     return NextResponse.json({ ok: true });
   } catch (e) {

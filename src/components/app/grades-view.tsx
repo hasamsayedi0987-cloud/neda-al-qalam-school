@@ -137,7 +137,16 @@ export function GradesView({ user }: { user: SessionUser }) {
       return;
     }
     const max = key === 'written' ? weights.maxWritten : key === 'oral' ? weights.maxOral : key === 'homework' ? weights.maxHomework : weights.maxActivity;
-    const clamped = clampComponent(Number(value), max);
+    const raw = Number(value);
+    // اعتبارسنجی خودکار — مقدار خارج از سقف با هشدار به سقف محدود می‌شود
+    if (Number.isFinite(raw) && raw > max) {
+      toast({
+        title: 'نمره از سقف بیشتر بود',
+        description: `${toPersianDigits(raw)} به سقف مجاز ${toPersianDigits(max)} محدود شد`,
+        duration: 2500,
+      });
+    }
+    const clamped = clampComponent(raw, max);
     setCells({ ...cells, [studentId]: { ...prev, [key]: clamped, total: componentTotal({ ...prev, [key]: clamped }) } });
   };
 
@@ -164,13 +173,47 @@ export function GradesView({ user }: { user: SessionUser }) {
       });
     } else {
       toast({
-        title: 'ذخیره شد',
-        description: res.queued
-          ? 'در حافظهٔ گوشی ذخیره شد — پس از اتصال به سرور منتقل می‌شود'
-          : `نمرات ${toPersianDigits(items.length)} شاگرد در جدول نتایج صنف منعکس گردید`,
+        title: res.queued ? 'پیش‌نویس در حافظهٔ گوشی ذخیره شد' : 'پیش‌نویس ذخیره شد — نمرات هنوز تایید نهایی نشده‌اند',
+        description: res.queued ? 'در حافظهٔ گوشی ذخیره شد — پس از اتصال به سرور منتقل می‌شود' : undefined,
       });
     }
     // آفلاین هم بارگذاری می‌شود — نمرات از کش محلی (با رونویسی) فوراً نمایش داده می‌شوند
+    loadGrades();
+  };
+
+  /** ذخیره + تایید نهایی — با کنترل اعتبار: نمرهٔ ناقص مانع تایید نهایی است */
+  const saveAndFinalize = async () => {
+    if (!csId) return;
+    const filled = students.filter((s) => (totalOf(s.id) ?? 0) > 0);
+    const empty = students.length - filled.length;
+    const msg = empty > 0
+      ? `${toPersianDigits(empty)} شاگرد هنوز نمرهٔ کاملی ندارد. ذخیره و تایید نهایی انجام شود؟ شاگردان بدون نمره در کارنامه «غایب/بدون نمره» خواهند بود.`
+      : 'نمرات همهٔ شاگردان ذخیره و تایید نهایی شود؟ پس از تایید، در جدول نتایج و کارنامه نهایی می‌گردد.';
+    if (!window.confirm(msg)) return;
+    setSaving(true);
+    const items = students.map((s) => ({
+      studentId: s.id,
+      ...(cells[s.id] || { written: null, oral: null, homework: null, activity: null }),
+    }));
+    const res = await apiSend<{ saved?: number }>('/api/grades', 'POST', {
+      classSubjectId: csId, period, items,
+    }, { queueLabel: 'ثبت نمرات' });
+    if (res.error) {
+      setSaving(false);
+      toast({ title: 'خطا در ذخیره', description: res.error, variant: 'destructive' });
+      return;
+    }
+    const res2 = await apiSend('/api/grades', 'POST', { action: 'approve', classSubjectId: csId, period, approved: true });
+    setSaving(false);
+    if (res2.error) {
+      toast({ title: 'ذخیره شد ولی تایید نهایی ناموفق بود', description: res2.error, variant: 'destructive' });
+      loadGrades();
+      return;
+    }
+    toast({
+      title: res.queued || res2.queued ? 'در حافظهٔ گوشی — پس از اتصال همگام می‌شود' : 'نمرات ذخیره و نهایی شد',
+      description: res.queued || res2.queued ? undefined : 'اعلان به معلم و والدین ارسال گردید — در جدول نتایج منعکس شد',
+    });
     loadGrades();
   };
 
@@ -393,28 +436,33 @@ export function GradesView({ user }: { user: SessionUser }) {
               )}
             </div>
             <div className="flex flex-wrap gap-2">
-              {canApprove && (
-                <>
-                  <Button variant="outline" onClick={() => toggleApprove(true)} className="gap-1.5 border-emerald-300 text-emerald-800">
-                    <BadgeCheck className="h-4 w-4" /> تایید نمرات
-                  </Button>
-                  {allApproved && (
-                    <Button variant="ghost" onClick={() => toggleApprove(false)} className="gap-1.5 text-amber-700">
-                      <RotateCcw className="h-4 w-4" /> لغو تایید
-                    </Button>
-                  )}
-                </>
+              {canApprove && !allApproved && (
+                <Button onClick={saveAndFinalize} disabled={saving} className="gap-1.5" variant="outline">
+                  <BadgeCheck className="h-4 w-4" /> ذخیره و تایید نهایی
+                </Button>
+              )}
+              {canApprove && allApproved && (
+                <Button variant="ghost" onClick={() => toggleApprove(false)} className="gap-1.5 text-amber-700">
+                  <RotateCcw className="h-4 w-4" /> لغو تایید (بازگشت به پیش‌نویس)
+                </Button>
               )}
               {teacherEditable && (
                 <Button onClick={save} disabled={saving} className="gap-1.5">
-                  <Save className="h-4 w-4" /> {saving ? 'در حال ذخیره...' : 'ذخیرهٔ نمرات'}
+                  <Save className="h-4 w-4" /> {saving ? 'در حال ذخیره...' : 'ذخیرهٔ پیش‌نویس'}
                 </Button>
               )}
             </div>
           </div>
-          {allApproved && !canApprove && (
-            <p className="text-xs text-amber-700 mt-2">
-              نمرات این مضمون توسط سرمعلم تایید شده و برای معلم قابل ویرایش نیست.
+          {allApproved && (
+            <p className={cn('text-xs mt-2', canApprove ? 'text-emerald-700' : 'text-amber-700')}>
+              {canApprove
+                ? 'نمرات نهایی و تایید شده‌اند — برای ویرایش، تایید را لغو کنید.'
+                : 'نمرات این مضمون تایید نهایی شده و برای معلم قابل ویرایش نیست.'}
+            </p>
+          )}
+          {!allApproved && teacherEditable && (
+            <p className="text-[11px] text-muted-foreground mt-2">
+              نمرات فعلی «پیش‌نویس» است — تا تایید نهایی در کارنامهٔ والدین محسوب نمی‌شود؛ مقادیر بزرگ‌تر از سقف خودکار محدود می‌شوند و مجموع بلافاصله محاسبه می‌گردد.
             </p>
           )}
         </>

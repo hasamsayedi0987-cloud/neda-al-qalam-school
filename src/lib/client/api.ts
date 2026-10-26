@@ -187,6 +187,31 @@ function rewriteIds<T>(value: T, map: Record<string, string>): T {
   return value;
 }
 
+/**
+ * بازنویسی شناسه‌های موقت داخل پارامترهای آدرس (؟id=tmp-... و classId و …)
+ * پیشتر فقط بدنهٔ درخواست بازنویسی می‌شد و DELETE/PATCH با شناسهٔ موقت در آدرس
+ * برای همیشه ۴۰۴ می‌خورد و در صف گیر می‌کرد — ریشهٔ هشدار قرمز همگام‌سازی.
+ */
+function rewriteUrl(url: string, map: Record<string, string>): string {
+  if (!url.includes('?') || Object.keys(map).length === 0) return url;
+  try {
+    const u = new URL(url, 'http://local');
+    let changed = false;
+    for (const [k, v] of [...u.searchParams.entries()]) {
+      if (map[v]) {
+        u.searchParams.set(k, map[v]);
+        changed = true;
+      }
+    }
+    if (!changed) return url;
+    const qs = u.searchParams.toString();
+    const base = url.split('?')[0];
+    return qs ? `${base}?${qs}` : base;
+  } catch {
+    return url;
+  }
+}
+
 function newTempId(): string {
   return `tmp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -601,6 +626,74 @@ const SPECS: Record<string, { apply: (data: Row, e: OverlayEntry, url: string) =
       return data;
     },
   },
+
+  fees: {
+    apply(data, e) {
+      if (e.method === 'POST') {
+        const b = (e.body as Row) || {};
+        if (!Array.isArray(data.payments)) data.payments = [];
+        const sid = String(b.studentId || '');
+        const stu = Array.isArray(data.students) ? (data.students as Row[]).find((s) => s.id === sid) : null;
+        (data.payments as Row[]).unshift({
+          id: e.tempId, studentId: sid, month: b.month, amount: num(b.amount) ?? 0,
+          paidAt: b.paidAt || isoToday(), method: b.method || 'CASH',
+          note: b.note ?? null, recordedBy: null, createdAt: new Date().toISOString(),
+          studentName: stu?.name || '', className: stu?.className || null,
+        });
+      }
+      return data;
+    },
+  },
+
+  messages: {
+    apply(data, e) {
+      const b = (e.body as Row) || {};
+      if (e.method === 'POST') {
+        if (!Array.isArray(data.sent)) data.sent = [];
+        let toLabel = '';
+        if (b.toUserId) {
+          const c = Array.isArray(data.contacts) ? (data.contacts as Row[]).find((x) => x.id === b.toUserId) : null;
+          toLabel = c ? String(c.name) : 'کاربر';
+        } else if (b.toClassId) {
+          const c = Array.isArray(data.classes) ? (data.classes as Row[]).find((x) => x.id === b.toClassId) : null;
+          toLabel = `والدین صنف ${c ? String(c.name) : ''}`.trim();
+        } else if (b.toRole === 'ALL') toLabel = 'همگانی — همه';
+        else if (b.toRole) toLabel = `همگانی — ${String(b.toRole)}`;
+        (data.sent as Row[]).unshift({
+          id: e.tempId, subject: b.subject ?? null, body: b.body,
+          category: b.category || 'GENERAL', read: false,
+          createdAt: new Date().toISOString(), toLabel, fromName: '', fromRole: '',
+        });
+      }
+      return data;
+    },
+  },
+
+  schedule: {
+    apply(data, e) {
+      if (!Array.isArray(data.slots)) return data;
+      const slots = data.slots as Row[];
+      const b = (e.body as Row) || {};
+      if (e.method === 'POST') {
+        const i = slots.findIndex((s) => s.classId === b.classId && s.day === b.day && s.period === b.period);
+        const classes = Array.isArray(data.classes) ? (data.classes as Row[]) : [];
+        const cls = classes.find((c) => c.id === b.classId);
+        const cs = cls && Array.isArray(cls.classSubjects) ? (cls.classSubjects as Row[]).find((x) => x.subjectId === b.subjectId) : null;
+        const teachers = Array.isArray(data.teachers) ? (data.teachers as Row[]) : [];
+        const t = b.teacherId ? teachers.find((x) => x.id === b.teacherId) : null;
+        const row: Row = {
+          id: i >= 0 ? String(slots[i].id) : e.tempId,
+          classId: b.classId, className: cls ? String(cls.name) : '',
+          subjectId: b.subjectId, subjectName: cs ? String((cs.subject as Row)?.name || '') : '',
+          teacherId: b.teacherId ?? null, teacherName: t ? String(t.name) : null,
+          day: b.day, period: b.period,
+        };
+        if (i >= 0) slots[i] = row;
+        else slots.push(row);
+      }
+      return data;
+    },
+  },
 };
 
 function safeJson(s: string): unknown {
@@ -811,6 +904,64 @@ function isDuplicateError(msg: string): boolean {
   return msg.includes('قبلاً ثبت شده') || msg.includes('قبلاً گرفته شده');
 }
 
+/**
+ * یافتن شناسهٔ واقعی یک رکوردِ ثبت‌شده با شناسهٔ موقت — با تطبیق مشخصات روی دادهٔ فعلی سرور.
+ * کاربرد: وقتی POST آفلاین «تکراری» تشخیص داده شد (رکورد از قبل روی سرور هست) یا
+ * PATCH/DELETE با شناسهٔ موقت ۴۰۴ خورد — تا پیوندهای بعدی صف (childId و …) سالم بمانند.
+ * فعلاً کاربران (با نام کاربری یکتا) و شاگردان (اسم + ولد + صنف) پشتیبانی می‌شوند.
+ */
+async function resolveTempRecord(item: QueuedRequest, postBodies: Record<string, Row>): Promise<string | null> {
+  try {
+    const col = collectionOf(item.url);
+    const src = postBodies[item.tempId || ''] || (item.body as Row) || {};
+    if (col === 'users') {
+      const uname = String(src.username || '').trim().toLowerCase();
+      if (!uname) return null;
+      const res = await fetchTimeout('/api/users', { cache: 'no-store' }, 8000);
+      if (!res.ok) return null;
+      const json = (await res.json().catch(() => ({}))) as { users?: Row[] };
+      const hit = (json.users || []).find((u) => String(u.username || '').trim().toLowerCase() === uname);
+      return hit ? String(hit.id) : null;
+    }
+    if (col === 'students') {
+      const fn = String(src.firstName || '').trim();
+      const fa = String(src.fatherName || '').trim();
+      if (!fn || !fa) return null;
+      const res = await fetchTimeout('/api/students', { cache: 'no-store' }, 8000);
+      if (!res.ok) return null;
+      const json = (await res.json().catch(() => ({}))) as { students?: Row[] };
+      const hit = (json.students || []).find((s) =>
+        String(s.firstName || '').trim() === fn &&
+        String(s.fatherName || '').trim() === fa &&
+        String(s.lastName || '').trim() === String(src.lastName || '').trim(),
+      );
+      return hit ? String(hit.id) : null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * حذف دستی یک آیتم گیرکرده از صف — فقط با تصمیم و تأیید مدیر (هیچ‌گاه خودکار نیست).
+ * با حذف، رونویسی محلی همان ثبت هم از جدول‌ها پاک می‌شود؛ داده روی سرور دست‌نخورده می‌ماند.
+ */
+export function discardQueueItem(id: string) {
+  const queue = readQueue();
+  writeQueue(queue.filter((q) => q.id !== id));
+  notify();
+}
+
+/** پاک‌کردن همهٔ ثبت‌های خطاخوردهٔ صف (با تأیید مدیر) — دادهٔ سرور دست‌نخورده می‌ماند */
+export function discardAllFailedItems(): number {
+  const queue = readQueue();
+  const keep = queue.filter((q) => !(q.failCount && q.lastError));
+  const removed = queue.length - keep.length;
+  if (removed > 0) writeQueue(keep);
+  return removed;
+}
+
 async function flushQueueInner(attempt = 0): Promise<number> {
   const queue = readQueue();
   if (queue.length === 0) return 0;
@@ -819,9 +970,17 @@ async function flushQueueInner(attempt = 0): Promise<number> {
   const affected = new Set<string>();
   let sent = 0;
   let authFailed = false;
+  // بدنهٔ POSTهای صف — برای یافتن رکورد واقعی وقتی شناسهٔ موقت در آدرس است (حذف/ویرایش پس از ثبت آفلاین)
+  const postBodies: Record<string, Row> = {};
+  for (const q of queue) {
+    if (q.method === 'POST' && q.tempId && q.body && typeof q.body === 'object') {
+      postBodies[q.tempId] = q.body as Row;
+    }
+  }
+
   for (const item of queue) {
     try {
-      const sendUrl = rewriteIds(item.url, idMap);
+      const sendUrl = rewriteUrl(rewriteIds(item.url, idMap), idMap);
       const sendBody = rewriteIds(item.body, idMap);
       const res = await fetchTimeout(sendUrl, {
         method: item.method,
@@ -840,15 +999,38 @@ async function flushQueueInner(attempt = 0): Promise<number> {
         // نشست معتبر نیست — داده حذف نمی‌شود؛ با ورود خودکار/دوباره ارسال می‌شود
         remaining.push(item);
         authFailed = true;
+      } else if (res.status === 404 && item.method === 'DELETE') {
+        // حذف رکوردی که روی سرور وجود ندارد = بی‌خطر و بی‌اثر — از صف حذف می‌شود
+        // (مثلاً ثبت آفلاین که قبلاً به‌عنوان تکراری حذف شده یا هرگز ثبت نشده)
+        affected.add(collectionOf(item.url));
+      } else if (res.status === 404 && item.tempId) {
+        // PATCH با شناسهٔ موقتِ آدرسی که هنوز به شناسهٔ واقعی نگاشت نشده —
+        // تلاش برای یافتن شناسهٔ واقعی از روی بدنهٔ POST اصلی همان رکورد
+        const resolved = await resolveTempRecord(item, postBodies);
+        if (resolved) {
+          rememberId(item.tempId, resolved);
+          idMap[item.tempId] = resolved;
+          flushAgain = true; // با نگاشت تازه، دوباره تلاش می‌شود
+        } else {
+          const failCount = (item.failCount || 0) + 1;
+          remaining.push({ ...item, failCount, lastError: 'رکورد موردنظر روی سرور یافت نشد' });
+        }
       } else if (res.status >= 500) {
         remaining.push(item);
       } else {
         // خطای منطقی سرور — داده هرگز بی‌صدا نابود نمی‌شود:
-        //  • تکراری (روی سرور هست) → حذف از صف بی‌خطر است
+        //  • تکراری (روی سرور هست) → حذف از صف بی‌خطر است (+ نگاشت شناسهٔ واقعی برای پیوندها)
         //  • سایر ۴xx → با شمار شکست در صف می‌ماند تا مدیر ببیند و اصلاح کند
         const msg = (json as Row).error ? String((json as Row).error) : `خطای ${res.status}`;
         if (isDuplicateError(msg)) {
           affected.add(collectionOf(item.url));
+          if (item.method === 'POST' && item.tempId) {
+            const resolved = await resolveTempRecord(item, postBodies);
+            if (resolved) {
+              rememberId(item.tempId, resolved);
+              idMap[item.tempId] = resolved;
+            }
+          }
         } else {
           const failCount = (item.failCount || 0) + 1;
           remaining.push({ ...item, failCount, lastError: msg });

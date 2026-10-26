@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireUser, requireRole, requireSection, ApiError } from '@/lib/auth';
-import { handleApiError, str } from '@/lib/api-helpers';
+import { handleApiError, str, optNum } from '@/lib/api-helpers';
 
 export async function GET() {
   try {
@@ -22,7 +22,13 @@ export async function POST(req: NextRequest) {
     if (!name) throw new ApiError('نام مضمون لازم است');
     const exists = await db.subject.findFirst({ where: { name } });
     if (exists) throw new ApiError('این مضمون قبلاً ثبت شده است');
-    const subject = await db.subject.create({ data: { name } });
+    const subject = await db.subject.create({
+      data: {
+        name,
+        code: str(body.code) || null,
+        credits: optNum(body.credits),
+      },
+    });
     return NextResponse.json({ id: subject.id });
   } catch (e) {
     return handleApiError(e);
@@ -36,7 +42,11 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const id = str(body.id);
     if (!id) throw new ApiError('شناسهٔ مضمون لازم است');
-    await db.subject.update({ where: { id }, data: { name: str(body.name) } });
+    const data: Record<string, unknown> = {};
+    if (body.name !== undefined) data.name = str(body.name);
+    if (body.code !== undefined) data.code = str(body.code) || null;
+    if (body.credits !== undefined) data.credits = optNum(body.credits);
+    await db.subject.update({ where: { id }, data });
     return NextResponse.json({ ok: true });
   } catch (e) {
     return handleApiError(e);

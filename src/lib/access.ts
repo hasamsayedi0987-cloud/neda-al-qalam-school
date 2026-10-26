@@ -60,6 +60,18 @@ export const SECTIONS: Record<string, SectionDef> = {
     manageable: true,
     hint: 'ثبت و ویرایش نمرات (معلم فقط مضامین سپرده‌شده به خود)',
   },
+  finance: {
+    label: 'مالی و فیس',
+    roles: ['ADMIN', 'HEADTEACHER'],
+    manageable: true,
+    hint: 'ثبت پرداخت‌های فیس، مجموع‌ها و هشدار تأخیر — دسترسی اصلی با مدیر',
+  },
+  messages: {
+    label: 'ارتباطات و پیام‌ها',
+    roles: ALL_ROLES,
+    manageable: true,
+    hint: 'پیام مستقیم و اعلان همگانی بین مدیر، معلم، شاگرد و والد',
+  },
   results: {
     label: 'جدول نتایج و کارنامه',
     roles: ['ADMIN', 'HEADTEACHER', 'TEACHER', 'STUDENT', 'GUARDIAN'],

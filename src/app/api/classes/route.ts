@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireUser, requireRole, requireSection, ApiError } from '@/lib/auth';
-import { handleApiError, num, str } from '@/lib/api-helpers';
+import { handleApiError, num, str, optNum } from '@/lib/api-helpers';
 import { teacherClassIds } from '@/lib/teacher-scope';
 
 export async function GET() {
@@ -25,6 +25,8 @@ export async function GET() {
     return NextResponse.json({
       classes: classes.map((c) => ({
         id: c.id, grade: c.grade, name: c.name, supervisorId: c.supervisorId,
+        capacity: c.capacity,
+        monthlyFee: c.monthlyFee,
         supervisorName: c.supervisor?.name || null,
         actingSupervisorId: c.actingSupervisorId,
         actingSupervisorName: c.actingSupervisor?.name || null,
@@ -55,6 +57,8 @@ export async function POST(req: NextRequest) {
     const cls = await db.class.create({
       data: {
         grade, name,
+        capacity: optNum(body.capacity),
+        monthlyFee: optNum(body.monthlyFee),
         supervisorId: str(body.supervisorId) || null,
         actingSupervisorId: str(body.actingSupervisorId) || null,
       },
@@ -83,6 +87,8 @@ export async function PATCH(req: NextRequest) {
     }
     if (body.supervisorId !== undefined) data.supervisorId = str(body.supervisorId) || null;
     if (body.actingSupervisorId !== undefined) data.actingSupervisorId = str(body.actingSupervisorId) || null;
+    if (body.capacity !== undefined) data.capacity = optNum(body.capacity);
+    if (body.monthlyFee !== undefined) data.monthlyFee = optNum(body.monthlyFee);
     await db.class.update({ where: { id }, data });
     return NextResponse.json({ ok: true });
   } catch (e) {

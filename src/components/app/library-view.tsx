@@ -15,10 +15,18 @@ import { apiGet, apiSend } from '@/lib/client/api';
 import { isoToJalaliDisplay, isoToday, toPersianDigits } from '@/lib/jalali';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, BookInfo, LoanInfo, StudentInfo } from '@/lib/types';
-import { Plus, BookOpen, BookMarked, Undo2, Trash2, AlertTriangle, Search } from 'lucide-react';
+import { Plus, BookOpen, BookMarked, Undo2, Trash2, AlertTriangle, Search, IdCard, MessageSquare } from 'lucide-react';
 
 const EMPTY_BOOK = { id: '', title: '', author: '', category: '', copies: '1', shelfNo: '' };
 const EMPTY_LEND = { bookId: '', borrowerName: '', borrowerType: 'STUDENT', studentId: '', loanDate: isoToday(), dueDate: '', notes: '' };
+
+/** جریمهٔ پیش‌بینی‌شدهٔ یک امانت — روزهای تأخیر × نرخ روزانه */
+function finePreview(dueDate: string, finePerDay: number): { days: number; amount: number } {
+  const today = isoToday();
+  if (dueDate >= today || finePerDay <= 0) return { days: 0, amount: 0 };
+  const days = Math.ceil((new Date(today).getTime() - new Date(dueDate).getTime()) / 86_400_000);
+  return { days, amount: days * finePerDay };
+}
 
 export function LibraryView({ user }: { user: SessionUser }) {
   const { toast } = useToast();
@@ -28,22 +36,29 @@ export function LibraryView({ user }: { user: SessionUser }) {
   const [books, setBooks] = useState<BookInfo[]>([]);
   const [loans, setLoans] = useState<LoanInfo[]>([]);
   const [students, setStudents] = useState<StudentInfo[]>([]);
+  const [finePerDay, setFinePerDay] = useState(5);
   const [loading, setLoading] = useState(true);
   const [bookDialog, setBookDialog] = useState(false);
   const [lendDialog, setLendDialog] = useState(false);
   const [bookForm, setBookForm] = useState({ ...EMPTY_BOOK });
   const [lendForm, setLendForm] = useState({ ...EMPTY_LEND });
+  // کارت شاگرد — امانت‌های یک شاگرد با یک انتخاب
+  const [cardStudentId, setCardStudentId] = useState('');
+  const cardStudent = students.find((s) => s.id === cardStudentId) || null;
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [b, s] = await Promise.all([
+      const [b, s, st] = await Promise.all([
         apiGet<{ books: BookInfo[]; loans: LoanInfo[] }>('/api/library'),
         apiGet<{ students: StudentInfo[] }>('/api/students'),
+        apiGet<{ settings: Record<string, string> }>('/api/settings').catch(() => ({ settings: {} as Record<string, string> })),
       ]);
       setBooks(b.books);
       setLoans(b.loans);
       setStudents(s.students);
+      const rate = Number(st.settings.finePerDay);
+      if (Number.isFinite(rate) && rate >= 0) setFinePerDay(rate);
     } catch (e) {
       toast({ title: 'خطا', description: e instanceof Error ? e.message : 'بارگذاری ناموفق', variant: 'destructive' });
     }
@@ -84,12 +99,21 @@ export function LibraryView({ user }: { user: SessionUser }) {
   };
 
   const returnBook = async (l: LoanInfo) => {
-    const res = await apiSend('/api/library', 'POST', { action: 'return', loanId: l.id });
+    const fp = finePreview(l.dueDate, finePerDay);
+    if (fp.amount > 0 && !window.confirm(`این کتاب ${toPersianDigits(fp.days)} روز تأخیر دارد — جریمهٔ ${toPersianDigits(fp.amount)} افغانی ثبت شود و کتاب پس گرفته شود؟`)) return;
+    const res = await apiSend<{ fine?: number | null }>('/api/library', 'POST', { action: 'return', loanId: l.id }, { queueLabel: 'پس گرفتن کتاب' });
     if (res.error) {
-      toast({ title: 'خطا', description: res.error, variant: 'destructive' });
+      toast({ title: res.error, variant: 'destructive' });
       return;
     }
-    toast({ title: 'کتاب پس گرفته شد' });
+    toast({
+      title: 'کتاب پس گرفته شد',
+      description: res.queued
+        ? 'در حافظهٔ گوشی — پس از اتصال همگام می‌شود'
+        : res.data?.fine != null && res.data.fine > 0
+          ? `جریمهٔ دیرکرد ثبت شد: ${toPersianDigits(res.data.fine)} افغانی`
+          : undefined,
+    });
     load();
   };
 
@@ -113,6 +137,17 @@ export function LibraryView({ user }: { user: SessionUser }) {
 
   const activeLoans = loans.filter((l) => l.status === 'LENT');
   const overdue = activeLoans.filter((l) => l.dueDate < isoToday());
+  const totalFine = overdue.reduce((a, l) => a + finePreview(l.dueDate, finePerDay).amount, 0);
+  const cardLoans = cardStudentId ? activeLoans.filter((l) => l.studentId === cardStudentId) : [];
+  const cardHistory = cardStudentId ? loans.filter((l) => l.studentId === cardStudentId) : [];
+  /** پیوند sms برای هشدار سررسید به امانت‌گیرندهٔ شاگرد */
+  const borrowerSms = (l: LoanInfo) => {
+    if (l.borrowerType !== 'STUDENT' || !l.studentId) return null;
+    const s = students.find((x) => x.id === l.studentId);
+    if (!s?.guardianPhone) return null;
+    const text = `سلام — کتاب «${l.bookTitle || ''}» امانتی ${fullName(s)} تا ${isoToJalaliDisplay(l.dueDate)} باید به کتابخانهٔ مکتب خصوصی نداالقلم برگشت داده شود. با احترام`;
+    return `sms:${s.guardianPhone.replace(/\s+/g, '')}?body=${encodeURIComponent(text)}`;
+  };
 
   return (
     <div>
@@ -132,6 +167,33 @@ export function LibraryView({ user }: { user: SessionUser }) {
         )}
       />
 
+      {/* هشدار خودکار سررسید برگشت + جریمه */}
+      {overdue.length > 0 && (
+        <div className="rounded-xl border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
+          <p className="font-semibold flex items-center gap-1.5">
+            <AlertTriangle className="h-4 w-4" />
+            {toPersianDigits(overdue.length)} کتاب از سررسید برگشت گذشته است — جریمهٔ برآوردی: {toPersianDigits(totalFine)} افغانی (نرخ: {toPersianDigits(finePerDay)} افغانی/روز)
+          </p>
+          <div className="mt-1.5 space-y-1 max-h-28 overflow-y-auto">
+            {overdue.slice(0, 8).map((l) => {
+              const fp = finePreview(l.dueDate, finePerDay);
+              const sms = borrowerSms(l);
+              return (
+                <div key={l.id} className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="font-medium">{l.bookTitle}</span>
+                  <span className="opacity-80">— {l.borrowerName} ({isoToJalaliDisplay(l.dueDate)}، {toPersianDigits(fp.days)} روز)</span>
+                  {sms && (
+                    <a href={sms} className="inline-flex items-center gap-1 rounded-md border border-rose-400/40 px-1.5 py-0.5 hover:bg-rose-500/10" aria-label="هشدار به والد">
+                      <MessageSquare className="h-3 w-3" /> هشدار به والد
+                    </a>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <Tabs defaultValue="books">
         <TabsList className="mb-4">
           <TabsTrigger value="books">کتاب‌ها ({toPersianDigits(books.length)})</TabsTrigger>
@@ -140,6 +202,7 @@ export function LibraryView({ user }: { user: SessionUser }) {
             {overdue.length > 0 && <AlertTriangle className="inline h-3.5 w-3.5 text-amber-600 mr-1" />}
           </TabsTrigger>
           <TabsTrigger value="history">سابقهٔ امانت</TabsTrigger>
+          <TabsTrigger value="card" className="gap-1"><IdCard className="h-3.5 w-3.5" /> کارت شاگرد</TabsTrigger>
         </TabsList>
 
         <TabsContent value="books">
@@ -299,9 +362,16 @@ export function LibraryView({ user }: { user: SessionUser }) {
                           <TableCell className="text-xs">{isoToJalaliDisplay(l.loanDate)}</TableCell>
                           <TableCell className="text-xs">{l.returnDate ? isoToJalaliDisplay(l.returnDate) : '—'}</TableCell>
                           <TableCell>
-                            <Badge className={l.status === 'RETURNED' ? 'bg-emerald-600' : 'bg-amber-500'}>
-                              {l.status === 'RETURNED' ? 'پس داده شد' : 'در امانت'}
-                            </Badge>
+                            <div className="flex items-center gap-1.5">
+                              <Badge className={l.status === 'RETURNED' ? 'bg-emerald-600' : 'bg-amber-500'}>
+                                {l.status === 'RETURNED' ? 'پس داده شد' : 'در امانت'}
+                              </Badge>
+                              {l.fineAmount != null && l.fineAmount > 0 && (
+                                <Badge variant="outline" className="text-[10px] border-rose-300 text-rose-600">
+                                  جریمه: {toPersianDigits(l.fineAmount)} افغانی
+                                </Badge>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -312,9 +382,64 @@ export function LibraryView({ user }: { user: SessionUser }) {
             </CardContent>
           </Card>
         </TabsContent>
-      </Tabs>
 
-      {/* دیالوگ کتاب */}
+        {/* ─── کارت شاگرد — امانت‌های یک شاگرد ─── */}
+        <TabsContent value="card">
+          <Card className="border-emerald-100">
+            <CardContent className="p-4 space-y-3">
+              <Field label="انتخاب شاگرد (کارت شناسایی)" hint="همهٔ امانت‌های جاری و سابقهٔ این شاگرد یکجا نمایش داده می‌شود">
+                <Select value={cardStudentId} onValueChange={setCardStudentId}>
+                  <SelectTrigger><SelectValue placeholder="انتخاب شاگرد…" /></SelectTrigger>
+                  <SelectContent className="max-h-64">
+                    {students.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{fullName(s)} — {s.className || 'بدون صنف'}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              {cardStudent && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 rounded-xl border bg-muted/30 p-3">
+                    {cardStudent.photo ? (
+                      <img src={cardStudent.photo} alt={fullName(cardStudent)} className="h-14 w-14 rounded-lg border object-cover" />
+                    ) : (
+                      <div className="h-14 w-14 rounded-lg bg-emerald-100 flex items-center justify-center"><IdCard className="h-6 w-6 text-emerald-700" /></div>
+                    )}
+                    <div>
+                      <p className="font-bold">{fullName(cardStudent)}</p>
+                      <p className="text-xs text-muted-foreground">ولد: {cardStudent.fatherName} | صنف: {cardStudent.className || '—'}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold mb-1.5">امانت‌های جاری ({toPersianDigits(cardLoans.length)})</p>
+                    {cardLoans.length === 0 ? <p className="text-xs text-muted-foreground">امانتی جاری ندارد</p> : (
+                      <div className="space-y-1">
+                        {cardLoans.map((l) => {
+                          const fp = finePreview(l.dueDate, finePerDay);
+                          return (
+                            <div key={l.id} className="flex flex-wrap items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs">
+                              <span className="font-medium">{l.bookTitle}</span>
+                              <span className={l.dueDate < isoToday() ? 'text-rose-600' : 'text-muted-foreground'}>
+                                تا {isoToJalaliDisplay(l.dueDate)}{fp.amount > 0 ? ` — جریمه: ${toPersianDigits(fp.amount)} افغانی` : ''}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  {cardHistory.length > cardLoans.length && (
+                    <div>
+                      <p className="text-sm font-semibold mb-1.5">سابقهٔ برگشت‌شده</p>
+                      <p className="text-xs text-muted-foreground">{toPersianDigits(cardHistory.filter((l) => l.status === 'RETURNED').length)} امانت پس داده شده است</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
       <Dialog open={bookDialog} onOpenChange={setBookDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{bookForm.id ? 'ویرایش کتاب' : 'کتاب جدید'}</DialogTitle></DialogHeader>
