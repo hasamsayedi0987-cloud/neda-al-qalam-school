@@ -487,3 +487,22 @@ Stage Summary:
 - هر ۱۵ مورد حل/پیاده شد و با تست خودکار اثبات شد؛ آفلاین و همگام‌سازی قبلی سالم ماند
 - APK: /home/z/my-project/download/nedaalqalam-school.apk (v2.2.0)
 - یادآوری امنیتی: توکن گیت‌هاب همچنان باید regenerate شود
+
+---
+Task ID: v22-release
+Agent: main (Z.ai)
+Task: انتشار نهایی v2.2.0 با توکن جدید گیت‌هاب
+
+Work Log:
+- توکن جدید از کاربر دریافت شد؛ remote origin به‌روزرسانی و احراز هویت تأیید شد (ls-remote موفق)
+- ۴ کامیت معلق (شامل v2.2.0) به main پوش شد: 4776d7e..7448447
+- اسکریپت scripts/release-v22.sh اجرا شد: tag v2.2.0 پوش + Release id 424225243 ساخته شد
+- APK نسخهٔ ۲.۲.۰ (versionCode 10) با نام nedaalqalam-school.apk آپلود شد
+- تأیید صحت: SHA-256 فایل آپلودی (187c91c6…) دقیقاً برابر بیلد محلی؛ دارایی v2.1.0 (267015bb…) دست‌نخورده — dex دو بیلد متفاوت است (18320 در برابر 22424 بایت)
+- هر ۱۱ ریلیز (v1.0.0 … v2.2.0) سالم‌اند و همهٔ لینک‌های دانلود قدیمی کار می‌کنند (HTTP 200)
+- README از قبل در کامیت‌های پوش‌شده به‌روز بود (جدول نسخه‌ها شامل v2.2.0)
+
+Stage Summary:
+- انتشار v2.2.0 کامل شد: https://github.com/hasamsayedi0987-cloud/neda-al-qalam-school/releases/tag/v2.2.0
+- لینک مستقیم APK: https://github.com/hasamsayedi0987-cloud/neda-al-qalam-school/releases/download/v2.2.0/nedaalqalam-school.apk
+- نکتهٔ امنیتی: توکن قبلی (ghp_nZDDsD6U…) باید Revoke شود؛ توکن جدید فقط در remote URL محلی ذخیره است
