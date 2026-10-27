@@ -506,3 +506,25 @@ Stage Summary:
 - انتشار v2.2.0 کامل شد: https://github.com/hasamsayedi0987-cloud/neda-al-qalam-school/releases/tag/v2.2.0
 - لینک مستقیم APK: https://github.com/hasamsayedi0987-cloud/neda-al-qalam-school/releases/download/v2.2.0/nedaalqalam-school.apk
 - نکتهٔ امنیتی: توکن قبلی (ghp_nZDDsD6U…) باید Revoke شود؛ توکن جدید فقط در remote URL محلی ذخیره است
+
+---
+Task ID: v22-three-fixes
+Agent: main (Z.ai)
+Task: سه اصلاح گزارش کاربر — داشبورد آفلاین، اعلان/حذف پیام، اسکرول منو (نسخهٔ ۲.۲.۱)
+
+Work Log:
+- ریشهٔ «صفر و undefined» داشبورد آفلاین: کش GET فقط با کلید URL بود — روی گوشی مشترک پاسخ داشبورد کاربر قبلی (مثلاً نقش شاگرد که attendanceToday رشته است) به کاربر بعدی (مدیر) نمایش داده می‌شد
+- api.ts: setCacheScope(userId) + کلید کش کاربر-مخصوص برای dashboard/notifications/messages/tasks (پسوند @u:…) + CacheItem.u برای تازه‌سازی + گارد «پاسخ خالی هرگز کش نمی‌شود»
+- dashboard-view: اعتبارسنجی شکل پاسخ با نقش کاربر + حالت بازسازی آمار از کش بخش‌ها (students/teachers/classes) با یادداشت شفاف + کارت حاضری فقط با دادهٔ واقعی و ?? 0 + صفحهٔ راهنما وقتی هیچ کشی نیست
+- messages: POST اکنون اعلان می‌سازد (مستقیم/نقش/والدین صنف) — زنگ بالای صفحه و اعلان کوتاه ۲.۵ ثانیه‌ای با پول ۴۵ ثانیه از قبل فعال بود و حالا پیام‌ها هم زنگ را روشن می‌کنند
+- حذف پیام: ستون deletedFor در هر دو اسکیما + DELETE /api/messages (مستقیمِ خودم=حذف کامل، بقیه=حذف برای من) + فیلتر GET + رونویسی آفلاین + دکمهٔ سطل در UI با تأیید
+- منو: ScrollArea → overflow-y-auto بومی (لمس در اندروید-وب‌ویو کار می‌کند) + پاپ‌آور اعلان هم بومی شد + نسخهٔ منو ۲.۲.۱
+- page.tsx: setCacheScope در هر دو مسیر ورود (آنلاین/آفلاین) — پیوند کش به کاربر قطع شد
+- SW → v8-1 | APK: versionCode 11 / versionName 2.2.1 — SDK از دست رفته بازسازی شد (build-tools r34 + platform-34-ext7 در /home/z/android-sdk)؛ امضا SHA-256 e4bafcbc… یکسان با همهٔ نسخه‌ها
+- تست: test-v221.js جدید ۳۳/۳۳ PASS — نکتهٔ مهم: setOffline در Playwright واکشی SW را قطع نمی‌کند؛ فاز بازسازی با توقف واقعی سرور تست شد — رگرسیون: v22 (۵۳/۵۳)، v21 (۳۷/۳۷)، v2 (PASS) — tsc و eslint صفر خطا
+- انتشار: tag v2.2.1 + Release id 424999987 + APK آپلود شد؛ SHA-256 آپلودی با بیلد محلی برابر (1b2614ac…)؛ ۱۲ ریلیز سالم و همهٔ لینک‌های قدیمی فعال
+
+Stage Summary:
+- هر سه مورد کاربر حل و با تست خودکار اثبات شد؛ آفلاین/همگام‌سازی قبلی سالم ماند
+- APK: https://github.com/hasamsayedi0987-cloud/neda-al-qalam-school/releases/download/v2.2.1/nedaalqalam-school.apk
+- نکتهٔ محیطی: Android SDK در محیط از دست رفته بود و بازسازی شد (مسیرها مطابق build.sh: android-14 + android-34)
