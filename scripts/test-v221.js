@@ -67,6 +67,9 @@ async function api(method, url, body, cookie) {
   check('ورود معلم', teacher.status === 200 && teacher.data?.user?.role === 'TEACHER');
   const teacherId = teacher.data?.user?.id;
 
+  // پاک‌سازی اعلان‌های اجراهای قبلی — API فقط ۵۰ ردیف آخر را می‌دهد؛ باید از صفر شروع شود
+  await api('PATCH', '/api/notifications', { all: true }, teacher.cookie);
+
   // شمار اعلان پیش از ارسال پیام
   const notif0 = await api('GET', '/api/notifications', undefined, teacher.cookie);
   const unread0 = notif0.data?.unread ?? -1;
@@ -216,7 +219,12 @@ async function api(method, url, body, cookie) {
       for (const r of await c.keys()) if (r.url.includes('/api/dashboard')) await c.delete(r);
     }
   });
-  execSync("pkill -f 'standalone/server[.]js' || true");
+  // کشتن واقعی سرور — next-server نام پروسه را عوض می‌کند؛ با پورت می‌کشیم (kill -9)
+  try {
+    const ssOut = execSync("ss -tlnp | grep ':3000 ' || true").toString();
+    const pm = ssOut.match(/pid=(\d+)/);
+    if (pm) { try { execSync(`kill -9 ${pm[1]}`); } catch { /* already dead */ } }
+  } catch { /* ignore */ }
   await page.waitForTimeout(1200);
   // جابه‌جایی ویو → داشبورد دوباره بار می‌شود → واکشی واقعاً شکست می‌خورد → مسیر بازسازی
   await page.locator('button[aria-label="بازکردن منو"]').click();
@@ -278,27 +286,35 @@ async function api(method, url, body, cookie) {
   const libLoaded = await page.locator('text=کتابخانه').first().isVisible();
   check('تب‌های انتهای منو با اسکرول در دسترس و باز شدند (کتابخانه)', libLoaded);
 
-  // بخش پیام‌ها — از منو باز می‌شود
+  // بخش پیام‌ها — از منو باز می‌شود (چت‌خانهٔ ۲.۴)
   await page.locator('button[aria-label="بازکردن منو"]').click();
   await page.waitForTimeout(600);
   const msgNav = page.getByRole('button', { name: 'ارتباطات' }).last();
   await msgNav.scrollIntoViewIfNeeded();
   await msgNav.click();
   await page.waitForTimeout(400);
-  await page.waitForSelector('text=ارتباطات و پیام‌ها', { timeout: 15000 });
+  await page.waitForSelector('input[placeholder="جست‌وجوی گفتگو یا شخص…"]', { timeout: 15000 });
   check('بخش پیام‌ها باز شد', true);
   await page.waitForTimeout(1200);
-  // اولین ردیف صندوق ورودی — دکمهٔ حذف
-  const trashBtns = page.locator('button[aria-label="حذف پیام"]');
-  const trashCount = await trashBtns.count();
-  check('دکمهٔ حذف پیام در صندوق موجود است', trashCount > 0, `count=${trashCount}`);
-  if (trashCount > 0) {
-    const rowsBefore = await page.locator('button[aria-label="حذف پیام"]').count();
-    await trashBtns.first().click();
-    await page.waitForTimeout(1500);
-    const toastGone = await page.locator('text=پیام حذف شد').first().isVisible().catch(() => false);
-    const rowsAfter = await page.locator('button[aria-label="حذف پیام"]').count();
-    check('حذف پیام از رابط انجام شد (پیام تأیید + ردیف کم شد)', toastGone || rowsAfter < rowsBefore, `before=${rowsBefore} after=${rowsAfter} toast=${toastGone}`);
+  // بازکردن یک گفتگو → حباب پیام → دکمهٔ حذف (فقط ردیف‌های بخش گفتگوها — نه منو)
+  const convRows = page.locator('section').first().locator('button.w-full');
+  const convCount = await convRows.count();
+  if (convCount > 0) {
+    await convRows.first().click();
+    await page.waitForTimeout(1000);
+    const trashBtns = page.locator('button[aria-label="حذف پیام"]');
+    const trashCount = await trashBtns.count();
+    check('دکمهٔ حذف پیام در گفتگو موجود است', trashCount > 0, `count=${trashCount}`);
+    if (trashCount > 0) {
+      const rowsBefore = await page.locator('button[aria-label="حذف پیام"]').count();
+      await trashBtns.first().click();
+      await page.waitForTimeout(1500);
+      const toastGone = await page.locator('text=پیام حذف شد').first().isVisible().catch(() => false);
+      const rowsAfter = await page.locator('button[aria-label="حذف پیام"]').count();
+      check('حذف پیام از رابط انجام شد (پیام تأیید + ردیف کم شد)', toastGone || rowsAfter < rowsBefore, `before=${rowsBefore} after=${rowsAfter} toast=${toastGone}`);
+    }
+  } else {
+    check('دکمهٔ حذف پیام در گفتگو موجود است', false, 'گفتگویی در فهرست نیست');
   }
 
   // ═══ فاز ۷: خطاهای کنسول ═══

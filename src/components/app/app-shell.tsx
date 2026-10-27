@@ -349,7 +349,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
         </nav>
       </div>
       <div className="px-4 py-3 border-t text-[11px] text-muted-foreground">
-        نسخهٔ ۲.۲.۱ — حسام الدین سیدی
+        نسخهٔ ۲.۴.۰ — حسام الدین سیدی
       </div>
     </div>
   );

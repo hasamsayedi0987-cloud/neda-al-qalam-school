@@ -36,11 +36,11 @@ const check = (n, c, x = '') => { if (c) { passed++; console.log(`  ✔ ${n}`); 
   const finText = await page.locator('main').textContent().catch(() => '');
   check('بخش مالی باز شد', (finText || '').includes('مالی') && (finText || '').includes('افغانی'), (finText || '').slice(0, 60));
 
-  // ─── ارتباطات ───
+  // ─── ارتباطات (چت‌خانهٔ ۲.۴) ───
   await page.goto(`${BASE}/?view=messages`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(3000);
   const msgText = await page.locator('main').textContent().catch(() => '');
-  check('بخش ارتباطات باز شد', (msgText || '').includes('ورودی') && (msgText || '').includes('نوشتن'));
+  check('بخش ارتباطات باز شد', (msgText || '').includes('پیام‌ها') && (msgText || '').includes('گفتگوی جدید'));
 
   // ─── صنف‌ها + برنامهٔ هفتگی ───
   await page.goto(`${BASE}/?view=classes`, { waitUntil: 'domcontentloaded' });

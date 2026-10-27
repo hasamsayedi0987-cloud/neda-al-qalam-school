@@ -759,6 +759,9 @@ const SPECS: Record<string, { apply: (data: Row, e: OverlayEntry, url: string) =
           priority: b.urgent === true ? 'URGENT' : 'NORMAL',
           readCount: 0, totalCount: 0,
           read: false,
+          // چت‌خانه — ردیف آفلاین باید دقیقاً مثل ردیف واقعی رفتار کند
+          recipientIds: Array.isArray(b.targets) && b.targets.length === 1 && (b.targets as Row[])[0].kind === 'users' ? ((b.targets as Row[])[0].userIds as string[]) : undefined,
+          attachmentName: b.attachment && typeof b.attachment === 'object' ? String((b.attachment as Row).name || 'پیوست') : null,
           createdAt: new Date().toISOString(), toLabel, fromName: '', fromRole: '',
         });
       }

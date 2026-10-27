@@ -63,8 +63,8 @@ const AUDIENCES = [
 
 interface Attach { name: string; type: string; data: string }
 
-/** فشرده‌سازی عکس — حداکثر ۱۲۸۰ پیکسل، JPEG با کیفیت ۰٫۷ */
-function compressImage(file: File): Promise<string> {
+/** فشرده‌سازی عکس — حداکثر ۱۲۸۰ پیکسل، JPEG با کیفیت ۰٫۷ (اشتراکی با چت‌خانه) */
+export function compressImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);

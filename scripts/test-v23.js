@@ -328,7 +328,7 @@ async function api(method, url, body, cookie) {
   const aSent3 = await api('GET', '/api/messages', undefined, admin.cookie);
   check('فرستنده هنوز پیام را دارد (حذف نرم)', (aSent3.data.sent || []).some((m) => m.id === directId));
 
-  // ═══ رابط کاربری — موبایل ═══
+  // ═══ رابط کاربری — موبایل (چت‌خانهٔ ۲.۴) ═══
   console.log('═ رابط کاربری (۳۹۰px) ═');
   await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#username', { timeout: 15000 });
@@ -339,11 +339,13 @@ async function api(method, url, body, cookie) {
   await page.locator('button[aria-label="بازکردن منو"]').click();
   await page.waitForTimeout(700);
   await page.getByRole('button', { name: 'ارتباطات و پیام‌ها' }).last().click();
-  await page.waitForSelector('button:has-text("نوشتن")', { timeout: 15000 });
+  await page.waitForSelector('input[placeholder="جست‌وجوی گفتگو یا شخص…"]', { timeout: 15000 });
   const pageText = await page.textContent('body');
-  check('ویو پیام‌ها رندر شد', pageText.includes('ارتباطات و پیام‌ها'));
-  check('تب‌های مدیریتی برای مدیر هست', pageText.includes('صلاحیت‌ها') && pageText.includes('گزارش‌ها'));
-  await page.locator('button:has-text("نوشتن")').first().click();
+  check('ویو چت‌خانه رندر شد', pageText.includes('پیام‌ها'));
+  check('پنل‌های مدیریتی برای مدیر هست (صلاحیت‌ها + گزارش‌ها)', await page.locator('button[aria-label="صلاحیت‌های ارتباطی"]').count() > 0 && await page.locator('button[aria-label="گزارش فعالیت پیام‌ها"]').count() > 0);
+  await page.click('button[aria-label="گفتگوی جدید"]');
+  await page.waitForTimeout(900);
+  await page.locator('button[role="tab"]:has-text("گروهی و همگانی")').click();
   await page.waitForTimeout(1200);
   const composeText = await page.textContent('body');
   check('پنل نوشتن با گروه‌ها برای مدیر', composeText.includes('گروه‌ها') || composeText.includes('همهٔ کاربران'));
