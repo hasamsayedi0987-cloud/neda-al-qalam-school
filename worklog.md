@@ -528,3 +528,30 @@ Stage Summary:
 - هر سه مورد کاربر حل و با تست خودکار اثبات شد؛ آفلاین/همگام‌سازی قبلی سالم ماند
 - APK: https://github.com/hasamsayedi0987-cloud/neda-al-qalam-school/releases/download/v2.2.1/nedaalqalam-school.apk
 - نکتهٔ محیطی: Android SDK در محیط از دست رفته بود و بازسازی شد (مسیرها مطابق build.sh: android-14 + android-34)
+
+---
+Task ID: v23-comm-platform
+Agent: main (Z.ai)
+Task: توسعهٔ حرفه‌ای بخش ارتباطات و پیام‌ها — پلتفرم کامل، امن و قابل‌کنترل (v2.3.0)
+
+Work Log:
+- بررسی ساختار واقعی دیتابیس پیش از پیاده‌سازی (scripts/db-inspect.mjs): ۱۰ کاربر در ۷ نقش، ۵ صنف با نگران، ۱۳ تقسیم مضمون، ۱۴ شاگرد، ۱۷ پیام قدیمی
+- اسکیما (SQLite + PostgreSQL): MessageRecipient (رسید خواندن/حذف فردی)، Message.kind/priority/attachment/editedAt، GuardianLink (چند‌فرزندی والد)، AuditLog — db push موفق
+- src/lib/comm.ts: سیاست ارتباطی مشترک — ۱۶ قابلیت با پیش‌فرض هر نقش + رونویسی نقش/فرد + relaxParentScope/relaxTeacherScope/extraPeers/blockedPeers
+- src/lib/comm-server.ts: موتور امنیتی سمت سرور — حل گیرندگان با ددیوپ، روابط واقعی (تدریس/نگرانی/فرزندان)، گارد محدودهٔ صنف، مهاجرت خودکار پیام‌های قدیمی
+- API: /api/messages بازنویسی کامل (GET فهرست+مخاطبان مجاز+myPerms، POST targets با گاردها، PATCH خواندن/ویرایش ۳۰دقیقه‌ای، DELETE فراخوانی/مودریشن) + /api/messages/preview (پیش‌شماره) + /api/comm (سیاست) + /api/comm/reports + /api/comm/links
+- اتصال ارسال پیام به گیرندگان واقعی: اعلان برای هر گیرنده (createMany) — زنگ و اعلان کوتاه قبلی سالم
+- پشتیبان نسخهٔ ۴: messageRecipients + guardianLinks + auditLogs شامل GET و restore تراکنشی
+- api.ts: کش کاربر-مخصوص /api/comm + رونویسی آفلاین پیام (POST targets، PATCH خواندن/ویرایش، DELETE) — صف آفلاین قبلی دست‌نخورده
+- UI: messages-view بازنویسی (فیلتر نقش/صنف/تاریخ/وضعیت، جست‌وجو، رسید خواندن، گفتگو، جزئیات، ویرایش) + compose-panel جدید (حالت افراد/گروه‌ها، پیش‌شمارهٔ زنده، فوری، پیوست فشرده) + comm-admin-panels (صلاحیت‌ها + فرزندان سرپرستان + گزارش/مودریشن)
+- باگ‌های رفع‌شده در تست: skipDuplicates نامعتبر در SQLite، SelectItem با value='' (کرش Radix)، گارد اطلاعیهٔ صنفی معلم، رابط معلم-والد از طریق GuardianLink
+- تست: test-v23.js جدید — هر ۸ سناریوی الزامی + امنیت + پیوست + ویرایش + مودریشن + گزارش + UI موبایل: ۶۲/۶۲ PASS
+- رگرسیون کامل: v22 (۵۳/۵۳)، v221 (۳۳/۳۳)، v21 (۳۷/۳۷)، v2 (PASS)، UI-smoke (۱۰/۱۰) — tsc و eslint صفر خطا
+- انتشار: SW → v9-0 | versionCode 12 / versionName 2.3.0 | امضای SHA-256 e4bafcbc… یکسان با همهٔ نسخه‌ها | push 3a75881..2d88405 + tag v2.3.0 | Release id 425036298 | SHA-256 آپلودی (3897e734…) برابر بیلد محلی | هر ۱۳ ریلیز سالم
+
+Stage Summary:
+- پلتفرم ارتباطات کامل شد: مدیر کنترل کامل بدون تغییر کد، محدودیت‌ها واقعاً سمت سرور اعمال می‌شوند
+- لینک: https://github.com/hasamsayedi0987-cloud/neda-al-qalam-school/releases/tag/v2.3.0
+- APK: https://github.com/hasamsayedi0987-cloud/neda-al-qalam-school/releases/download/v2.3.0/nedaalqalam-school.apk
+- نکته: برای اعمال روی سرور ابری، اسکیمای PostgreSQL (prisma/schema.postgres.prisma) باید db push شود — مهاجرت پیام‌های قدیمی خودکار است
+- یادآوری امنیتی: توکن قبلی (ghp_nZDDsD6U…) همچنان باید Revoke شود
