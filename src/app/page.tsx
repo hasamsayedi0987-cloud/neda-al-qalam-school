@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { LoginView } from '@/components/app/login-view';
 import { AppShell } from '@/components/app/app-shell';
-import { apiGet, markAuthRestored } from '@/lib/client/api';
+import { apiGet, markAuthRestored, setCacheScope } from '@/lib/client/api';
 import type { SessionUser } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
 
@@ -27,6 +27,8 @@ export default function Page() {
       if (data.setupDone !== undefined) setSetupDone(data.setupDone);
       if (data.user) {
         sessionStorage.setItem(ALIVE_KEY, '1');
+        // کش بخش‌های کاربر-مخصوص (داشبورد/اعلان/پیام) به این کاربر پیوند خورد — ریشهٔ دادهٔ جابجا روی گوشی مشترک قطع شد
+        setCacheScope(data.user.id);
         // ورود معتبر شد — ثبت‌های آفلاین مانده در صف ارسال می‌شوند
         markAuthRestored();
       } else sessionStorage.removeItem(ALIVE_KEY);
@@ -62,6 +64,7 @@ export default function Page() {
     try { sessionStorage.setItem(ALIVE_KEY, '1'); } catch { /* ignore */ }
     if (u) {
       // ورود آفلاین — کاربر از اعتبار محلی، بدون خواندن کش
+      setCacheScope(u.id);
       setUser(u);
       return;
     }

@@ -323,6 +323,7 @@ model Message {
   body      String
   category  String   @default("GENERAL") // GENERAL | ACADEMIC | DISCIPLINARY | ANNOUNCEMENT
   read      Boolean  @default(false)
+  deletedFor String? // JSON آرایهٔ شناسهٔ کاربرانی که این پیام را برای خودشان حذف کرده‌اند
   createdAt DateTime @default(now())
 
   fromUser User @relation("sentMessages", fields: [fromUserId], references: [id], onDelete: Cascade)

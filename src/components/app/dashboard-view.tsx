@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, StatCard, PageHeader, LoadingBlock } from './ui-bits';
 import { apiGet } from '@/lib/client/api';
+import { Info } from 'lucide-react';
 import { isoToday, isoToJalaliDisplay, toPersianDigits, isoToWeekday } from '@/lib/jalali';
 import { ATTENDANCE_LABELS, letterGrade } from '@/lib/grading';
 import type { SessionUser } from '@/lib/types';
@@ -46,16 +47,84 @@ const LETTER_ORDER = ['الف', 'ب', 'ج', 'د', 'هـ', 'تکرار'];
 export function DashboardView({ user, onNavigate }: { user: SessionUser; onNavigate: (v: string) => void }) {
   const [data, setData] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
+  /** در حالت آفلاین وقتی کش داشبوردِ همین کاربر موجود نیست، آمار از آخرین دادهٔ بخش‌ها ساخته می‌شود */
+  const [partial, setPartial] = useState(false);
 
   useEffect(() => {
-    apiGet<DashData>('/api/dashboard')
-      .then(setData)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+    let alive = true;
+    const isStudentSideRole = user.role === 'STUDENT' || user.role === 'GUARDIAN';
+
+    (async () => {
+      try {
+        const d = await apiGet<DashData>('/api/dashboard');
+        // اعتبارسنجی شکل پاسخ — کشِ کاربر دیگر (مثلاً شاگرد روی گوشیِ مدیر) هرگز نباید نمایش داده شود
+        const valid =
+          d &&
+          d.role === user.role &&
+          (isStudentSideRole
+            ? typeof d.totalGrades === 'number'
+            : typeof d.studentCount === 'number' && typeof d.classCount === 'number');
+        if (!valid) throw new Error('شکل دادهٔ داشبورد با حساب شما هم‌خوان نیست');
+        if (alive) {
+          setData(d);
+          setPartial(false);
+        }
+      } catch {
+        // بارگیری داشبورد ممکن نشد (آفلاین بدون کش) — آمار از آخرین دادهٔ ذخیره‌شدهٔ بخش‌ها ساخته می‌شود
+        try {
+          const [st, te, cl] = await Promise.all([
+            apiGet<{ students?: Array<{ status?: string }> }>('/api/students').catch(() => null),
+            apiGet<{ teachers?: Array<{ position?: string; active?: boolean }> }>('/api/teachers').catch(() => null),
+            apiGet<{ classes?: unknown[] }>('/api/classes').catch(() => null),
+          ]);
+          const students = st?.students || [];
+          const teachers = te?.teachers || [];
+          const classes = cl?.classes || [];
+          if (!alive) return;
+          if (students.length === 0 && teachers.length === 0 && classes.length === 0) {
+            setData(null);
+          } else {
+            const TEACHING = ['معلم', 'سرمعلم', 'مدیر'];
+            const STAFF_ROLES = ['ملازم', 'کارمند', 'کتابخانه‌دار'];
+            setPartial(true);
+            setData({
+              role: user.role,
+              studentCount: students.filter((s) => (s.status || 'ACTIVE') === 'ACTIVE').length,
+              teacherCount: teachers.filter((t) => TEACHING.includes(t.position || '') && t.active !== false).length,
+              staffCount: teachers.filter((t) => STAFF_ROLES.includes(t.position || '') && t.active !== false).length,
+              classCount: classes.length,
+            });
+          }
+        } catch {
+          if (alive) setData(null);
+        }
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [user.role, user.id]);
 
   if (loading) return <LoadingBlock rows={5} />;
-  if (!data) return <p className="text-sm text-muted-foreground p-4">اطلاعات داشبورد بارگذاری نشد.</p>;
+  if (!data)
+    return (
+      <div className="space-y-4">
+        <PageHeader title={`سلام، ${user.name}`} subtitle={`${isoToWeekday(isoToday())} — ${isoToJalaliDisplay(isoToday())}`} icon={Sparkles} />
+        <Card>
+          <CardContent className="p-6 text-center space-y-2">
+            <Info className="h-8 w-8 text-muted-foreground mx-auto" />
+            <p className="text-sm font-medium">آمار داشبورد برای حالت آفلاین ذخیره نشده است</p>
+            <p className="text-xs text-muted-foreground leading-6">
+              یک بار با اتصال انترنت وارد شوید تا آمار شاگردان، معلمان، کارمندان و صنف‌ها در حافظهٔ گوشی ذخیره شود؛
+              پس از آن در حالت آفلاین هم به‌درستی نمایش داده می‌شود.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
 
   const today = isoToday();
   const isStudentSide = user.role === 'STUDENT' || user.role === 'GUARDIAN';
@@ -118,22 +187,35 @@ export function DashboardView({ user, onNavigate }: { user: SessionUser; onNavig
       {/* آمار بر اساس نقش */}
       {isStudentSide ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger">
-          <StatCard title="مضمون دارای نمره" value={data.totalGrades || 0} icon={ClipboardList} tone="emerald" />
-          <StatCard title="نمرات تایید‌شده" value={data.approvedGrades || 0} icon={GraduationCap} tone="teal" />
-          <StatCard title="کل روزهای حاضری" value={data.attendanceTotal || 0} icon={CalendarDays} tone="sky" />
-          <StatCard title="تعداد غیبت" value={data.absences || 0} icon={CalendarCheck} tone="rose" />
+          <StatCard title="مضمون دارای نمره" value={data.totalGrades ?? 0} icon={ClipboardList} tone="emerald" />
+          <StatCard title="نمرات تایید‌شده" value={data.approvedGrades ?? 0} icon={GraduationCap} tone="teal" />
+          <StatCard title="کل روزهای حاضری" value={data.attendanceTotal ?? 0} icon={CalendarDays} tone="sky" />
+          <StatCard title="تعداد غیبت" value={data.absences ?? 0} icon={CalendarCheck} tone="rose" />
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger">
-          <StatCard title="شاگردان فعال" value={data.studentCount || 0} icon={Users} tone="emerald" />
-          <StatCard title="معلمان" value={data.teacherCount || 0} icon={GraduationCap} tone="teal" />
-          <StatCard title="کارمندان" value={data.staffCount || 0} icon={UserCog} tone="sky" />
-          <StatCard title="صنف‌ها" value={data.classCount || 0} icon={School} tone="amber" />
+          <StatCard title="شاگردان فعال" value={data.studentCount ?? 0} icon={Users} tone="emerald" />
+          <StatCard title="معلمان" value={data.teacherCount ?? 0} icon={GraduationCap} tone="teal" />
+          <StatCard title="کارمندان" value={data.staffCount ?? 0} icon={UserCog} tone="sky" />
+          <StatCard title="صنف‌ها" value={data.classCount ?? 0} icon={School} tone="amber" />
         </div>
       )}
 
-      {/* حاضری امروز (برای مسئولان) */}
-      {!isStudentSide && data.attendanceToday && (
+      {/* در حالت آفلاین بدون کش داشبورد — آمار از آخرین دادهٔ بخش‌ها ساخته شده */}
+      {partial && (
+        <Card className="border-sky-500/30 bg-sky-500/5 animate-fade-up">
+          <CardContent className="p-3 flex items-start gap-2.5">
+            <Info className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-sky-800 dark:text-sky-300 leading-6">
+              حالت آفلاین — این آمار از آخرین داده‌های ذخیره‌شدهٔ بخش شاگردان، معلمان و صنف‌ها محاسبه شده است.
+              با اتصال انترنت، آمار دقیق و کامل (حاضری، نمرات و نمودارها) نمایش داده می‌شود.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* حاضری امروز (برای مسئولان) — فقط وقتی دادهٔ واقعی روز جاری موجود است */}
+      {!isStudentSide && data.attendanceToday && typeof data.attendanceToday === 'object' && (
         <Card className="animate-fade-up">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
@@ -143,7 +225,7 @@ export function DashboardView({ user, onNavigate }: { user: SessionUser; onNavig
           <CardContent className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
             {(['present', 'absent', 'sick', 'leave', 'recorded'] as const).map((k) => (
               <div key={k} className="rounded-xl bg-accent/60 border py-2.5">
-                <p className="text-lg font-bold">{toPersianDigits(data.attendanceToday![k])}</p>
+                <p className="text-lg font-bold">{toPersianDigits(data.attendanceToday![k] ?? 0)}</p>
                 <p className="text-[11px] text-muted-foreground">
                   {k === 'recorded' ? 'ثبت‌شده' : ATTENDANCE_LABELS[k === 'present' ? 'PRESENT' : k === 'absent' ? 'ABSENT' : k === 'sick' ? 'SICK' : 'LEAVE']}
                 </p>

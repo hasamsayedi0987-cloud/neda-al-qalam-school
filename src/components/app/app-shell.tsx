@@ -9,7 +9,6 @@ import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { apiGet, apiSend, onSyncStateChange, pendingSyncCount, failedSyncItems, isOnline, isAuthRequired, flushQueue, tryAutoRelogin, discardQueueItem, discardAllFailedItems } from '@/lib/client/api';
 import { configureExports } from '@/lib/client/exports';
@@ -194,15 +193,31 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
       .catch(() => {});
   }, []);
 
+  // ردیابی اعلان‌های قبلی — برای تشخیص «پیام تازه» و نمایش اعلان کوتاه رسیدن پیام
+  const seenNotifIdsRef = useRef<Set<string>>(new Set());
+  const firstNotifLoadRef = useRef(true);
+
   const loadNotifications = useCallback(async () => {
     try {
       const data = await apiGet<{ notifications: NotificationInfo[]; unread: number }>('/api/notifications');
       setNotifications(data.notifications);
       setUnread(data.unread);
+      // اعلان کوتاه هنگام رسیدن پیام/اعلان تازه — فقط از دومین بارگیری به بعد (بار اول شلوغ نشود)
+      const fresh = data.notifications.filter((n) => !n.read && !seenNotifIdsRef.current.has(n.id));
+      seenNotifIdsRef.current = new Set(data.notifications.map((n) => n.id));
+      if (!firstNotifLoadRef.current && fresh.length > 0) {
+        const n = fresh[0];
+        toast({
+          title: n.title,
+          description: n.body.length > 90 ? n.body.slice(0, 87) + '…' : n.body,
+          duration: 2500,
+        });
+      }
+      firstNotifLoadRef.current = false;
     } catch {
       /* آفلاین */
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     queueMicrotask(loadNotifications);
@@ -303,7 +318,8 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
           <p className="text-[11px] text-muted-foreground">{titles.tagline}</p>
         </div>
       </div>
-      <ScrollArea className="flex-1 px-2 py-3">
+      {/* فهرست بخش‌ها — اسکرول بومی لمسی (ScrollArea در اندروید-وب‌ویو لمس را نمی‌گیرد و تب‌های پایین دست‌نیافتنی می‌شدند) */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-2 py-3">
         <nav className="space-y-1">
           {visibleNav.map((item) => (
             <button
@@ -331,9 +347,9 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
             </div>
           )}
         </nav>
-      </ScrollArea>
+      </div>
       <div className="px-4 py-3 border-t text-[11px] text-muted-foreground">
-        نسخهٔ ۲.۱.۰ — حسام الدین سیدی
+        نسخهٔ ۲.۲.۱ — حسام الدین سیدی
       </div>
     </div>
   );
@@ -424,7 +440,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
                   خواندن همه
                 </Button>
               </div>
-              <ScrollArea className="max-h-80">
+              <div className="max-h-80 overflow-y-auto overscroll-contain">
                 {notifications.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-8">اعلانی موجود نیست</p>
                 ) : (
@@ -441,7 +457,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
                     </div>
                   ))
                 )}
-              </ScrollArea>
+              </div>
             </PopoverContent>
           </Popover>
 

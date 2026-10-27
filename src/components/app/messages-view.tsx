@@ -19,7 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { apiGet, apiSend } from '@/lib/client/api';
 import { isoToJalaliDisplay, toPersianDigits } from '@/lib/jalali';
 import { ROLE_LABELS } from '@/lib/grading';
-import { MessageSquare, Send, CheckCheck, Inbox, FileText, PenLine } from 'lucide-react';
+import { MessageSquare, Send, CheckCheck, Inbox, FileText, PenLine, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SessionUser } from '@/lib/types';
 
@@ -137,34 +137,71 @@ export function MessagesView({ user }: { user: SessionUser }) {
     void load();
   };
 
+  /** حذف پیام — برای من حذف می‌شود؛ پیام مستقیمِ خود فرستنده کامل پاک می‌شود */
+  const deleteMsg = async (m: Msg) => {
+    if (!window.confirm('این پیام حذف شود؟\nپیام از صندوق شما پاک می‌شود و این عمل بازگشت‌پذیر نیست.')) return;
+    const res = await apiSend(`/api/messages?id=${m.id}`, 'DELETE', undefined, {
+      queueLabel: m.subject ? `حذف پیام: ${m.subject}` : 'حذف پیام',
+    });
+    if (res.error) {
+      toast({ title: res.error, variant: 'destructive' });
+      return;
+    }
+    toast({
+      title: res.queued
+        ? 'حذف در حافظهٔ گوشی ذخیره شد — پس از اتصال همگام می‌شود'
+        : 'پیام حذف شد',
+    });
+    if (!res.queued) void load();
+  };
+
   if (loading) {
     return <p className="text-sm text-muted-foreground animate-pulse">در حال بارگذاری پیام‌ها…</p>;
   }
 
   const msgRow = (m: Msg, sent: boolean) => (
-    <button
+    <div
       key={m.id}
-      type="button"
-      onClick={() => !sent && markRead(m)}
       className={cn(
-        'w-full text-right rounded-xl border p-3 transition-colors hover:bg-accent/40',
+        'rounded-xl border p-3 transition-colors',
         !sent && !m.read && 'border-primary/40 bg-primary/5',
       )}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium text-sm">
-          {sent ? `به: ${m.toLabel}` : m.fromName || 'کاربر'}
-          {!sent && m.fromRole ? ` (${ROLE_LABELS[m.fromRole] || m.fromRole})` : ''}
-        </span>
+        {!sent && !m.read ? (
+          <button
+            type="button"
+            onClick={() => markRead(m)}
+            className="min-w-0 flex-1 text-right font-medium text-sm hover:underline underline-offset-2"
+            title="برای علامت‌گذاری «خوانده‌شده» لمس کنید"
+          >
+            {m.fromName || 'کاربر'}
+            {m.fromRole ? ` (${ROLE_LABELS[m.fromRole] || m.fromRole})` : ''}
+          </button>
+        ) : (
+          <span className="min-w-0 flex-1 font-medium text-sm truncate">
+            {sent ? `به: ${m.toLabel}` : m.fromName || 'کاربر'}
+            {!sent && m.fromRole ? ` (${ROLE_LABELS[m.fromRole] || m.fromRole})` : ''}
+          </span>
+        )}
         <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0', catOf(m.category).cls)}>
           {catOf(m.category).label}
         </Badge>
-        <span className="text-[11px] text-muted-foreground ms-auto">{toPersianDigits(isoToJalaliDisplay(m.createdAt.slice(0, 10)))}</span>
+        <span className="text-[11px] text-muted-foreground">{toPersianDigits(isoToJalaliDisplay(m.createdAt.slice(0, 10)))}</span>
         {!sent && !m.read && <span className="h-2 w-2 rounded-full bg-primary shrink-0" aria-label="نخوانده" />}
+        <button
+          type="button"
+          onClick={() => deleteMsg(m)}
+          aria-label="حذف پیام"
+          title="حذف پیام"
+          className="shrink-0 rounded-lg p-1.5 text-rose-600 hover:bg-rose-500/10 transition-colors"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
       </div>
       {m.subject && <p className="text-sm font-medium mt-1.5">{m.subject}</p>}
       <p className="text-[13px] text-foreground/80 mt-0.5 whitespace-pre-wrap break-words">{m.body}</p>
-    </button>
+    </div>
   );
 
   return (

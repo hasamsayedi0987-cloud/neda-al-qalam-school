@@ -18,7 +18,36 @@ const GET_CACHE_KEY = 'noq_get_cache_v1';
 const CREDS_KEY = 'noq_offline_creds_v1';
 const IDMAP_KEY = 'noq_idmap_v1';
 const LAST_USER_KEY = 'noq_last_user_v1';
+const SCOPE_KEY = 'noq_cache_scope_v1';
 type Row = Record<string, unknown>;
+
+/* ───────────────  دامنهٔ کش به‌ازای هر کاربر  ───────────────
+ * پاسخ برخی بخش‌ها «مخصوص همان کاربر» است (داشبورد، اعلان‌ها، پیام‌ها، وظایف).
+ * اگر این پاسخ‌ها با کلید فقط-آدرس ذخیره می‌شدند، روی یک گوشیِ مشترک،
+ * دادهٔ کاربر قبلی به کاربر بعدی نشان داده می‌شد — ریشهٔ «صفر و undefined» داشبورد آفلاین.
+ */
+let cacheScope = 'anon';
+if (typeof window !== 'undefined') {
+  try { cacheScope = localStorage.getItem(SCOPE_KEY) || 'anon'; } catch { /* ignore */ }
+}
+
+/** هنگام ورود موفق (آنلاین یا آفلاین) فراخوانی می‌شود — کش بخش‌های کاربر-مخصوص از این پس مالِ همین کاربر است */
+export function setCacheScope(userId: string | null | undefined) {
+  cacheScope = userId ? `u:${userId}` : 'anon';
+  if (typeof window !== 'undefined') {
+    try { localStorage.setItem(SCOPE_KEY, cacheScope); } catch { /* ignore */ }
+  }
+}
+
+/** بخش‌هایی که پاسخ‌شان به‌ازای هر کاربر جداگانه ذخیره می‌شود */
+const USER_SCOPED_PREFIXES = ['/api/dashboard', '/api/notifications', '/api/messages', '/api/tasks'];
+
+function scopedKey(url: string): string {
+  if (USER_SCOPED_PREFIXES.some((p) => url === p || url.startsWith(p + '?'))) {
+    return `${url}@${cacheScope}`;
+  }
+  return url;
+}
 
 interface QueuedRequest {
   id: string;
@@ -648,6 +677,15 @@ const SPECS: Record<string, { apply: (data: Row, e: OverlayEntry, url: string) =
   messages: {
     apply(data, e) {
       const b = (e.body as Row) || {};
+      // حذف پیام (آفلاین) — از هر دو صندوق حذف می‌شود تا بلافاصله از فهرست پنهان شود
+      if (e.method === 'DELETE') {
+        const id = idFromUrl(e.url);
+        if (id) {
+          if (Array.isArray(data.inbox)) data.inbox = (data.inbox as Row[]).filter((m) => m.id !== id);
+          if (Array.isArray(data.sent)) data.sent = (data.sent as Row[]).filter((m) => m.id !== id);
+        }
+        return data;
+      }
       if (e.method === 'POST') {
         if (!Array.isArray(data.sent)) data.sent = [];
         let toLabel = '';
@@ -730,6 +768,8 @@ function applyOverlay(url: string, data: unknown): unknown {
 interface CacheItem {
   t: number;
   data: unknown;
+  /** آدرس اصلی — وقتی کلید کش پسوند دامنهٔ کاربر دارد، برای تازه‌سازی لازم است */
+  u?: string;
 }
 
 function readGetCache(): Record<string, CacheItem> {
@@ -749,14 +789,22 @@ function writeGetCache(cache: Record<string, CacheItem>) {
   }
 }
 
+/** پاسخ خالی/ناقص هرگز کش نمی‌شود تا کش سالم قبلی خراب نشود */
+function isCacheable(data: unknown): boolean {
+  if (data == null || typeof data !== 'object') return false;
+  return Object.keys(data as Row).length > 0;
+}
+
 function cacheGet(url: string, data: unknown) {
+  if (!isCacheable(data)) return;
   const cache = readGetCache();
-  cache[url] = { t: Date.now(), data };
+  const key = scopedKey(url);
+  cache[key] = { t: Date.now(), data, ...(key !== url ? { u: url } : {}) };
   writeGetCache(cache);
 }
 
 function cachePeek(url: string): unknown | undefined {
-  const item = readGetCache()[url];
+  const item = readGetCache()[scopedKey(url)];
   return item ? item.data : undefined;
 }
 
@@ -768,9 +816,13 @@ async function refreshCollections(cols: Set<string>) {
   await Promise.allSettled(
     keys.map(async (k) => {
       try {
-        const res = await fetchTimeout(k, { cache: 'no-store' }, 6000);
+        // کلیدهای دارای دامنهٔ کاربر (@u:…) آدرس اصلی‌شان در CacheItem.u ذخیره شده — همان واکشی می‌شود
+        const item = cache[k] as CacheItem;
+        if (k.includes('@') && !item.u) return; // کلید قدیمی دارای دامنه بدون آدرس اصلی — قابل واکشی نیست
+        const target = item.u || k;
+        const res = await fetchTimeout(target, { cache: 'no-store' }, 6000);
         if (res.ok && res.headers.get('x-noq-cache') !== '1') {
-          cacheGet(k, await res.json());
+          cacheGet(target, await res.json());
         }
       } catch {
         /* کش قبلی می‌ماند */

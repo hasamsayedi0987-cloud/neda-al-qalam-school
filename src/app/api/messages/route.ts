@@ -17,6 +17,61 @@ import { teacherClassIds } from '@/lib/teacher-scope';
 const CATEGORIES = ['GENERAL', 'ACADEMIC', 'DISCIPLINARY', 'ANNOUNCEMENT'];
 const CONTACT_SELECT = { id: true, name: true, role: true };
 
+/** متن اعلان پیام — کوتاه‌شده تا در پوپآپ و زنگ اعلان جا شود */
+function notifyBody(subject: string | null, text: string): string {
+  const raw = subject ? `${subject} — ${text}` : text;
+  return raw.length > 120 ? raw.slice(0, 117) + '…' : raw;
+}
+
+/**
+ * پس از ثبت پیام، اعلان برای گیرنده‌ها ساخته می‌شود تا:
+ *  ۱) زنگ اعلان بالای صفحه با تعداد نخوانده روشن شود
+ *  ۲) اپ هنگام رسیدن پیام اعلان کوتاه نشان دهد
+ */
+async function createMessageNotifications(
+  fromName: string,
+  toUserId: string | null,
+  toRole: string | null,
+  toClassId: string | null,
+  subject: string | null,
+  text: string,
+) {
+  const title = `پیام جدید از ${fromName}`;
+  const body = notifyBody(subject, text);
+  try {
+    if (toUserId) {
+      await db.notification.createMany({ data: [{ userId: toUserId, title, body, type: 'INFO' }] });
+      return;
+    }
+    if (toClassId) {
+      // والدین (و شاگردان) آن صنف — مطابق گیرندگان واقعی پیام در GET
+      const users = await db.user.findMany({
+        where: { active: true, role: 'GUARDIAN', studentProfile: { classId: toClassId } },
+        select: { id: true },
+      });
+      if (users.length) {
+        await db.notification.createMany({
+          data: users.map((u) => ({ userId: u.id, title, body, type: 'INFO' })),
+        });
+      }
+      return;
+    }
+    if (toRole) {
+      const users = await db.user.findMany({
+        where: toRole === 'ALL' ? { active: true } : { active: true, role: toRole },
+        select: { id: true },
+      });
+      if (users.length) {
+        await db.notification.createMany({
+          data: users.map((u) => ({ userId: u.id, title, body, type: 'INFO' })),
+        });
+      }
+    }
+  } catch {
+    // اعلان حتماً نباید ارسال پیام را بشکند
+  }
+}
+
 async function listContacts(me: { id: string; role: string; teacherId: string | null }) {
   if (me.role === 'ADMIN') {
     return db.user.findMany({
@@ -111,6 +166,14 @@ export async function GET() {
         : Promise.resolve([] as Array<{ id: string; name: string }>),
     ]);
 
+    // پیام‌هایی که خود کاربر حذف کرده از صندوق‌ها کنار می‌روند (حذف برای من — نه برای دیگران)
+    const hiddenBy = (m: { deletedFor: string | null }): boolean => {
+      if (!m.deletedFor) return false;
+      try { return (JSON.parse(m.deletedFor) as string[]).includes(me.id); } catch { return false; }
+    };
+    const inboxList = inboxRaw.filter((m) => !hiddenBy(m));
+    const sentList = sentRaw.filter((m) => !hiddenBy(m));
+
     // برچسب گیرنده برای پیام‌های ارسال‌شده
     const toUserIds = [...new Set(sentRaw.map((m) => m.toUserId).filter(Boolean))] as string[];
     const classIds = [...new Set(sentRaw.map((m) => m.toClassId).filter(Boolean))] as string[];
@@ -138,10 +201,10 @@ export async function GET() {
       };
     };
 
-    const unread = inboxRaw.filter((m) => m.toUserId === me.id && !m.read).length;
+    const unread = inboxList.filter((m) => m.toUserId === me.id && !m.read).length;
     return NextResponse.json({
-      inbox: inboxRaw.map(decorate),
-      sent: sentRaw.map(decorate),
+      inbox: inboxList.map(decorate),
+      sent: sentList.map(decorate),
       unread,
       contacts: contacts.map((c) => ({ id: c.id, name: c.name, role: c.role })),
       classes,
@@ -170,6 +233,7 @@ export async function POST(req: NextRequest) {
       const msg = await db.message.create({
         data: { fromUserId: me.id, toUserId, subject: str(body.subject) || null, body: text, category },
       });
+      await createMessageNotifications(me.name, toUserId, null, null, msg.subject, text);
       return NextResponse.json({ id: msg.id });
     }
 
@@ -184,6 +248,7 @@ export async function POST(req: NextRequest) {
       const msg = await db.message.create({
         data: { fromUserId: me.id, toClassId, toRole: role, subject: str(body.subject) || null, body: text, category: 'ANNOUNCEMENT' },
       });
+      await createMessageNotifications(me.name, null, null, toClassId, msg.subject, text);
       return NextResponse.json({ id: msg.id });
     }
     if (toRole && !['ALL', 'ADMIN', 'HEADTEACHER', 'TEACHER', 'STUDENT', 'GUARDIAN', 'STAFF', 'LIBRARIAN'].includes(toRole)) {
@@ -192,7 +257,50 @@ export async function POST(req: NextRequest) {
     const msg = await db.message.create({
       data: { fromUserId: me.id, toRole: toRole || 'ALL', subject: str(body.subject) || null, body: text, category },
     });
+    await createMessageNotifications(me.name, null, toRole || 'ALL', null, msg.subject, text);
     return NextResponse.json({ id: msg.id });
+  } catch (e) {
+    return handleApiError(e);
+  }
+}
+
+/**
+ * حذف پیام — هر کاربر پیام‌های صندوق خودش را می‌تواند حذف کند:
+ *  • پیام مستقیمِ فرستاده‌شده توسط خودم → حذف کامل برای هر دو طرف
+ *  • بقیه (دریافتی/همگانی) → حذف فقط برای من (deletedFor)
+ */
+export async function DELETE(req: NextRequest) {
+  try {
+    const me = await requireUser();
+    const id = new NextRequest(req.url).nextUrl.searchParams.get('id') || '';
+    if (!id) throw new ApiError('شناسهٔ پیام لازم است');
+    const msg = await db.message.findUnique({ where: { id } });
+    if (!msg) throw new ApiError('پیام یافت نشد');
+
+    const myStudent = me.studentId
+      ? await db.student.findUnique({ where: { id: me.studentId }, select: { classId: true } })
+      : null;
+    const inMyInbox =
+      msg.toUserId === me.id ||
+      msg.toRole === 'ALL' ||
+      msg.toRole === me.role ||
+      Boolean(myStudent?.classId && msg.toClassId === myStudent.classId);
+    if (msg.fromUserId !== me.id && !inMyInbox) {
+      throw new ApiError('این پیام در صندوق شما نیست', 403);
+    }
+
+    if (msg.fromUserId === me.id && msg.toUserId) {
+      // پیام مستقیم خودم — حذف کامل برای هر دو طرف
+      await db.message.delete({ where: { id } });
+      return NextResponse.json({ ok: true, hard: true });
+    }
+
+    // حذف فقط برای من
+    let list: string[] = [];
+    try { list = msg.deletedFor ? (JSON.parse(msg.deletedFor) as string[]) : []; } catch { list = []; }
+    if (!list.includes(me.id)) list.push(me.id);
+    await db.message.update({ where: { id }, data: { deletedFor: JSON.stringify(list) } });
+    return NextResponse.json({ ok: true, hard: false });
   } catch (e) {
     return handleApiError(e);
   }
