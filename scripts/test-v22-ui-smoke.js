@@ -40,7 +40,7 @@ const check = (n, c, x = '') => { if (c) { passed++; console.log(`  ✔ ${n}`); 
   await page.goto(`${BASE}/?view=messages`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(3000);
   const msgText = await page.locator('main').textContent().catch(() => '');
-  check('بخش ارتباطات باز شد', (msgText || '').includes('صندوق ورودی') && (msgText || '').includes('نوشتن'));
+  check('بخش ارتباطات باز شد', (msgText || '').includes('ورودی') && (msgText || '').includes('نوشتن'));
 
   // ─── صنف‌ها + برنامهٔ هفتگی ───
   await page.goto(`${BASE}/?view=classes`, { waitUntil: 'domcontentloaded' });

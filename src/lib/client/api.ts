@@ -40,7 +40,7 @@ export function setCacheScope(userId: string | null | undefined) {
 }
 
 /** بخش‌هایی که پاسخ‌شان به‌ازای هر کاربر جداگانه ذخیره می‌شود */
-const USER_SCOPED_PREFIXES = ['/api/dashboard', '/api/notifications', '/api/messages', '/api/tasks'];
+const USER_SCOPED_PREFIXES = ['/api/dashboard', '/api/notifications', '/api/messages', '/api/tasks', '/api/comm'];
 
 function scopedKey(url: string): string {
   if (USER_SCOPED_PREFIXES.some((p) => url === p || url.startsWith(p + '?'))) {
@@ -686,10 +686,65 @@ const SPECS: Record<string, { apply: (data: Row, e: OverlayEntry, url: string) =
         }
         return data;
       }
+      // علامت‌گذاری «خوانده‌شده» (آفلاین) — تکی یا همه
+      if (e.method === 'PATCH' && b.edit !== true) {
+        if (Array.isArray(data.inbox)) {
+          const list = data.inbox as Row[];
+          if (b.all === true) {
+            for (const m of list) m.read = true;
+            data.unread = 0;
+          } else if (typeof b.id === 'string') {
+            const m = list.find((x) => x.id === b.id);
+            if (m && !m.read) {
+              m.read = true;
+              data.unread = Math.max(0, Number(data.unread || 0) - 1);
+            }
+          }
+        }
+        return data;
+      }
+      // ویرایش پیام خود (آفلاین) — متن جدید بلافاصله در صندوق‌ها دیده می‌شود
+      if (e.method === 'PATCH' && b.edit === true && typeof b.id === 'string') {
+        for (const key of ['inbox', 'sent']) {
+          if (Array.isArray(data[key])) {
+            const m = (data[key] as Row[]).find((x) => x.id === b.id);
+            if (m) {
+              if (typeof b.body === 'string') m.body = b.body;
+              if ('subject' in b) m.subject = (b.subject as string) || null;
+              m.editedAt = new Date().toISOString();
+            }
+          }
+        }
+        return data;
+      }
       if (e.method === 'POST') {
         if (!Array.isArray(data.sent)) data.sent = [];
         let toLabel = '';
-        if (b.toUserId) {
+        // فرمت جدید — targets آرایه‌ای (کاربران/نقش‌ها/صنف‌ها/همه)
+        if (Array.isArray(b.targets) && b.targets.length > 0) {
+          const targets = b.targets as Row[];
+          const labels: Row = {
+            all: 'همهٔ کاربران', roles: 'گروه‌های نقشی', classes: 'صنف‌ها', users: 'اشخاص مشخص',
+          };
+          const audienceLabel: Row = { guardians: 'والدین', students: 'شاگردان', teachers: 'معلمان', classAll: 'اعضای' };
+          const parts: string[] = [];
+          for (const t of targets) {
+            const kind = String(t.kind || '');
+            if (kind === 'all') parts.push('همهٔ کاربران');
+            else if (kind === 'roles') parts.push((t.roles as string[] || []).join('، '));
+            else if (kind === 'classes') {
+              const cls = Array.isArray(data.classes) ? (data.classes as Row[]) : [];
+              const names = (t.classIds as string[] || []).map((id) => String(cls.find((c) => c.id === id)?.name || 'صنف'));
+              parts.push(`${audienceLabel[String(t.audience)] || ''} ${names.join('، ')}`.trim());
+            } else if (kind === 'users') {
+              const contacts = Array.isArray(data.contacts) ? (data.contacts as Row[]) : [];
+              const ids = (t.userIds as string[] || []);
+              const first = contacts.find((c) => c.id === ids[0]);
+              parts.push(ids.length === 1 ? String(first?.name || 'شخص') : `${ids.length} شخص`);
+            }
+          }
+          toLabel = parts.join(' + ') || String(labels[String(targets[0]?.kind)] || 'گیرندگان');
+        } else if (b.toUserId) {
           const c = Array.isArray(data.contacts) ? (data.contacts as Row[]).find((x) => x.id === b.toUserId) : null;
           toLabel = c ? String(c.name) : 'کاربر';
         } else if (b.toClassId) {
@@ -699,7 +754,11 @@ const SPECS: Record<string, { apply: (data: Row, e: OverlayEntry, url: string) =
         else if (b.toRole) toLabel = `همگانی — ${String(b.toRole)}`;
         (data.sent as Row[]).unshift({
           id: e.tempId, subject: b.subject ?? null, body: b.body,
-          category: b.category || 'GENERAL', read: false,
+          category: b.category || 'GENERAL',
+          kind: Array.isArray(b.targets) && b.targets.length === 1 && (b.targets as Row[])[0].kind === 'users' && ((b.targets as Row[])[0].userIds as string[])?.length === 1 ? 'DIRECT' : (Array.isArray(b.targets) && b.targets.every((t) => (t as Row).kind !== 'users') ? 'BROADCAST' : 'GROUP'),
+          priority: b.urgent === true ? 'URGENT' : 'NORMAL',
+          readCount: 0, totalCount: 0,
+          read: false,
           createdAt: new Date().toISOString(), toLabel, fromName: '', fromRole: '',
         });
       }

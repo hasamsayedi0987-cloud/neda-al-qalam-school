@@ -20,7 +20,7 @@ export async function GET() {
       users, classes, subjects, classSubjects, teachers, students,
       attendance, staffAttendance, activities, grades, books, loans,
       notifications, tasks, settings, customSections, customEntries, certificates,
-      feePayments, messages, scheduleSlots,
+      feePayments, messages, scheduleSlots, messageRecipients, guardianLinks, auditLogs,
     ] = await Promise.all([
       db.user.findMany(),
       db.class.findMany(),
@@ -43,9 +43,12 @@ export async function GET() {
       db.feePayment.findMany(),
       db.message.findMany(),
       db.scheduleSlot.findMany(),
+      db.messageRecipient.findMany(),
+      db.guardianLink.findMany(),
+      db.auditLog.findMany({ orderBy: { createdAt: 'desc' }, take: 500 }),
     ]);
     const backup = {
-      version: 3,
+      version: 4,
       app: 'مکتب خصوصی نداالقلم',
       createdAt: new Date().toISOString(),
       data: {
@@ -54,6 +57,7 @@ export async function GET() {
         attendance, staffAttendance, activities, grades,
         books, loans, notifications, tasks,
         feePayments, messages, scheduleSlots,
+        messageRecipients, guardianLinks, auditLogs,
         // کلید امنیتی نشست هرگز پشتیبان نمی‌شود
         settings: settings.filter((s) => s.key !== 'authSecret'),
         customSections, customEntries, certificates,
@@ -108,6 +112,9 @@ export async function POST(req: NextRequest) {
 
     await db.$transaction(async (tx) => {
       // پاک‌سازی جدول‌ها (به ترتیب وابستگی)
+      await tx.messageRecipient.deleteMany({});
+      await tx.guardianLink.deleteMany({});
+      await tx.auditLog.deleteMany({});
       await tx.message.deleteMany({});
       await tx.feePayment.deleteMany({});
       await tx.scheduleSlot.deleteMany({});
@@ -254,7 +261,29 @@ export async function POST(req: NextRequest) {
       if (Array.isArray(data.messages)) {
         for (const m of data.messages) {
           await tx.message.create({
-            data: { id: m.id, fromUserId: m.fromUserId, toUserId: m.toUserId ?? null, toRole: m.toRole ?? null, toClassId: m.toClassId ?? null, subject: m.subject ?? null, body: m.body, category: m.category ?? 'GENERAL', read: m.read ?? false },
+            data: { id: m.id, fromUserId: m.fromUserId, toUserId: m.toUserId ?? null, toRole: m.toRole ?? null, toClassId: m.toClassId ?? null, subject: m.subject ?? null, body: m.body, category: m.category ?? 'GENERAL', kind: m.kind ?? 'DIRECT', priority: m.priority ?? 'NORMAL', attachment: m.attachment ?? null, read: m.read ?? false, editedAt: m.editedAt ?? null, deletedFor: m.deletedFor ?? null, createdAt: m.createdAt },
+          });
+        }
+      }
+      // گیرندگان پیام‌ها، پیوند فرزندان والدین و گزارش فعالیت‌ها (نسخهٔ ۴)
+      if (Array.isArray(data.messageRecipients)) {
+        for (const r of data.messageRecipients) {
+          await tx.messageRecipient.create({
+            data: { id: r.id, messageId: r.messageId, userId: r.userId, read: r.read ?? false, readAt: r.readAt ?? null, deleted: r.deleted ?? false, createdAt: r.createdAt ?? new Date() },
+          });
+        }
+      }
+      if (Array.isArray(data.guardianLinks)) {
+        for (const l of data.guardianLinks) {
+          await tx.guardianLink.create({
+            data: { id: l.id, userId: l.userId, studentId: l.studentId, createdAt: l.createdAt ?? new Date() },
+          });
+        }
+      }
+      if (Array.isArray(data.auditLogs)) {
+        for (const a of data.auditLogs) {
+          await tx.auditLog.create({
+            data: { id: a.id, actorId: a.actorId, actorName: a.actorName, action: a.action, detail: a.detail ?? '{}', createdAt: a.createdAt ?? new Date() },
           });
         }
       }

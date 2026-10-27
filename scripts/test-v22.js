@@ -192,7 +192,7 @@ async function api(method, url, body, cookie) {
   console.log('═ فاز ۷: پشتیبان‌گیری و داده‌های سال‌های گذشته ═');
   const bkRes = await fetch(`${BASE}/api/backup`, { headers: { cookie: admin.cookie } });
   const bk = await bkRes.json().catch(() => ({}));
-  check('پشتیبان نسخهٔ ۳', bk.version === 3);
+  check('پشتیبان نسخهٔ ۳ یا بالاتر', bk.version >= 3);
   check('پشتیبان شامل مالی/پیام/برنامه', Array.isArray(bk.data?.feePayments) && Array.isArray(bk.data?.messages) && Array.isArray(bk.data?.scheduleSlots));
   const clearBad = await api('DELETE', '/api/backup', { action: 'clear-attendance', beforeJalaliYear: 99 }, admin.cookie);
   check('گارد سال نامعتبر', clearBad.status === 400);

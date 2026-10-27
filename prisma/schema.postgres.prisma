@@ -25,6 +25,8 @@ model User {
 
   notifications Notification[]
   sentMessages Message[] @relation("sentMessages")
+  messageRecipients MessageRecipient[]
+  guardianLinks GuardianLink[]
   teacherProfile Teacher?  @relation(fields: [teacherId], references: [id])
   studentProfile Student?  @relation("StudentUsers", fields: [studentId], references: [id])
 }
@@ -148,6 +150,7 @@ model Student {
   loans      BookLoan[]
   feePayments FeePayment[]
   users      User[] @relation("StudentUsers")
+  guardianLinks GuardianLink[]
 }
 
 // ═══════════════ حاضری ═══════════════
@@ -316,20 +319,70 @@ model FeePayment {
 model Message {
   id        String   @id @default(cuid())
   fromUserId String
-  toUserId  String?  // مستقیم — برای پیام همگانی null است
+  toUserId  String?  // مستقیم تک‌نفره (سازگاری با پیام‌های قدیمی) — برای پیام همگانی null است
   toRole    String?  // همگانی به یک نقش (ADMIN | TEACHER | GUARDIAN | …)
   toClassId String?  // همگانی به والدین یک صنف
   subject   String?
   body      String
   category  String   @default("GENERAL") // GENERAL | ACADEMIC | DISCIPLINARY | ANNOUNCEMENT
-  read      Boolean  @default(false)
+  kind      String   @default("DIRECT") // DIRECT | GROUP | BROADCAST
+  priority  String   @default("NORMAL") // NORMAL | URGENT
+  attachment String? // JSON {name,type,data} — پیوست فایل/عکس (در صورت فعال بودن از پنل مدیر)
+  read      Boolean  @default(false) // برای پیام مستقیم قدیمی — جدید: وضعیت در MessageRecipient
+  editedAt  DateTime? // ویرایش پیام توسط فرستنده (پنجرهٔ محدود)
   deletedFor String? // JSON آرایهٔ شناسهٔ کاربرانی که این پیام را برای خودشان حذف کرده‌اند
   createdAt DateTime @default(now())
 
   fromUser User @relation("sentMessages", fields: [fromUserId], references: [id], onDelete: Cascade)
+  recipients MessageRecipient[]
 
   @@index([toUserId, read])
   @@index([fromUserId])
+}
+
+// گیرندگان واقعی هر پیام — وضعیت خوانده‌شدن و حذف به‌ازای هر فرد
+model MessageRecipient {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  read      Boolean  @default(false)
+  readAt    DateTime?
+  deleted   Boolean  @default(false) // حذف فقط برای همین گیرنده
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([userId, read])
+  @@index([messageId])
+}
+
+// پیوند والد با فرزندان — یک سرپرست می‌تواند چند شاگرد (در صنف‌های مختلف) داشته باشد
+model GuardianLink {
+  id        String   @id @default(cuid())
+  userId    String
+  studentId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, studentId])
+  @@index([userId])
+  @@index([studentId])
+}
+
+// گزارش فعالیت‌های حساس — تغییر صلاحیت‌های ارتباطی و مودریشن پیام‌ها
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String
+  actorName String
+  action    String // COMM_POLICY_UPDATE | MSG_MODERATE_DELETE | GUARDIAN_LINK_…
+  detail    String   @default("{}") // JSON توضیح اقدام
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 // ═══════════════ تنظیمات (کلید-مقدار) ═══════════════
