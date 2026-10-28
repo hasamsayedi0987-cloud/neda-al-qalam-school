@@ -110,14 +110,17 @@ async function api(method, url, body, cookie) {
   const sentAdmin = await api('GET', '/api/messages', undefined, admin.cookie);
   check('پیام در «ارسال‌شدهٔ» فرستنده هنوز هست (حذف نرم)', (sentAdmin.data.sent || []).some((m) => m.id === msgId1));
 
-  // حذف کامل: پیام مستقیم خود فرستنده
+  // حذف برای هر دو طرف: فرستنده پیام مستقیم خود را فراخوانی می‌کند — گیرنده «این پیام حذف شد» می‌بیند (رفتار ۲.۴.۱)
   const send2 = await api('POST', '/api/messages', { toUserId: teacherId, body: `پیام دوم ${stamp}`, category: 'ACADEMIC' }, admin.cookie);
   const msgId2 = send2.data.id;
   const del2 = await api('DELETE', `/api/messages?id=${msgId2}`, undefined, admin.cookie);
-  check('حذف پیام مستقیم توسط فرستنده — حذف کامل', del2.status === 200 && del2.data.hard === true);
+  check('حذف پیام مستقیم توسط فرستنده — فراخوانی (tombstone)', del2.status === 200 && del2.data.ok === true && del2.data.recalled === true && del2.data.hard === false, JSON.stringify(del2.data));
   const inbox3 = await api('GET', '/api/messages', undefined, teacher.cookie);
   const sent2 = await api('GET', '/api/messages', undefined, admin.cookie);
-  check('پیام مستقیم حذف‌شده برای دو طرف پاک شد', !(inbox3.data.inbox || []).some((m) => m.id === msgId2) && !(sent2.data.sent || []).some((m) => m.id === msgId2));
+  const tombT = (inbox3.data.inbox || []).find((m) => m.id === msgId2);
+  const tombS = (sent2.data.sent || []).find((m) => m.id === msgId2);
+  check('گیرنده به‌جای متن «این پیام حذف شد» می‌بیند', !!tombT && tombT.deleted === true && tombT.body === 'این پیام حذف شد', JSON.stringify(tombT || {}).slice(0, 120));
+  check('فرستنده پیام فراخوانی‌شده را حذف‌شده می‌بیند', !!tombS && tombS.deleted === true);
 
   // پیام همگانی به نقش معلم → اعلان + حذف نرم
   const notifB0 = await api('GET', '/api/notifications', undefined, teacher.cookie);

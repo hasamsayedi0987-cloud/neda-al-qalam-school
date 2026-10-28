@@ -103,7 +103,7 @@ export function JalaliDate({ iso, withName = true }: { iso: string; withName?: b
 export function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-sm font-medium text-emerald-900">{label}</label>
+      <label className="text-sm font-medium text-emerald-900 dark:text-emerald-200">{label}</label>
       {children}
       {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
     </div>
@@ -200,7 +200,7 @@ export function JalaliDatePicker({
       </Select>
       <Button
         type="button" variant="ghost" size="sm"
-        className="h-8 px-2 text-xs text-emerald-700"
+        className="h-8 px-2 text-xs text-emerald-700 dark:text-emerald-300"
         onClick={() => {
           setPick({ y: tJ.jy, m: tJ.jm, d: tJ.jd });
           commit(tJ.jy, tJ.jm, tJ.jd);

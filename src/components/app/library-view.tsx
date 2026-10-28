@@ -160,7 +160,7 @@ export function LibraryView({ user }: { user: SessionUser }) {
             <Button onClick={() => { setBookForm({ ...EMPTY_BOOK }); setBookDialog(true); }} className="gap-1.5">
               <Plus className="h-4 w-4" /> کتاب جدید
             </Button>
-            <Button variant="outline" onClick={() => { setLendForm({ ...EMPTY_LEND }); setLendDialog(true); }} className="gap-1.5 border-emerald-300 text-emerald-800">
+            <Button variant="outline" onClick={() => { setLendForm({ ...EMPTY_LEND }); setLendDialog(true); }} className="gap-1.5 border-emerald-300 dark:border-emerald-500/40 text-emerald-800 dark:text-emerald-300">
               <BookMarked className="h-4 w-4" /> امانت دادن
             </Button>
           </div>
@@ -199,7 +199,7 @@ export function LibraryView({ user }: { user: SessionUser }) {
           <TabsTrigger value="books">کتاب‌ها ({toPersianDigits(books.length)})</TabsTrigger>
           <TabsTrigger value="loans">
             امانت‌های جاری ({toPersianDigits(activeLoans.length)})
-            {overdue.length > 0 && <AlertTriangle className="inline h-3.5 w-3.5 text-amber-600 mr-1" />}
+            {overdue.length > 0 && <AlertTriangle className="inline h-3.5 w-3.5 text-amber-600 dark:text-amber-400 mr-1" />}
           </TabsTrigger>
           <TabsTrigger value="history">سابقهٔ امانت</TabsTrigger>
           <TabsTrigger value="card" className="gap-1"><IdCard className="h-3.5 w-3.5" /> کارت شاگرد</TabsTrigger>
@@ -215,14 +215,14 @@ export function LibraryView({ user }: { user: SessionUser }) {
               className="pr-9"
             />
           </div>
-          <Card className="border-emerald-100">
+          <Card className="border-emerald-100 dark:border-emerald-500/25">
             <CardContent className="p-0">
               {filteredBooks.length === 0 ? (
                 <EmptyState message="هیچ کتابی ثبت نشده است." icon={BookOpen} />
               ) : (
                 <div className="overflow-x-auto nice-scroll max-h-[60vh] overflow-y-auto">
                   <Table>
-                    <TableHeader className="sticky top-0 bg-emerald-50">
+                    <TableHeader className="sticky top-0 bg-emerald-50 dark:bg-emerald-500/10">
                       <TableRow>
                         <TableHead className="w-10">#</TableHead>
                         <TableHead>عنوان</TableHead>
@@ -268,10 +268,10 @@ export function LibraryView({ user }: { user: SessionUser }) {
                                   }}
                                   aria-label="ویرایش کتاب"
                                 >
-                                  <BookOpen className="h-4 w-4 text-emerald-700" />
+                                  <BookOpen className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
                                 </Button>
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeBook(b)} aria-label="حذف کتاب">
-                                  <Trash2 className="h-4 w-4 text-rose-600" />
+                                  <Trash2 className="h-4 w-4 text-rose-600 dark:text-rose-400" />
                                 </Button>
                               </div>
                             </TableCell>
@@ -287,7 +287,7 @@ export function LibraryView({ user }: { user: SessionUser }) {
         </TabsContent>
 
         <TabsContent value="loans">
-          <Card className="border-emerald-100">
+          <Card className="border-emerald-100 dark:border-emerald-500/25">
             <CardContent className="p-0">
               {activeLoans.length === 0 ? (
                 <EmptyState message="امانتی جاری وجود ندارد." icon={BookMarked} />
@@ -306,7 +306,7 @@ export function LibraryView({ user }: { user: SessionUser }) {
                     {activeLoans.map((l) => {
                       const isOverdue = l.dueDate < isoToday();
                       return (
-                        <TableRow key={l.id} className={isOverdue ? 'bg-rose-50/50' : ''}>
+                        <TableRow key={l.id} className={isOverdue ? 'bg-rose-50 dark:bg-rose-500/10/50' : ''}>
                           <TableCell className="font-medium">{l.bookTitle}</TableCell>
                           <TableCell>
                             {l.borrowerName}
@@ -316,7 +316,7 @@ export function LibraryView({ user }: { user: SessionUser }) {
                           </TableCell>
                           <TableCell className="text-xs">{isoToJalaliDisplay(l.loanDate)}</TableCell>
                           <TableCell className="text-xs">
-                            <span className={isOverdue ? 'text-rose-600 font-bold' : ''}>
+                            <span className={isOverdue ? 'text-rose-600 dark:text-rose-400 font-bold' : ''}>
                               {isoToJalaliDisplay(l.dueDate)}{isOverdue ? ' (گذشته)' : ''}
                             </span>
                           </TableCell>
@@ -338,14 +338,14 @@ export function LibraryView({ user }: { user: SessionUser }) {
         </TabsContent>
 
         <TabsContent value="history">
-          <Card className="border-emerald-100">
+          <Card className="border-emerald-100 dark:border-emerald-500/25">
             <CardContent className="p-0">
               {loans.length === 0 ? (
                 <EmptyState message="سابقه‌ای موجود نیست." icon={BookMarked} />
               ) : (
                 <div className="overflow-x-auto nice-scroll max-h-[60vh] overflow-y-auto">
                   <Table>
-                    <TableHeader className="sticky top-0 bg-emerald-50">
+                    <TableHeader className="sticky top-0 bg-emerald-50 dark:bg-emerald-500/10">
                       <TableRow>
                         <TableHead>کتاب</TableHead>
                         <TableHead>امانت‌گیرنده</TableHead>
@@ -367,7 +367,7 @@ export function LibraryView({ user }: { user: SessionUser }) {
                                 {l.status === 'RETURNED' ? 'پس داده شد' : 'در امانت'}
                               </Badge>
                               {l.fineAmount != null && l.fineAmount > 0 && (
-                                <Badge variant="outline" className="text-[10px] border-rose-300 text-rose-600">
+                                <Badge variant="outline" className="text-[10px] border-rose-300 dark:border-rose-500/40 text-rose-600 dark:text-rose-400">
                                   جریمه: {toPersianDigits(l.fineAmount)} افغانی
                                 </Badge>
                               )}
@@ -385,7 +385,7 @@ export function LibraryView({ user }: { user: SessionUser }) {
 
         {/* ─── کارت شاگرد — امانت‌های یک شاگرد ─── */}
         <TabsContent value="card">
-          <Card className="border-emerald-100">
+          <Card className="border-emerald-100 dark:border-emerald-500/25">
             <CardContent className="p-4 space-y-3">
               <Field label="انتخاب شاگرد (کارت شناسایی)" hint="همهٔ امانت‌های جاری و سابقهٔ این شاگرد یکجا نمایش داده می‌شود">
                 <Select value={cardStudentId} onValueChange={setCardStudentId}>
@@ -403,7 +403,7 @@ export function LibraryView({ user }: { user: SessionUser }) {
                     {cardStudent.photo ? (
                       <img src={cardStudent.photo} alt={fullName(cardStudent)} className="h-14 w-14 rounded-lg border object-cover" />
                     ) : (
-                      <div className="h-14 w-14 rounded-lg bg-emerald-100 flex items-center justify-center"><IdCard className="h-6 w-6 text-emerald-700" /></div>
+                      <div className="h-14 w-14 rounded-lg bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center"><IdCard className="h-6 w-6 text-emerald-700 dark:text-emerald-300" /></div>
                     )}
                     <div>
                       <p className="font-bold">{fullName(cardStudent)}</p>
@@ -419,7 +419,7 @@ export function LibraryView({ user }: { user: SessionUser }) {
                           return (
                             <div key={l.id} className="flex flex-wrap items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs">
                               <span className="font-medium">{l.bookTitle}</span>
-                              <span className={l.dueDate < isoToday() ? 'text-rose-600' : 'text-muted-foreground'}>
+                              <span className={l.dueDate < isoToday() ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground'}>
                                 تا {isoToJalaliDisplay(l.dueDate)}{fp.amount > 0 ? ` — جریمه: ${toPersianDigits(fp.amount)} افغانی` : ''}
                               </span>
                             </div>

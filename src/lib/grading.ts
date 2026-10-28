@@ -104,12 +104,12 @@ function toPersianDigitsSafe(n: number): string {
 /** رنگ پیشنهادی برای مکتسبه */
 export function letterColor(score: number | null): string {
   if (score == null) return 'text-muted-foreground';
-  if (score >= 90) return 'text-emerald-700 font-bold';
-  if (score >= 80) return 'text-green-700 font-bold';
-  if (score >= 70) return 'text-teal-700 font-bold';
-  if (score >= 60) return 'text-amber-700 font-bold';
-  if (score >= 50) return 'text-orange-700 font-bold';
-  return 'text-red-700 font-bold';
+  if (score >= 90) return 'text-emerald-700 dark:text-emerald-300 font-bold';
+  if (score >= 80) return 'text-green-700 dark:text-green-300 font-bold';
+  if (score >= 70) return 'text-teal-700 dark:text-teal-300 font-bold';
+  if (score >= 60) return 'text-amber-700 dark:text-amber-300 font-bold';
+  if (score >= 50) return 'text-orange-700 dark:text-orange-300 font-bold';
+  return 'text-red-700 dark:text-red-300 font-bold';
 }
 
 export const RESULT_PROMOTED = 'ارتقا صنف';

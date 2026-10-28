@@ -225,7 +225,7 @@ export function ResultsView({ user }: { user: SessionUser }) {
             </Button>
           }
         />
-        <Card className="border-emerald-100 print-area">
+        <Card className="border-emerald-100 dark:border-emerald-500/25 print-area">
           <CardContent className="p-0 overflow-x-auto nice-scroll">
             <Table>
               <TableHeader>
@@ -254,18 +254,18 @@ export function ResultsView({ user }: { user: SessionUser }) {
           </CardContent>
         </Card>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-4">
-          <Card className="border-emerald-100"><CardContent className="p-4 text-center">
+          <Card className="border-emerald-100 dark:border-emerald-500/25"><CardContent className="p-4 text-center">
             <p className="text-xs text-muted-foreground">مجموع نمرات</p>
-            <p className="text-xl font-bold text-emerald-900">{rc.total != null ? toPersianDigits(rc.total) : '—'}</p>
+            <p className="text-xl font-bold text-emerald-900 dark:text-emerald-200">{rc.total != null ? toPersianDigits(rc.total) : '—'}</p>
           </CardContent></Card>
-          <Card className="border-emerald-100"><CardContent className="p-4 text-center">
+          <Card className="border-emerald-100 dark:border-emerald-500/25"><CardContent className="p-4 text-center">
             <p className="text-xs text-muted-foreground">اوسط</p>
-            <p className="text-xl font-bold text-emerald-900">{rc.average != null ? toPersianDigits(rc.average) : '—'}</p>
+            <p className="text-xl font-bold text-emerald-900 dark:text-emerald-200">{rc.average != null ? toPersianDigits(rc.average) : '—'}</p>
           </CardContent></Card>
-          <Card className={cn('border', rc.result === RESULT_PROMOTED ? 'border-emerald-300 bg-emerald-50' : rc.result === RESULT_REPEAT ? 'border-rose-300 bg-rose-50' : '')}>
+          <Card className={cn('border', rc.result === RESULT_PROMOTED ? 'border-emerald-300 dark:border-emerald-500/40 bg-emerald-50 dark:bg-emerald-500/10' : rc.result === RESULT_REPEAT ? 'border-rose-300 dark:border-rose-500/40 bg-rose-50 dark:bg-rose-500/10' : '')}>
             <CardContent className="p-4 text-center">
               <p className="text-xs text-muted-foreground">نتیجهٔ نهایی</p>
-              <p className={cn('text-lg font-bold', rc.result === RESULT_PROMOTED ? 'text-emerald-700' : 'text-rose-700')}>{rc.result}</p>
+              <p className={cn('text-lg font-bold', rc.result === RESULT_PROMOTED ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300')}>{rc.result}</p>
             </CardContent>
           </Card>
         </div>
@@ -311,13 +311,13 @@ export function ResultsView({ user }: { user: SessionUser }) {
       ) : data.rows.length === 0 ? (
         <EmptyState message="این صنف شاگرد فعال ندارد." icon={FileSpreadsheet} />
       ) : (
-        <Card className="border-emerald-100 print-area">
+        <Card className="border-emerald-100 dark:border-emerald-500/25 print-area">
           <CardContent className="p-0">
             <div className="overflow-x-auto nice-scroll max-h-[65vh] overflow-y-auto">
               <Table>
-                <TableHeader className="sticky top-0 bg-emerald-50 z-10">
+                <TableHeader className="sticky top-0 bg-emerald-50 dark:bg-emerald-500/10 z-10">
                   <TableRow>
-                    <TableHead className="sticky right-0 bg-emerald-50 z-20 min-w-[180px]">شاگرد</TableHead>
+                    <TableHead className="sticky right-0 bg-emerald-50 dark:bg-emerald-500/10 z-20 min-w-[180px]">شاگرد</TableHead>
                     {data.subjects.map((s) => (
                       <TableHead key={s.id} className="min-w-[90px] text-center">{s.name}</TableHead>
                     ))}
@@ -331,7 +331,7 @@ export function ResultsView({ user }: { user: SessionUser }) {
                 <TableBody>
                   {data.rows.map((r, i) => (
                     <TableRow key={r.student.id}>
-                      <TableCell className="sticky right-0 bg-white z-10">
+                      <TableCell className="sticky right-0 bg-background z-10">
                         <span className="font-medium">{toPersianDigits(r.student.rollNo ?? i + 1)}. {fullName(r.student)}</span>
                         <span className="block text-[10px] text-muted-foreground">
                           ولد {r.student.fatherName}{r.student.grandFather ? ` — ولدیت ${r.student.grandFather}` : ''}
@@ -347,21 +347,21 @@ export function ResultsView({ user }: { user: SessionUser }) {
                         );
                       })}
                       <TableCell className="text-center font-semibold">{r.total != null ? toPersianDigits(r.total) : '—'}</TableCell>
-                      <TableCell className="text-center font-bold text-emerald-800">{r.average != null ? toPersianDigits(r.average) : '—'}</TableCell>
+                      <TableCell className="text-center font-bold text-emerald-800 dark:text-emerald-300">{r.average != null ? toPersianDigits(r.average) : '—'}</TableCell>
                       <TableCell className="text-center">
                         {r.rank != null && (
-                          <Badge variant="outline" className={cn(r.rank === 1 ? 'border-amber-400 text-amber-700 bg-amber-50' : 'border-emerald-200 text-emerald-700')}>
+                          <Badge variant="outline" className={cn(r.rank === 1 ? 'border-amber-400 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/10' : 'border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300')}>
                             {toPersianDigits(r.rank)}
                           </Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-center">
-                        <span className={cn('text-xs font-bold', r.result === RESULT_PROMOTED ? 'text-emerald-700' : r.result === RESULT_REPEAT ? 'text-rose-700' : 'text-muted-foreground')}>
+                        <span className={cn('text-xs font-bold', r.result === RESULT_PROMOTED ? 'text-emerald-700 dark:text-emerald-300' : r.result === RESULT_REPEAT ? 'text-rose-700 dark:text-rose-300' : 'text-muted-foreground')}>
                           {r.result}
                         </span>
                       </TableCell>
                       <TableCell className="text-center no-print">
-                        <Button variant="ghost" size="sm" className="h-7 text-xs text-emerald-700" onClick={() => openReportCard(r.student.id)}>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs text-emerald-700 dark:text-emerald-300" onClick={() => openReportCard(r.student.id)}>
                           مشاهده
                         </Button>
                       </TableCell>

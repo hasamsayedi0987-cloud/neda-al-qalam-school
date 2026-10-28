@@ -78,9 +78,9 @@ export default function Page() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-emerald-50/40">
-        <Loader2 className="h-9 w-9 animate-spin text-emerald-600" />
-        <p className="text-sm text-emerald-800 font-medium">در حال بارگذاری سیستم مکتب...</p>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-emerald-50 dark:bg-emerald-500/10/40">
+        <Loader2 className="h-9 w-9 animate-spin text-emerald-600 dark:text-emerald-400" />
+        <p className="text-sm text-emerald-800 dark:text-emerald-300 font-medium">در حال بارگذاری سیستم مکتب...</p>
       </div>
     );
   }

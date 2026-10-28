@@ -91,7 +91,7 @@ export function SubjectsView({ user }: { user: SessionUser }) {
         )}
       />
 
-      <Card className="border-emerald-100">
+      <Card className="border-emerald-100 dark:border-emerald-500/25">
         <CardContent className="p-0">
           {subjects.length === 0 ? (
             <EmptyState message="هیچ مضمونی ثبت نشده است." icon={BookOpen} />
@@ -118,11 +118,11 @@ export function SubjectsView({ user }: { user: SessionUser }) {
                         <div className="flex gap-1 justify-end">
                           <Button variant="ghost" size="icon" className="h-8 w-8"
                             onClick={() => { setName(s.name); setCode(s.code || ''); setCredits(s.credits ? String(s.credits) : ''); setEditId(s.id); setDialogOpen(true); }} aria-label="ویرایش">
-                            <Pencil className="h-4 w-4 text-emerald-700" />
+                            <Pencil className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
                           </Button>
                           {user.role === 'ADMIN' && (
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => remove(s)} aria-label="حذف">
-                              <Trash2 className="h-4 w-4 text-rose-600" />
+                              <Trash2 className="h-4 w-4 text-rose-600 dark:text-rose-400" />
                             </Button>
                           )}
                         </div>

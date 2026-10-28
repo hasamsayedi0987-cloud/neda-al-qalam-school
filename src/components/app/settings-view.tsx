@@ -254,9 +254,9 @@ export function SettingsView({ user }: { user: SessionUser }) {
       )}
 
       {isAdmin && (
-        <Card className="border-emerald-100">
+        <Card className="border-emerald-100 dark:border-emerald-500/25">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base text-emerald-900">معلومات مکتب</CardTitle>
+            <CardTitle className="text-base text-emerald-900 dark:text-emerald-200">معلومات مکتب</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="نام مکتب"><Input value={settings.schoolName} onChange={(e) => set('schoolName', e.target.value)} /></Field>
@@ -272,9 +272,9 @@ export function SettingsView({ user }: { user: SessionUser }) {
       )}
 
       {isAdmin && (
-        <Card className="border-emerald-100">
+        <Card className="border-emerald-100 dark:border-emerald-500/25">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base text-emerald-900">عناوین و نام‌ها — قابل تغییر توسط مدیر</CardTitle>
+            <CardTitle className="text-base text-emerald-900 dark:text-emerald-200">عناوین و نام‌ها — قابل تغییر توسط مدیر</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground leading-5">
@@ -289,7 +289,7 @@ export function SettingsView({ user }: { user: SessionUser }) {
               </Field>
             </div>
             <Separator className="my-1" />
-            <p className="text-xs font-semibold text-emerald-800">عناوین بخش‌های منو:</p>
+            <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">عناوین بخش‌های منو:</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {Object.entries(SECTIONS).map(([key, def]) => (
                 <Field key={key} label={def.label}>
@@ -306,9 +306,9 @@ export function SettingsView({ user }: { user: SessionUser }) {
       )}
 
       {isAdmin && (
-        <Card className="border-emerald-100">
+        <Card className="border-emerald-100 dark:border-emerald-500/25">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base text-emerald-900">مقاطع نمرات — سقف هر جزء از ۱۰۰</CardTitle>
+            <CardTitle className="text-base text-emerald-900 dark:text-emerald-200">مقاطع نمرات — سقف هر جزء از ۱۰۰</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Field label="تحریری"><Input type="number" min={0} value={settings.maxWritten} onChange={(e) => set('maxWritten', e.target.value)} /></Field>
@@ -326,14 +326,14 @@ export function SettingsView({ user }: { user: SessionUser }) {
 
       {/* مکتسبه‌های قابل تنظیم — الف/ب/ج... با حد دلخواه */}
       {isAdmin && (
-        <Card className="border-emerald-100">
+        <Card className="border-emerald-100 dark:border-emerald-500/25">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base text-emerald-900">مکتسبه‌ها و حد نمرات (قابل تغییر)</CardTitle>
+            <CardTitle className="text-base text-emerald-900 dark:text-emerald-200">مکتسبه‌ها و حد نمرات (قابل تغییر)</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground leading-5">
               مثال: اگر «الف» باید از ۸۵ شروع شود، عدد کنار آن را به ۸۵ تغییر دهید. حد کمترین مکتسبهٔ قبولی، مرز ارتقا و تکرار صنف است.
-              پیش‌نمایش فعلی: <span className="font-semibold text-emerald-800">{scaleRangesText(scale)}</span>
+              پیش‌نمایش فعلی: <span className="font-semibold text-emerald-800 dark:text-emerald-300">{scaleRangesText(scale)}</span>
             </p>
             <div className="space-y-2">
               {scale.map((row, i) => (
@@ -349,7 +349,7 @@ export function SettingsView({ user }: { user: SessionUser }) {
                   />
                   <Button
                     variant="ghost" size="icon" aria-label="حذف سطر"
-                    className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                    className="text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:bg-rose-500/10"
                     disabled={scale.length <= 2}
                     onClick={() => removeScaleRow(i)}
                   >
@@ -358,7 +358,7 @@ export function SettingsView({ user }: { user: SessionUser }) {
                 </div>
               ))}
             </div>
-            <Button variant="outline" size="sm" onClick={addScaleRow} className="gap-1.5 border-emerald-300 text-emerald-800">
+            <Button variant="outline" size="sm" onClick={addScaleRow} className="gap-1.5 border-emerald-300 dark:border-emerald-500/40 text-emerald-800 dark:text-emerald-300">
               <Plus className="h-4 w-4" /> افزودن مکتسبه
             </Button>
           </CardContent>
@@ -367,9 +367,9 @@ export function SettingsView({ user }: { user: SessionUser }) {
 
       {/* مالی — ضرب‌الاجل فیس و جریمهٔ دیرکرد کتابخانه */}
       {isAdmin && (
-        <Card className="border-emerald-100">
+        <Card className="border-emerald-100 dark:border-emerald-500/25">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base text-emerald-900 flex items-center gap-2">
+            <CardTitle className="text-base text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
               <Wallet className="h-5 w-5" /> مالی — ضرب‌الاجل و جریمه
             </CardTitle>
           </CardHeader>
@@ -394,9 +394,9 @@ export function SettingsView({ user }: { user: SessionUser }) {
       )}
 
       {isAdmin && (
-        <Card className="border-emerald-100">
+        <Card className="border-emerald-100 dark:border-emerald-500/25">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base text-emerald-900 flex items-center gap-2">
+            <CardTitle className="text-base text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
               <ShieldCheck className="h-5 w-5" /> دسترسی معلمان — کنترل توسط مدیر
             </CardTitle>
           </CardHeader>
@@ -412,9 +412,9 @@ export function SettingsView({ user }: { user: SessionUser }) {
                 ['permTeacherGradeDelete', 'حذف نمرات مضامین خود', 'معلم بتواند نمرهٔ ثبت‌شدهٔ هر شاگرد را حذف کند (با پاک‌کردن همهٔ اجزا یا دکمهٔ حذف)'],
                 ['permTeacherStudents', 'ثبت و ویرایش شاگردان صنف‌های خود', 'معلم بتواند شاگرد جدید در صنف‌های خود ثبت و معلومات شاگردان همان صنف‌ها را ویرایش کند'],
               ] as const).map(([key, label, desc]) => (
-                <div key={key} className="flex items-start justify-between gap-3 rounded-lg border border-emerald-100 bg-emerald-50/40 px-3 py-2.5">
+                <div key={key} className="flex items-start justify-between gap-3 rounded-lg border border-emerald-100 dark:border-emerald-500/25 bg-emerald-50 dark:bg-emerald-500/10/40 px-3 py-2.5">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-emerald-900">{label}</p>
+                    <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">{label}</p>
                     <p className="text-xs text-muted-foreground leading-5 mt-0.5">{desc}</p>
                   </div>
                   <Switch
@@ -438,9 +438,9 @@ export function SettingsView({ user }: { user: SessionUser }) {
       )}
 
       {/* رمز عبور */}
-      <Card className="border-emerald-100">
+      <Card className="border-emerald-100 dark:border-emerald-500/25">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base text-emerald-900 flex items-center gap-2">
+          <CardTitle className="text-base text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
             <KeyRound className="h-5 w-5" /> امنیت حساب
           </CardTitle>
         </CardHeader>
@@ -448,7 +448,7 @@ export function SettingsView({ user }: { user: SessionUser }) {
           <p className="text-sm text-muted-foreground mb-3">
             رمز عبور خود را به‌صورت دوره‌ای تغییر دهید تا امنیت حساب تضمین شود.
           </p>
-          <Button variant="outline" onClick={() => setPwOpen(true)} className="gap-1.5 border-emerald-300 text-emerald-800">
+          <Button variant="outline" onClick={() => setPwOpen(true)} className="gap-1.5 border-emerald-300 dark:border-emerald-500/40 text-emerald-800 dark:text-emerald-300">
             <KeyRound className="h-4 w-4" /> تغییر رمز عبور
           </Button>
         </CardContent>
@@ -456,9 +456,9 @@ export function SettingsView({ user }: { user: SessionUser }) {
 
       {/* پشتیبان‌گیری خودکار — زمان‌بندی */}
       {isAdmin && (
-        <Card className="border-emerald-100">
+        <Card className="border-emerald-100 dark:border-emerald-500/25">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base text-emerald-900 flex items-center gap-2">
+            <CardTitle className="text-base text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
               <CalendarClock className="h-5 w-5" /> پشتیبان‌گیری خودکار (زمان‌بندی)
             </CardTitle>
           </CardHeader>
@@ -494,9 +494,9 @@ export function SettingsView({ user }: { user: SessionUser }) {
 
       {/* پشتیبان‌گیری */}
       {isAdmin && (
-        <Card className="border-emerald-100">
+        <Card className="border-emerald-100 dark:border-emerald-500/25">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base text-emerald-900 flex items-center gap-2">
+            <CardTitle className="text-base text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
               <DatabaseBackup className="h-5 w-5" /> پشتیبان‌گیری و بازیابی
             </CardTitle>
           </CardHeader>
@@ -504,7 +504,7 @@ export function SettingsView({ user }: { user: SessionUser }) {
             <div>
               <p className="text-sm text-muted-foreground mb-2 leading-6">
                 از تمام داده‌های مکتب (شاگردان، نمرات، حاضری، کتابخانه و...) یک فایل پشتیبان تهیه و در محل امن نگهداری کنید.
-                بازیابی داده‌ها <b className="text-emerald-800">تنها برای مدیر مکتب</b> ممکن است.
+                بازیابی داده‌ها <b className="text-emerald-800 dark:text-emerald-300">تنها برای مدیر مکتب</b> ممکن است.
               </p>
               <Button onClick={downloadBackup} className="gap-1.5">
                 <Download className="h-4 w-4" /> تهیهٔ فایل پشتیبان (Backup)
@@ -512,9 +512,9 @@ export function SettingsView({ user }: { user: SessionUser }) {
             </div>
             <Separator />
             <div>
-              <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50/70 p-3 mb-3">
-                <AlertTriangle className="h-4 w-4 text-rose-600 mt-0.5 shrink-0" />
-                <p className="text-xs text-rose-800 leading-5">
+              <div className="flex items-start gap-2 rounded-lg border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10/70 p-3 mb-3">
+                <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
+                <p className="text-xs text-rose-800 dark:text-rose-300 leading-5">
                   هشدار: بازیابی، تمام داده‌های فعلی را با محتوای فایل پشتیبان جایگزین می‌کند. این عمل بازگشت‌پذیر نیست.
                 </p>
               </div>
@@ -538,9 +538,9 @@ export function SettingsView({ user }: { user: SessionUser }) {
 
       {/* مدیریت داده‌های سال‌های گذشته */}
       {isAdmin && (
-        <Card className="border-emerald-100">
+        <Card className="border-emerald-100 dark:border-emerald-500/25">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base text-emerald-900 flex items-center gap-2">
+            <CardTitle className="text-base text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
               <History className="h-5 w-5" /> مدیریت داده‌های سال‌های گذشته
             </CardTitle>
           </CardHeader>
@@ -559,7 +559,7 @@ export function SettingsView({ user }: { user: SessionUser }) {
             <Separator />
             <div className="rounded-lg border border-rose-200 bg-rose-50/70 p-3 space-y-3 dark:border-rose-900/60 dark:bg-rose-950/30">
               <div className="flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 text-rose-600 mt-0.5 shrink-0" />
+                <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
                 <p className="text-xs text-rose-800 leading-5 dark:text-rose-300">
                   منطقهٔ خطر — پاک‌سازی حاضری سال‌های گذشته: با وارد کردن سال شمسی، همهٔ رکوردهای حاضری یومیهٔ آن سال و سال‌های قبل از آن برای همیشه حذف می‌شود تا پایگاه داده سبک بماند. نمرات و کارنامه‌ها دست نمی‌خورند و تاریخچهٔ آن‌ها می‌ماند. این عمل بازگشت‌پذیر نیست.
                 </p>

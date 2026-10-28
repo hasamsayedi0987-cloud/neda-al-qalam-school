@@ -29,7 +29,7 @@ import { ROLE_LABELS } from '@/lib/grading';
 import { effectivePerms, parseCommPolicy, EDIT_WINDOW_MS, MAX_ATTACH_DATAURL, type CommPerms } from '@/lib/comm';
 import {
   Send, CheckCheck, Check, Clock, Paperclip, Pencil, Trash2, Search, AlertCircle,
-  MessagesSquare, ShieldCheck, ScrollText, SquarePen, Megaphone, ArrowRight, X, Loader2,
+  MessagesSquare, ShieldCheck, ScrollText, SquarePen, Megaphone, ArrowRight, X, Loader2, Copy,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SessionUser } from '@/lib/types';
@@ -53,6 +53,7 @@ interface Msg {
   read?: boolean;
   readAt?: string | null;
   editedAt?: string | null;
+  deleted?: boolean; // فراخوانی‌شده از طرف فرستنده — «این پیام حذف شد»
   createdAt: string;
   toLabel: string;
   fromId?: string;
@@ -123,11 +124,31 @@ function avatarCls(role: string): string {
   return ROLE_AVATAR[role] || 'bg-muted text-muted-foreground';
 }
 
+/** کلید روز محلی (yyyy-mm-dd) — نه UTC؛ تا تاریخ‌بندی گفتگو با ساعت واقعی کاربر بخواند */
+function localDayKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** ساعت محلی HH:mm با ارقام فارسی — زمان واقعی ارسال پیام (نه UTC) */
+function localTime(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return toPersianDigits(iso.slice(11, 16));
+    return toPersianDigits(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
+  } catch {
+    return toPersianDigits(iso.slice(11, 16));
+  }
+}
+
 /** زمان هوشمند — امروز فقط ساعت، غیر از آن تاریخ شمسی کوتاه */
 function smartTime(iso: string, todayIso: string): string {
-  const d = iso.slice(0, 10);
-  if (d === todayIso) return toPersianDigits(iso.slice(11, 16));
-  return jDateShort(d);
+  let key = iso.slice(0, 10);
+  try {
+    const d = new Date(iso);
+    if (!Number.isNaN(d.getTime())) key = localDayKey(d);
+  } catch { /* fallback */ }
+  if (key === todayIso) return localTime(iso);
+  return jDateShort(key);
 }
 
 function jDateShort(isoDate: string): string {
@@ -197,7 +218,7 @@ function ConvRow({ conv, todayIso, active, onClick }: { conv: Conversation; toda
               ? <CheckCheck className="h-3.5 w-3.5 shrink-0 text-primary" aria-label="خوانده شد" />
               : <Check className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="ارسال شد" />
           )}
-          {conv.lastUrgent && <AlertCircle className="h-3.5 w-3.5 shrink-0 text-rose-500" aria-label="فوری" />}
+          {conv.lastUrgent && <AlertCircle className="h-3.5 w-3.5 shrink-0 text-rose-500 dark:text-rose-400" aria-label="فوری" />}
           {conv.lastAttach && <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="پیوست" />}
           <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{conv.lastPreview}</span>
           {!!conv.unread && (
@@ -247,14 +268,81 @@ export function MessagesView({ user }: { user: SessionUser }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // تیک ثانیه‌شمار — برای فعال‌شدن ویرایش پس از چند ثانیه و به‌روز ماندن زمان‌ها
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // فشردن طولانی حباب پیام — گزینهٔ ویرایش/حذف مثل واتساپ (موبایل)
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [actionMsg, setActionMsg] = useState<Msg | null>(null);
+  const clearPress = useCallback(() => {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  }, []);
+  useEffect(() => clearPress, [clearPress]);
+  const onPressStart = (m: Msg) => (e: React.PointerEvent) => {
+    if (e.pointerType === 'mouse' || m.deleted) return;
+    clearPress();
+    pressTimer.current = setTimeout(() => {
+      try { navigator.vibrate?.(35); } catch { /* پشتیبانی نمی‌شود */ }
+      setActionMsg(m);
+    }, 550);
+  };
+
+  // ارتفاع دقیق چت‌خانه = ارتفاع قابل‌مشاهده منهای هدر/نوار همگام‌سازی/پانویس —
+  // تا کادر نوشتن پیام همیشه در پایین صفحه باشد، حتی با نوار آفلاین یا کیبورد موبایل
+  const [chatH, setChatH] = useState(0);
+  useEffect(() => {
+    const compute = () => {
+      const el = rootRef.current;
+      if (!el) return;
+      const vv = window.visualViewport;
+      const vh = vv ? vv.height : window.innerHeight;
+      const hdr = document.querySelector('header')?.getBoundingClientRect().height ?? 64;
+      const sync = document.getElementById('noq-syncbar')?.getBoundingClientRect().height ?? 0;
+      const ftr = document.querySelector('footer')?.getBoundingClientRect().height ?? 40;
+      const main = el.closest('main');
+      let pad = 24;
+      if (main) {
+        const cs = window.getComputedStyle(main);
+        pad = (parseFloat(cs.paddingTop || '0') || 0) + (parseFloat(cs.paddingBottom || '0') || 0);
+      }
+      const h = Math.floor(vh - hdr - sync - ftr - pad - 2);
+      setChatH((prev) => (Math.abs(prev - h) >= 2 ? Math.max(400, h) : prev));
+    };
+    compute();
+    const t1 = setTimeout(compute, 80);
+    const t2 = setTimeout(compute, 400);
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', compute);
+    window.addEventListener('resize', compute);
+    const ro = new ResizeObserver(compute);
+    ro.observe(document.body);
+    const hdr = document.querySelector('header');
+    if (hdr) ro.observe(hdr);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      vv?.removeEventListener('resize', compute);
+      window.removeEventListener('resize', compute);
+      ro.disconnect();
+    };
+  }, []);
 
   const perms: CommPerms = useMemo(
     () => data?.myPerms || effectivePerms(user.role, user.id, parseCommPolicy(null)),
     [data, user],
   );
 
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const yesterdayIso = new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const todayIso = localDayKey(new Date(nowTick));
+  const yesterdayIso = localDayKey(new Date(nowTick - 24 * 3600 * 1000));
 
   /* بارگیری — silent برای پول/بازآوری بی‌صدا (آفلاین پیام خطا نمی‌دهد) */
   const load = useCallback(async (silent = false) => {
@@ -303,6 +391,7 @@ export function MessagesView({ user }: { user: SessionUser }) {
       return c;
     };
     const previewOf = (m: Msg): string => {
+      if (m.deleted) return 'این پیام حذف شد';
       const body = (m.body || '').replace(/\s+/g, ' ').trim();
       if (body) return body.length > 72 ? body.slice(0, 72) + '…' : body;
       return m.attachmentName ? `پیوست: ${m.attachmentName}` : 'پیام';
@@ -408,6 +497,8 @@ export function MessagesView({ user }: { user: SessionUser }) {
         unread: Math.max(0, d.unread - unreadMsgs.length),
       } : d);
       for (const m of unreadMsgs) void apiSend('/api/messages', 'PATCH', { id: m.id });
+      // اعلان‌های این پیام‌ها سرور حذف می‌شوند — زنگ بالای صفحه هم تازه شود
+      window.dispatchEvent(new CustomEvent('noq:notif-refresh'));
     }
   }, [data]);
 
@@ -423,6 +514,7 @@ export function MessagesView({ user }: { user: SessionUser }) {
   const markAll = async () => {
     setData((d) => d ? { ...d, inbox: d.inbox.map((x) => ({ ...x, read: true })), unread: 0 } : d);
     const res = await apiSend('/api/messages', 'PATCH', { all: true });
+    window.dispatchEvent(new CustomEvent('noq:notif-refresh'));
     if (res.error) { toast({ title: res.error, variant: 'destructive' }); return; }
     toast({ title: 'همهٔ پیام‌ها خوانده‌شده شد' });
   };
@@ -499,22 +591,32 @@ export function MessagesView({ user }: { user: SessionUser }) {
     }
   };
 
+  /** ویرایش: چند ثانیهٔ اول غیرفعال، تا ۳۰ دقیقه و تا پیش از خوانده‌شدن */
+  const EDIT_DELAY_MS = 5000;
   const canEditMsg = (m: Msg): boolean => {
     if (!perms.editOwn) return false;
-    if (Date.now() - new Date(m.createdAt).getTime() > EDIT_WINDOW_MS) return false;
+    if (m.deleted) return false;
+    const age = nowTick - new Date(m.createdAt).getTime();
+    if (age < EDIT_DELAY_MS) return false; // در چند ثانیهٔ اول غیرفعال — پس از آن فعال
+    if (age > EDIT_WINDOW_MS) return false;
     if ((m.readCount || 0) > 0) return false;
     return true;
   };
+
+  /** آیا این پیام از آنِ من است (برای منوی فشردن طولانی) */
+  const isMine = (m: Msg): boolean => m.recipientIds !== undefined || pendingIds.has(m.id);
 
   const deleteMsg = async (m: Msg, mine: boolean) => {
     const hard = mine && perms.deleteOwn;
     const confirmText = hard && (m.totalCount || 0) > 1
       ? 'این پیام گروهی برای همهٔ گیرندگان حذف (فراخوانی) شود؟'
-      : 'این پیام حذف شود؟ این عمل بازگشت‌پذیر نیست.';
+      : hard
+        ? 'پیام برای هر دو طرف حذف شود؟ گیرنده به‌جای متن، «این پیام حذف شد» را می‌بیند.'
+        : 'این پیام فقط برای شما حذف شود؟';
     if (!window.confirm(confirmText)) return;
     const res = await apiSend(`/api/messages?id=${m.id}`, 'DELETE', undefined, { queueLabel: 'حذف پیام' });
     if (res.error) { toast({ title: res.error, variant: 'destructive' }); return; }
-    toast({ title: res.queued ? 'حذف ذخیره شد — پس از اتصال همگام می‌شود' : 'پیام حذف شد' });
+    toast({ title: res.queued ? 'حذف ذخیره شد — پس از اتصال همگام می‌شود' : mine ? 'پیام برای همه حذف شد' : 'پیام حذف شد' });
     if (!res.queued) void load(true);
   };
 
@@ -587,7 +689,11 @@ export function MessagesView({ user }: { user: SessionUser }) {
   if (!data) return null;
 
   return (
-    <div className="h-[calc(100dvh-5.5rem)] md:h-[calc(100dvh-7rem)] min-h-[440px]">
+    <div
+      ref={rootRef}
+      className="min-h-[420px]"
+      style={{ height: chatH || 'calc(100dvh - 5.5rem)' }}
+    >
       <div className="h-full grid md:grid-cols-[minmax(300px,360px)_1fr] rounded-xl border overflow-hidden bg-background">
 
         {/* ─── فهرست گفتگوها ─── */}
@@ -599,17 +705,17 @@ export function MessagesView({ user }: { user: SessionUser }) {
                 {!!data.unread && <Badge className="bg-primary text-[10px] px-1.5 shrink-0">{toPersianDigits(data.unread)} نخوانده</Badge>}
               </h1>
               {!!data.unread && (
-                <button type="button" title="خواندن همه" aria-label="خواندن همه" onClick={() => void markAll()} className="rounded-lg p-2 text-emerald-600 hover:bg-emerald-500/10 transition-colors">
+                <button type="button" title="خواندن همه" aria-label="خواندن همه" onClick={() => void markAll()} className="rounded-lg p-2 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors">
                   <CheckCheck className="h-4 w-4" />
                 </button>
               )}
               {perms.managePolicy && (
-                <button type="button" title="صلاحیت‌های ارتباطی" aria-label="صلاحیت‌های ارتباطی" onClick={() => setPolicyOpen(true)} className="rounded-lg p-2 text-violet-600 hover:bg-violet-500/10 transition-colors">
+                <button type="button" title="صلاحیت‌های ارتباطی" aria-label="صلاحیت‌های ارتباطی" onClick={() => setPolicyOpen(true)} className="rounded-lg p-2 text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 transition-colors">
                   <ShieldCheck className="h-4 w-4" />
                 </button>
               )}
               {perms.reports && (
-                <button type="button" title="گزارش فعالیت پیام‌ها" aria-label="گزارش فعالیت پیام‌ها" onClick={() => setReportsOpen(true)} className="rounded-lg p-2 text-sky-600 hover:bg-sky-500/10 transition-colors">
+                <button type="button" title="گزارش فعالیت پیام‌ها" aria-label="گزارش فعالیت پیام‌ها" onClick={() => setReportsOpen(true)} className="rounded-lg p-2 text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 transition-colors">
                   <ScrollText className="h-4 w-4" />
                 </button>
               )}
@@ -719,9 +825,10 @@ export function MessagesView({ user }: { user: SessionUser }) {
                 {thread.map((m, i) => {
                   const day = m.createdAt.slice(0, 10);
                   const prevDay = i > 0 ? thread[i - 1].createdAt.slice(0, 10) : null;
-                  const mine = m.recipientIds !== undefined || pendingIds.has(m.id);
+                  const mine = isMine(m);
                   const pending = pendingIds.has(m.id);
                   const multi = (m.totalCount || 0) > 1;
+                  const deleted = Boolean(m.deleted);
                   return (
                     <Fragment key={m.id}>
                       {day !== prevDay && (
@@ -732,30 +839,44 @@ export function MessagesView({ user }: { user: SessionUser }) {
                       <div className={cn('flex mb-1.5', mine ? 'justify-end' : 'justify-start')}>
                         <div
                           className={cn(
-                            'group max-w-[85%] sm:max-w-[72%] rounded-2xl px-3 pt-2 pb-1.5 text-sm shadow-sm',
-                            mine ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-muted rounded-bl-sm',
-                            m.priority === 'URGENT' && 'ring-1 ring-rose-400/70',
+                            'group max-w-[85%] sm:max-w-[72%] rounded-2xl px-3 pt-2 pb-1.5 text-sm shadow-sm select-none',
+                            deleted
+                              ? 'bg-muted/70 border border-dashed border-border text-muted-foreground italic'
+                              : mine ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-muted rounded-bl-sm',
+                            !deleted && m.priority === 'URGENT' && 'ring-1 ring-rose-400/70',
                           )}
+                          title={`${isoToJalaliDisplay(m.createdAt.slice(0, 10))} — ${localTime(m.createdAt)}`}
+                          onPointerDown={onPressStart(m)}
+                          onPointerUp={clearPress}
+                          onPointerCancel={clearPress}
+                          onPointerLeave={clearPress}
+                          onContextMenu={(e) => e.preventDefault()}
                         >
-                          {m.subject && <p className="font-bold text-[13px] mb-0.5 break-words">{m.subject}</p>}
-                          <p className="whitespace-pre-wrap break-words leading-6">{m.body}</p>
-                          {m.attachmentName && (
-                            <button
-                              type="button"
-                              onClick={() => void viewAttachment(m)}
-                              className={cn(
-                                'mt-1.5 flex items-center gap-1.5 rounded-lg px-2 py-1 text-[12px] transition-colors max-w-full',
-                                mine ? 'bg-primary-foreground/15 hover:bg-primary-foreground/25' : 'bg-background/60 hover:bg-background',
+                          {deleted ? (
+                            <p className="leading-6 text-[13px]">{mine ? 'شما این پیام را حذف کردید' : 'این پیام حذف شد'}</p>
+                          ) : (
+                            <>
+                              {m.subject && <p className="font-bold text-[13px] mb-0.5 break-words">{m.subject}</p>}
+                              <p className="whitespace-pre-wrap break-words leading-6">{m.body}</p>
+                              {m.attachmentName && (
+                                <button
+                                  type="button"
+                                  onClick={() => void viewAttachment(m)}
+                                  className={cn(
+                                    'mt-1.5 flex items-center gap-1.5 rounded-lg px-2 py-1 text-[12px] transition-colors max-w-full',
+                                    mine ? 'bg-primary-foreground/15 hover:bg-primary-foreground/25' : 'bg-background/60 hover:bg-background',
+                                  )}
+                                >
+                                  <Paperclip className="h-3.5 w-3.5 shrink-0" />
+                                  <span className="truncate">{m.attachmentName}</span>
+                                </button>
                               )}
-                            >
-                              <Paperclip className="h-3.5 w-3.5 shrink-0" />
-                              <span className="truncate">{m.attachmentName}</span>
-                            </button>
+                            </>
                           )}
                           <div className="mt-0.5 flex items-center justify-end gap-1.5 text-[10px] opacity-80">
-                            {m.editedAt && <span>(ویرایش‌شده)</span>}
-                            {m.priority === 'URGENT' && <span className="font-bold">فوری</span>}
-                            <span dir="ltr">{toPersianDigits(m.createdAt.slice(11, 16))}</span>
+                            {m.editedAt && !deleted && <span>(ویرایش‌شده)</span>}
+                            {m.priority === 'URGENT' && !deleted && <span className="font-bold">فوری</span>}
+                            <span dir="ltr">{localTime(m.createdAt)}</span>
                             {mine && pending && <Clock className="h-3 w-3" aria-label="در انتظار همگام‌سازی" />}
                             {mine && !pending && perms.seeReadStatus && multi && (
                               <span className="flex items-center gap-0.5">
@@ -764,14 +885,16 @@ export function MessagesView({ user }: { user: SessionUser }) {
                               </span>
                             )}
                             {mine && !pending && perms.seeReadStatus && !multi && ((m.readCount || 0) > 0 ? <CheckCheck className="h-3.5 w-3.5" aria-label="خوانده شد" /> : <Check className="h-3 w-3" aria-label="ارسال شد" />)}
-                            {mine && !pending && canEditMsg(m) && (
-                              <button type="button" onClick={() => openEdit(m)} className="opacity-60 hover:opacity-100 transition-opacity" aria-label="ویرایش پیام" title="ویرایش (تا ۳۰ دقیقه)">
+                            {!deleted && mine && !pending && canEditMsg(m) && (
+                              <button type="button" onClick={() => openEdit(m)} className="opacity-60 hover:opacity-100 transition-opacity" aria-label="ویرایش پیام" title="ویرایش">
                                 <Pencil className="h-3 w-3" />
                               </button>
                             )}
-                            <button type="button" onClick={() => void deleteMsg(m, mine)} className="opacity-60 hover:opacity-100 transition-opacity" aria-label="حذف پیام" title={mine ? 'حذف برای همه' : 'حذف برای من'}>
-                              <Trash2 className="h-3 w-3" />
-                            </button>
+                            {!deleted && (
+                              <button type="button" onClick={() => void deleteMsg(m, mine)} className="opacity-60 hover:opacity-100 transition-opacity" aria-label="حذف پیام" title={mine ? 'حذف برای هر دو طرف' : 'حذف برای من'}>
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -856,6 +979,71 @@ export function MessagesView({ user }: { user: SessionUser }) {
           )}
         </section>
       </div>
+
+      {/* ─── منوی فشردن طولانی پیام (مثل واتساپ) ─── */}
+      <Dialog open={!!actionMsg} onOpenChange={(v) => !v && setActionMsg(null)}>
+        <DialogContent className="max-w-[280px] p-3">
+          <DialogHeader className="sr-only">
+            <DialogTitle>گزینه‌های پیام</DialogTitle>
+          </DialogHeader>
+          {actionMsg && (
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground border-b pb-2 mb-1 line-clamp-2">{actionMsg.body}</p>
+              <button
+                type="button"
+                className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm hover:bg-accent transition-colors text-right"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(actionMsg.body);
+                    toast({ title: 'متن کپی شد' });
+                  } catch {
+                    toast({ title: 'کپی نشد — مرورگر اجازه نداد', variant: 'destructive' });
+                  }
+                  setActionMsg(null);
+                }}
+              >
+                <Copy className="h-4 w-4 text-sky-600 dark:text-sky-400" /> کپی متن
+              </button>
+              {isMine(actionMsg) && !actionMsg.deleted && (
+                <button
+                  type="button"
+                  disabled={!canEditMsg(actionMsg)}
+                  title={canEditMsg(actionMsg) ? 'ویرایش پیام' : 'ویرایش هنوز فعال نشده یا مهلت گذشته است'}
+                  className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm hover:bg-accent transition-colors text-right disabled:opacity-40 disabled:pointer-events-none"
+                  onClick={() => {
+                    const m = actionMsg;
+                    setActionMsg(null);
+                    openEdit(m);
+                  }}
+                >
+                  <Pencil className="h-4 w-4 text-violet-600 dark:text-violet-400" /> ویرایش پیام
+                </button>
+              )}
+              {!actionMsg.deleted && (
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm hover:bg-rose-500/10 transition-colors text-right text-rose-600 dark:text-rose-400"
+                  onClick={() => {
+                    const m = actionMsg;
+                    const mine = isMine(m);
+                    setActionMsg(null);
+                    void deleteMsg(m, mine);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" /> {isMine(actionMsg) ? 'حذف برای هر دو طرف' : 'حذف برای من'}
+                </button>
+              )}
+              <button
+                type="button"
+                className="w-full rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-accent transition-colors"
+                onClick={() => setActionMsg(null)}
+              >
+                انصراف
+              </button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* ─── دیالوگ گفتگوی جدید ─── */}
       <Dialog open={newChatOpen} onOpenChange={setNewChatOpen}>
@@ -947,7 +1135,7 @@ export function MessagesView({ user }: { user: SessionUser }) {
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto nice-scroll">
           <DialogHeader>
             <DialogTitle className="text-base flex items-center gap-1.5">
-              <ShieldCheck className="h-4 w-4 text-violet-600" /> صلاحیت‌های ارتباطی
+              <ShieldCheck className="h-4 w-4 text-violet-600 dark:text-violet-400" /> صلاحیت‌های ارتباطی
             </DialogTitle>
           </DialogHeader>
           <CommPolicyPanel />
@@ -959,7 +1147,7 @@ export function MessagesView({ user }: { user: SessionUser }) {
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto nice-scroll">
           <DialogHeader>
             <DialogTitle className="text-base flex items-center gap-1.5">
-              <ScrollText className="h-4 w-4 text-sky-600" /> گزارش فعالیت پیام‌ها
+              <ScrollText className="h-4 w-4 text-sky-600 dark:text-sky-400" /> گزارش فعالیت پیام‌ها
             </DialogTitle>
           </DialogHeader>
           <CommReportsPanel />

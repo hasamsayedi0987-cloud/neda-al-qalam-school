@@ -249,7 +249,7 @@ export function FeesView({ user }: { user: SessionUser }) {
         <Card>
           <CardHeader className="pb-1"><CardTitle className="text-xs font-medium text-muted-foreground">شاگردان دارای تأخیر</CardTitle></CardHeader>
           <CardContent>
-            <p className={cn('text-2xl font-bold flex items-center gap-1.5', stats.delayed > 0 && deadlinePassed ? 'text-rose-600' : '')}>
+            <p className={cn('text-2xl font-bold flex items-center gap-1.5', stats.delayed > 0 && deadlinePassed ? 'text-rose-600 dark:text-rose-400' : '')}>
               {stats.delayed > 0 && deadlinePassed ? <AlertTriangle className="h-5 w-5" /> : <Clock className="h-4 w-4 opacity-50" />}
               {toPersianDigits(stats.delayed)}
             </p>
@@ -307,7 +307,7 @@ export function FeesView({ user }: { user: SessionUser }) {
                       <td className="p-2.5 text-center font-medium text-primary">{toPersianDigits(paid)}</td>
                       <td className="p-2.5 text-center">
                         <Badge variant={st.tone === 'paid' ? 'default' : st.tone === 'partial' ? 'secondary' : 'outline'}
-                          className={cn(st.tone === 'paid' && 'bg-primary', st.tone === 'unpaid' && deadlinePassed && 'border-rose-400 text-rose-600')}>
+                          className={cn(st.tone === 'paid' && 'bg-primary', st.tone === 'unpaid' && deadlinePassed && 'border-rose-400 text-rose-600 dark:text-rose-400')}>
                           {st.tone === 'paid' && <CheckCircle2 className="h-3 w-3 ml-1" />}
                           {st.label}
                         </Badge>
@@ -410,7 +410,7 @@ export function FeesView({ user }: { user: SessionUser }) {
                   </p>
                 </div>
                 {isAdmin && (
-                  <Button size="sm" variant="ghost" className="h-7 text-xs text-rose-600" onClick={() => deletePayment(p)}>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs text-rose-600 dark:text-rose-400" onClick={() => deletePayment(p)}>
                     حذف
                   </Button>
                 )}

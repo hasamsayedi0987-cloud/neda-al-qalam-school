@@ -195,33 +195,38 @@ export function AttendanceView({ user }: { user: SessionUser }) {
 
   const saveStaff = async () => {
     setSaving(true);
-    const items = Object.entries(staffMarks).map(([teacherId, status]) => ({ teacherId, status }));
+    const items = Object.entries(staffMarks).map(([userId, status]) => ({ userId, status }));
     const res = await apiSend('/api/attendance', 'POST', { action: 'staff', date, items });
     setSaving(false);
     if (res.error) {
       toast({ title: 'خطا', description: res.error, variant: 'destructive' });
       return;
     }
-    toast({ title: 'ذخیره شد', description: res.queued ? 'در حافظهٔ گوشی — پس از اتصال همگام می‌شود' : 'حاضری کارمندان ثبت گردید' });
+    toast({ title: 'ذخیره شد', description: res.queued ? 'در حافظهٔ گوشی — پس از اتصال همگام می‌شود' : 'حاضری پرسنل ثبت گردید' });
     loadStaff();
   };
 
   const loadStaff = useCallback(async () => {
     setStaffLoading(true);
     try {
-      const data = await apiGet<{ records: Array<{ teacherId: string; date: string; status: string }>; staff: Array<{ id: string; name: string; position: string }> }>(
+      const data = await apiGet<{ records: Array<{ userId: string; date: string; status: string }>; staff: Array<{ id: string; name: string; position: string; role?: string }> }>(
         `/api/attendance?mode=staff&date=${date}`,
       );
       setStaffList(data.staff);
       const m: Record<string, Status> = {};
       for (const s of data.staff) {
-        const rec = data.records.find((r) => r.teacherId === s.id);
+        const rec = data.records.find((r) => r.userId === s.id);
         m[s.id] = (rec?.status as Status) || 'PRESENT';
       }
       setStaffMarks(m);
     } catch { /* دسترسی */ }
     setStaffLoading(false);
   }, [date]);
+
+  // بارگیری حاضری پرسنل هنگام باز شدن بخش (برای مدیر/سرمعلم) و با تغییر تاریخ
+  useEffect(() => {
+    if (['ADMIN', 'HEADTEACHER'].includes(user.role)) queueMicrotask(loadStaff);
+  }, [user.role, loadStaff]);
 
   // ─── گزارش ماهانه: محاسبه ───
   const monthlySummary = useMemo(() => {
@@ -318,11 +323,11 @@ export function AttendanceView({ user }: { user: SessionUser }) {
 
       <Tabs defaultValue={canMark ? 'daily' : (isStaffSelf ? 'daily' : 'report')}>
         {canMark && (
-          <TabsList className="mb-4">
+          <TabsList className="mb-4 flex w-full flex-wrap h-auto min-h-10 gap-0.5">
             <TabsTrigger value="daily">حاضری یومیه</TabsTrigger>
             <TabsTrigger value="report">گزارش ماهانه</TabsTrigger>
             <TabsTrigger value="annual" className="gap-1"><BarChart3 className="h-3.5 w-3.5" /> آمار سالانه</TabsTrigger>
-            {['ADMIN', 'HEADTEACHER'].includes(user.role) && <TabsTrigger value="staff">حاضری کارمندان</TabsTrigger>}
+            {['ADMIN', 'HEADTEACHER'].includes(user.role) && <TabsTrigger value="staff">حاضری پرسنل</TabsTrigger>}
           </TabsList>
         )}
 
@@ -367,7 +372,7 @@ export function AttendanceView({ user }: { user: SessionUser }) {
                     <UserCheck className="h-4 w-4" /> همه حاضر
                   </Button>
                 </div>
-                <Card className="border-emerald-100">
+                <Card className="border-emerald-100 dark:border-emerald-500/25">
                   <CardContent className="p-0">
                     <Table>
                       <TableHeader>
@@ -393,7 +398,7 @@ export function AttendanceView({ user }: { user: SessionUser }) {
                                     onClick={() => setMarks({ ...marks, [s.id]: st })}
                                     className={cn(
                                       'rounded-full px-3 py-1.5 text-xs font-medium transition-all min-h-[32px]',
-                                      marks[s.id] === st ? ATTENDANCE_COLORS[st] : 'bg-muted text-muted-foreground hover:bg-emerald-50',
+                                      marks[s.id] === st ? ATTENDANCE_COLORS[st] : 'bg-muted text-muted-foreground hover:bg-emerald-50 dark:bg-emerald-500/10',
                                     )}
                                   >
                                     {ATTENDANCE_LABELS[st]}
@@ -421,10 +426,10 @@ export function AttendanceView({ user }: { user: SessionUser }) {
                     </DialogHeader>
                     <p className="text-xs text-muted-foreground">{todayJ} — {isoToWeekday(date)}</p>
                     <div className="grid grid-cols-4 gap-2 text-center">
-                      <div className="rounded-lg border p-2"><p className="text-lg font-bold text-emerald-700">{toPersianDigits(marksSummary.present)}</p><p className="text-[10px] text-muted-foreground">حاضر</p></div>
-                      <div className="rounded-lg border p-2"><p className="text-lg font-bold text-rose-600">{toPersianDigits(marksSummary.absent)}</p><p className="text-[10px] text-muted-foreground">غایب</p></div>
-                      <div className="rounded-lg border p-2"><p className="text-lg font-bold text-amber-600">{toPersianDigits(marksSummary.sick)}</p><p className="text-[10px] text-muted-foreground">مریض</p></div>
-                      <div className="rounded-lg border p-2"><p className="text-lg font-bold text-sky-700">{toPersianDigits(marksSummary.leave)}</p><p className="text-[10px] text-muted-foreground">رخصت</p></div>
+                      <div className="rounded-lg border p-2"><p className="text-lg font-bold text-emerald-700 dark:text-emerald-300">{toPersianDigits(marksSummary.present)}</p><p className="text-[10px] text-muted-foreground">حاضر</p></div>
+                      <div className="rounded-lg border p-2"><p className="text-lg font-bold text-rose-600 dark:text-rose-400">{toPersianDigits(marksSummary.absent)}</p><p className="text-[10px] text-muted-foreground">غایب</p></div>
+                      <div className="rounded-lg border p-2"><p className="text-lg font-bold text-amber-600 dark:text-amber-400">{toPersianDigits(marksSummary.sick)}</p><p className="text-[10px] text-muted-foreground">مریض</p></div>
+                      <div className="rounded-lg border p-2"><p className="text-lg font-bold text-sky-700 dark:text-sky-300">{toPersianDigits(marksSummary.leave)}</p><p className="text-[10px] text-muted-foreground">رخصت</p></div>
                     </div>
                     {marksSummary.absent > 0 ? (
                       <div className="space-y-1.5">
@@ -440,14 +445,14 @@ export function AttendanceView({ user }: { user: SessionUser }) {
                             ) : (
                               <div key={s.id} className="flex items-center justify-between rounded-md border px-2.5 py-1.5 text-xs opacity-60">
                                 <span>{fullName(s)}</span>
-                                <span className="text-[10px] text-amber-600">شمارهٔ والد ثبت نشده</span>
+                                <span className="text-[10px] text-amber-600 dark:text-amber-400">شمارهٔ والد ثبت نشده</span>
                               </div>
                             );
                           })}
                         </div>
                       </div>
                     ) : (
-                      <p className="text-xs text-emerald-700 flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" /> غایبی نیست — آمار کامل است</p>
+                      <p className="text-xs text-emerald-700 dark:text-emerald-300 flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" /> غایبی نیست — آمار کامل است</p>
                     )}
                     <div className="flex gap-2 justify-end">
                       <Button variant="outline" onClick={() => setConfirmOpen(false)}>بازگشت</Button>
@@ -465,14 +470,14 @@ export function AttendanceView({ user }: { user: SessionUser }) {
         {/* ─── حاضری خود کارمند (ملازم) ─── */}
         {isStaffSelf && (
           <TabsContent value="daily" className="space-y-4">
-            <Card className="border-emerald-100">
+            <Card className="border-emerald-100 dark:border-emerald-500/25">
               <CardContent className="p-0">
                 {myStaffRecords.length === 0 ? (
                   <EmptyState message="هنوز حاضری برای شما ثبت نشده است." icon={CalendarDays} />
                 ) : (
                   <div className="overflow-x-auto nice-scroll max-h-[60vh] overflow-y-auto">
                     <Table>
-                      <TableHeader className="sticky top-0 bg-emerald-50">
+                      <TableHeader className="sticky top-0 bg-emerald-50 dark:bg-emerald-500/10">
                         <TableRow>
                           <TableHead>تاریخ</TableHead>
                           <TableHead>وضعیت</TableHead>
@@ -551,7 +556,7 @@ export function AttendanceView({ user }: { user: SessionUser }) {
           ) : monthlySummary.length === 0 ? (
             <EmptyState message="برای این دوره دادهٔ حاضری موجود نیست." icon={CalendarDays} />
           ) : (
-            <Card className="border-emerald-100 print-area">
+            <Card className="border-emerald-100 dark:border-emerald-500/25 print-area">
               <CardContent className="p-0">
                 <div className="flex justify-end gap-2 p-3 no-print">
                   <Button variant="outline" size="sm" onClick={printMonthly} className="gap-1">
@@ -579,10 +584,10 @@ export function AttendanceView({ user }: { user: SessionUser }) {
                         <TableRow key={r.student.id}>
                           <TableCell>{toPersianDigits(i + 1)}</TableCell>
                           <TableCell className="font-medium">{fullName(r.student)}</TableCell>
-                          <TableCell className="text-emerald-700 font-semibold">{toPersianDigits(r.present)}</TableCell>
-                          <TableCell className="text-rose-600 font-semibold">{toPersianDigits(r.absent)}</TableCell>
-                          <TableCell className="text-amber-600">{toPersianDigits(r.sick)}</TableCell>
-                          <TableCell className="text-sky-700">{toPersianDigits(r.leave)}</TableCell>
+                          <TableCell className="text-emerald-700 dark:text-emerald-300 font-semibold">{toPersianDigits(r.present)}</TableCell>
+                          <TableCell className="text-rose-600 dark:text-rose-400 font-semibold">{toPersianDigits(r.absent)}</TableCell>
+                          <TableCell className="text-amber-600 dark:text-amber-400">{toPersianDigits(r.sick)}</TableCell>
+                          <TableCell className="text-sky-700 dark:text-sky-300">{toPersianDigits(r.leave)}</TableCell>
                           <TableCell>{toPersianDigits(r.total)}</TableCell>
                         </TableRow>
                       ))}
@@ -622,11 +627,11 @@ export function AttendanceView({ user }: { user: SessionUser }) {
                     <FileSpreadsheet className="h-4 w-4" /> Excel
                   </Button>
                 </div>
-                <Card className="border-emerald-100">
+                <Card className="border-emerald-100 dark:border-emerald-500/25">
                   <CardContent className="p-0">
                     <div className="overflow-x-auto nice-scroll max-h-[60vh] overflow-y-auto">
                       <Table>
-                        <TableHeader className="sticky top-0 bg-emerald-50">
+                        <TableHeader className="sticky top-0 bg-emerald-50 dark:bg-emerald-500/10">
                           <TableRow>
                             <TableHead>شماره</TableHead>
                             <TableHead>شهرت شاگرد</TableHead>
@@ -644,10 +649,10 @@ export function AttendanceView({ user }: { user: SessionUser }) {
                               <TableRow key={r.student.id}>
                                 <TableCell>{toPersianDigits(i + 1)}</TableCell>
                                 <TableCell className="font-medium">{fullName(r.student)}</TableCell>
-                                <TableCell className="text-emerald-700 font-semibold">{toPersianDigits(r.present)}</TableCell>
-                                <TableCell className="text-rose-600 font-semibold">{toPersianDigits(r.absent)}</TableCell>
-                                <TableCell className="text-amber-600">{toPersianDigits(r.sick)}</TableCell>
-                                <TableCell className="text-sky-700">{toPersianDigits(r.leave)}</TableCell>
+                                <TableCell className="text-emerald-700 dark:text-emerald-300 font-semibold">{toPersianDigits(r.present)}</TableCell>
+                                <TableCell className="text-rose-600 dark:text-rose-400 font-semibold">{toPersianDigits(r.absent)}</TableCell>
+                                <TableCell className="text-amber-600 dark:text-amber-400">{toPersianDigits(r.sick)}</TableCell>
+                                <TableCell className="text-sky-700 dark:text-sky-300">{toPersianDigits(r.leave)}</TableCell>
                                 <TableCell>
                                   <div className="flex items-center gap-2">
                                     <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
@@ -672,19 +677,21 @@ export function AttendanceView({ user }: { user: SessionUser }) {
           </TabsContent>
         )}
 
-        {/* ─── حاضری کارمندان ─── */}
+        {/* ─── حاضری پرسنل: معلمان، کارمندان و مدیریت ─── */}
         {['ADMIN', 'HEADTEACHER'].includes(user.role) && (
           <TabsContent value="staff" className="space-y-4">
             <div className="flex flex-wrap items-end gap-2">
               <Field label="تاریخ (شمسی)">
                 <JalaliDatePicker value={date} onChange={setDate} />
               </Field>
-              <p className="text-xs text-muted-foreground pb-2">{todayJ}</p>
+              <p className="text-xs text-muted-foreground pb-2">{todayJ} — حاضری معلمان، کارمندان و مدیریت</p>
             </div>
             {staffLoading ? (
               <LoadingBlock rows={3} />
+            ) : staffList.length === 0 ? (
+              <EmptyState message="پرسنلی ثبت نشده است." icon={Users} />
             ) : (
-              <Card className="border-emerald-100">
+              <Card className="border-emerald-100 dark:border-emerald-500/20">
                 <CardContent className="p-0">
                   <Table>
                     <TableHeader>
@@ -709,7 +716,7 @@ export function AttendanceView({ user }: { user: SessionUser }) {
                                   onClick={() => setStaffMarks({ ...staffMarks, [t.id]: st })}
                                   className={cn(
                                     'rounded-full px-3 py-1.5 text-xs font-medium transition-all min-h-[32px]',
-                                    staffMarks[t.id] === st ? ATTENDANCE_COLORS[st] : 'bg-muted text-muted-foreground hover:bg-emerald-50',
+                                    staffMarks[t.id] === st ? ATTENDANCE_COLORS[st] : 'bg-muted text-muted-foreground hover:bg-emerald-50 dark:hover:bg-emerald-500/10',
                                   )}
                                 >
                                   {ATTENDANCE_LABELS[st]}
@@ -726,7 +733,7 @@ export function AttendanceView({ user }: { user: SessionUser }) {
             )}
             <div className="flex justify-end">
               <Button onClick={saveStaff} disabled={saving} className="gap-1.5">
-                <Save className="h-4 w-4" /> ذخیرهٔ حاضری کارمندان
+                <Save className="h-4 w-4" /> ذخیرهٔ حاضری پرسنل
               </Button>
             </div>
           </TabsContent>

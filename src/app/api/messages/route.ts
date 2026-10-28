@@ -231,6 +231,13 @@ export async function GET(req: NextRequest) {
         Boolean(msg.toClassId && myStudentClass && msg.toClassId === myStudentClass);
       if (!isSender && !myRow && !legacyVisible) throw new ApiError('این پیام در صندوق شما نیست', 403);
       let attachment: AttachJson | null = null;
+      if (msg.deletedForAll) {
+        return NextResponse.json({
+          id: msg.id, subject: null, body: 'این پیام حذف شد', category: msg.category, kind: msg.kind,
+          priority: msg.priority, createdAt: msg.createdAt, editedAt: null, deleted: true,
+          from: { id: msg.fromUser.id, name: msg.fromUser.name, role: msg.fromUser.role }, attachment: null,
+        });
+      }
       if (msg.attachment) {
         try { attachment = JSON.parse(msg.attachment) as AttachJson; } catch { attachment = null; }
       }
@@ -287,11 +294,12 @@ export async function GET(req: NextRequest) {
     const inbox = inboxRows.map((r) => ({
       id: r.message.id,
       subject: r.message.subject,
-      body: r.message.body,
+      body: r.message.deletedForAll ? 'این پیام حذف شد' : r.message.body,
+      deleted: r.message.deletedForAll,
       category: r.message.category,
       kind: r.message.kind,
       priority: r.message.priority,
-      attachmentName: r.message.attachment ? ((JSON.parse(r.message.attachment) as AttachJson).name ?? null) : null,
+      attachmentName: r.message.deletedForAll || !r.message.attachment ? null : ((JSON.parse(r.message.attachment) as AttachJson).name ?? null),
       read: r.read,
       readAt: r.readAt,
       editedAt: r.message.editedAt,
@@ -326,10 +334,11 @@ export async function GET(req: NextRequest) {
         id: m.id,
         subject: m.subject,
         body: m.body,
+        deleted: m.deletedForAll,
         category: m.category,
         kind: m.kind,
         priority: m.priority,
-        attachmentName: m.attachment ? ((JSON.parse(m.attachment) as AttachJson).name ?? null) : null,
+        attachmentName: m.deletedForAll || !m.attachment ? null : ((JSON.parse(m.attachment) as AttachJson).name ?? null),
         readCount,
         totalCount: m.recipients.length,
         createdAt: m.createdAt,
@@ -355,7 +364,7 @@ export async function GET(req: NextRequest) {
 }
 
 /** ساخت اعلان برای همهٔ گیرندگان — زنگ بالای صفحه و اعلان کوتاه */
-async function notifyRecipients(fromName: string, recipients: ResolvedRecipient[], kind: string, priority: string, category: string, subject: string | null, text: string) {
+async function notifyRecipients(fromName: string, recipients: ResolvedRecipient[], kind: string, priority: string, category: string, subject: string | null, text: string, messageId?: string) {
   if (!recipients.length) return;
   try {
     await db.notification.createMany({
@@ -364,6 +373,7 @@ async function notifyRecipients(fromName: string, recipients: ResolvedRecipient[
         title: notifyTitle(kind, priority, category, fromName),
         body: notifyBody(subject, text),
         type: priority === 'URGENT' ? 'WARNING' : 'INFO',
+        messageId: messageId || null,
       })),
     });
   } catch {
@@ -438,7 +448,7 @@ export async function POST(req: NextRequest) {
       return msg;
     });
 
-    await notifyRecipients(me.name, recipients, kind, urgent ? 'URGENT' : 'NORMAL', category, subject, text);
+    await notifyRecipients(me.name, recipients, kind, urgent ? 'URGENT' : 'NORMAL', category, subject, text, created.id);
 
     return NextResponse.json({
       id: created.id,
@@ -469,6 +479,8 @@ export async function PATCH(req: NextRequest) {
         where: { userId: me.id, deleted: false, read: false },
         data: { read: true, readAt: new Date() },
       });
+      // اعلان‌های پیام‌ها پس از خواندن پاک می‌شوند — اعلان‌های دیگر (نمره/حاضری و…) فقط خوانده می‌شوند
+      await db.notification.deleteMany({ where: { userId: me.id, messageId: { not: null } } });
       return NextResponse.json({ ok: true });
     }
 
@@ -506,11 +518,14 @@ export async function PATCH(req: NextRequest) {
       if (!row.read) {
         await db.messageRecipient.update({ where: { id: row.id }, data: { read: true, readAt: new Date() } });
       }
+      // پس از خواندن پیام، اعلان مرتبط آن حذف می‌شود
+      await db.notification.deleteMany({ where: { userId: me.id, messageId: id } });
       return NextResponse.json({ ok: true });
     }
     // سازگاری با پیام‌های مستقیم بسیار قدیمی بدون ردیف گیرنده
     if (msg.toUserId === me.id) {
       await db.message.update({ where: { id }, data: { read: true } });
+      await db.notification.deleteMany({ where: { userId: me.id, messageId: id } });
       return NextResponse.json({ ok: true });
     }
     throw new ApiError('این پیام در صندوق شما نیست', 403);
@@ -537,23 +552,33 @@ export async function DELETE(req: NextRequest) {
     const perms = await permsFor(me);
     const myRow = msg.recipients.find((r) => r.userId === me.id);
 
-    // مدیر — مودریشن پیام نامناسب دیگران
+    // مدیر — مودریشن پیام نامناسب دیگران (حذف کامل)
     if (msg.fromUserId !== me.id && perms.moderate) {
       await db.message.delete({ where: { id } });
+      await db.notification.deleteMany({ where: { messageId: id } });
       await logAudit(me, 'MSG_MODERATE_DELETE', { messageId: id, fromUserId: msg.fromUserId, subject: msg.subject });
       return NextResponse.json({ ok: true, hard: true, moderated: true });
     }
 
-    // فرستنده — حذف کامل پیام خود (فراخوانی برای همهٔ گیرندگان)
+    // فرستنده — حذف برای هر دو طرف: گیرنده به‌جای متن، «این پیام حذف شد» می‌بیند
     if (msg.fromUserId === me.id) {
       if (!perms.deleteOwn) throw new ApiError('حذف پیام برای شما غیرفعال است', 403);
-      await db.message.delete({ where: { id } });
-      return NextResponse.json({ ok: true, hard: true });
+      if (msg.deletedForAll) {
+        return NextResponse.json({ ok: true, hard: false, recalled: true });
+      }
+      await db.message.update({
+        where: { id },
+        data: { deletedForAll: true, attachment: null },
+      });
+      // اعلان‌های پیام فراخوانی‌شده از صندوق همهٔ گیرندگان پاک می‌شود
+      await db.notification.deleteMany({ where: { messageId: id } });
+      return NextResponse.json({ ok: true, hard: false, recalled: true });
     }
 
-    // گیرنده — حذف فقط برای من
+    // گیرنده — حذف فقط برای من + پاک‌شدن اعلان مرتبط خودم
     if (myRow) {
       await db.messageRecipient.update({ where: { id: myRow.id }, data: { deleted: true } });
+      await db.notification.deleteMany({ where: { userId: me.id, messageId: id } });
       return NextResponse.json({ ok: true, hard: false });
     }
 
@@ -570,6 +595,7 @@ export async function DELETE(req: NextRequest) {
       try { list = msg.deletedFor ? (JSON.parse(msg.deletedFor) as string[]) : []; } catch { list = []; }
       if (!list.includes(me.id)) list.push(me.id);
       await db.message.update({ where: { id }, data: { deletedFor: JSON.stringify(list) } });
+      await db.notification.deleteMany({ where: { userId: me.id, messageId: id } });
       return NextResponse.json({ ok: true, hard: false });
     }
 

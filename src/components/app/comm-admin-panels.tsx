@@ -287,7 +287,7 @@ export function CommPolicyPanel() {
             <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-bold">{activeUser.name} — تنظیم فردی</p>
-                <Button variant="outline" size="sm" onClick={() => removeUserOverride(activeUser.id)} className="gap-1 text-rose-600">
+                <Button variant="outline" size="sm" onClick={() => removeUserOverride(activeUser.id)} className="gap-1 text-rose-600 dark:text-rose-400">
                   <Trash2 className="h-3.5 w-3.5" /> حذف تنظیم فردی
                 </Button>
               </div>
@@ -424,7 +424,7 @@ function GuardianLinksPanel() {
               {guardianLinks.map((l) => (
                 <div key={l.id} className="flex items-center justify-between gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
                   <span>{l.studentName} <span className="text-muted-foreground text-xs">({l.className || 'بدون صنف'})</span></span>
-                  <button type="button" onClick={() => removeLink(l)} className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-500/10" aria-label="حذف پیوند">
+                  <button type="button" onClick={() => removeLink(l)} className="rounded-lg p-1.5 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10" aria-label="حذف پیوند">
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
@@ -563,7 +563,7 @@ export function CommReportsPanel() {
       {data.canModerate && (
         <Card>
           <CardContent className="p-4 space-y-2">
-            <h3 className="text-sm font-bold flex items-center gap-1.5"><FileWarning className="h-4 w-4 text-amber-600" /> پیام‌های اخیر — بررسی و مودریشن</h3>
+            <h3 className="text-sm font-bold flex items-center gap-1.5"><FileWarning className="h-4 w-4 text-amber-600 dark:text-amber-400" /> پیام‌های اخیر — بررسی و مودریشن</h3>
             <p className="text-[11px] text-muted-foreground">پیام نامناسب را می‌توانید برای همهٔ گیرندگان حذف کنید؛ اقدام در گزارش فعالیت ثبت می‌شود.</p>
             <div className="space-y-1.5 max-h-80 overflow-y-auto nice-scroll">
               {data.recent.map((m) => (
@@ -572,11 +572,11 @@ export function CommReportsPanel() {
                     <b>{m.fromName}</b>
                     <span className="text-muted-foreground">({ROLE_LABELS[m.fromRole] || m.fromRole})</span>
                     <Badge variant="outline" className="text-[10px] px-1">{kindLabels[m.kind] || m.kind}</Badge>
-                    {m.priority === 'URGENT' && <Badge className="bg-rose-500/15 text-rose-700 text-[10px] px-1">فوری</Badge>}
+                    {m.priority === 'URGENT' && <Badge className="bg-rose-500/15 text-rose-700 dark:text-rose-300 text-[10px] px-1">فوری</Badge>}
                     <span className="text-[11px] text-muted-foreground mr-auto">{isoToJalaliDisplay(m.createdAt.slice(0, 10))}</span>
                     <button
                       type="button" onClick={() => moderateDelete(m)}
-                      className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-500/10 shrink-0"
+                      className="rounded-lg p-1.5 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 shrink-0"
                       aria-label="حذف کامل پیام" title="حذف کامل برای همه"
                     >
                       <Trash2 className="h-3.5 w-3.5" />

@@ -129,14 +129,14 @@ export function AboutView({ user }: { user: SessionUser }) {
       <PageHeader title="دربارهٔ اپلیکیشن و سازنده" subtitle="مکتب خصوصی نداالقلم — سیستم مدیریت تعلیمی" icon={GraduationCap} />
 
       {/* کارت سازنده */}
-      <Card className="border-emerald-200 overflow-hidden">
+      <Card className="border-emerald-200 dark:border-emerald-500/30 overflow-hidden">
         <CardContent className="p-0">
           <div className="bg-gradient-to-l from-emerald-700 to-emerald-600 p-5 text-white flex items-center gap-4">
             <div className="relative h-20 w-20 rounded-full overflow-hidden border-4 border-white/30 shadow-lg shrink-0 bg-white">
               {dev.photo ? (
                 <Image src={dev.photo} alt={`عکس ${dev.name}`} fill className="object-cover" unoptimized={dev.photo.startsWith('data:')} />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-emerald-700">{dev.name.slice(0, 1)}</div>
+                <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-emerald-700 dark:text-emerald-300">{dev.name.slice(0, 1)}</div>
               )}
             </div>
             <div className="min-w-0">
@@ -146,20 +146,20 @@ export function AboutView({ user }: { user: SessionUser }) {
           </div>
           <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             {dev.phone && (
-              <a href={`tel:${dev.phone}`} className="flex items-center gap-2.5 rounded-lg border border-emerald-100 px-3 py-2.5 hover:bg-emerald-50 transition-colors">
-                <Phone className="h-4 w-4 text-emerald-600 shrink-0" />
+              <a href={`tel:${dev.phone}`} className="flex items-center gap-2.5 rounded-lg border border-emerald-100 dark:border-emerald-500/25 px-3 py-2.5 hover:bg-emerald-50 dark:bg-emerald-500/10 transition-colors">
+                <Phone className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <div>
                   <p className="text-[11px] text-muted-foreground">شمارهٔ تماس</p>
-                  <p dir="ltr" className="font-semibold text-emerald-900">{toPersianDigits(dev.phone)}</p>
+                  <p dir="ltr" className="font-semibold text-emerald-900 dark:text-emerald-200">{toPersianDigits(dev.phone)}</p>
                 </div>
               </a>
             )}
             {dev.email && (
-              <a href={`mailto:${dev.email}`} className="flex items-center gap-2.5 rounded-lg border border-emerald-100 px-3 py-2.5 hover:bg-emerald-50 transition-colors">
-                <Mail className="h-4 w-4 text-emerald-600 shrink-0" />
+              <a href={`mailto:${dev.email}`} className="flex items-center gap-2.5 rounded-lg border border-emerald-100 dark:border-emerald-500/25 px-3 py-2.5 hover:bg-emerald-50 dark:bg-emerald-500/10 transition-colors">
+                <Mail className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <div className="min-w-0">
                   <p className="text-[11px] text-muted-foreground">ایمیل</p>
-                  <p dir="ltr" className="font-semibold text-emerald-900 text-xs truncate">{dev.email}</p>
+                  <p dir="ltr" className="font-semibold text-emerald-900 dark:text-emerald-200 text-xs truncate">{dev.email}</p>
                 </div>
               </a>
             )}
@@ -168,30 +168,30 @@ export function AboutView({ user }: { user: SessionUser }) {
       </Card>
 
       {/* دربارهٔ اپ */}
-      <Card className="border-emerald-100">
+      <Card className="border-emerald-100 dark:border-emerald-500/25">
         <CardContent className="p-5 space-y-4 text-sm leading-7">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-emerald-900 font-bold text-base">
+            <div className="flex items-center gap-2 text-emerald-900 dark:text-emerald-200 font-bold text-base">
               <Code2 className="h-5 w-5" /> دربارهٔ اپلیکیشن
             </div>
             {isAdmin && (
               <div className="flex gap-1.5">
-                <Button variant="outline" size="sm" className="h-8 gap-1 border-emerald-300 text-emerald-800" onClick={() => openEdit('app')}>
+                <Button variant="outline" size="sm" className="h-8 gap-1 border-emerald-300 dark:border-emerald-500/40 text-emerald-800 dark:text-emerald-300" onClick={() => openEdit('app')}>
                   <Pencil className="h-3.5 w-3.5" /> ویرایش
                 </Button>
               </div>
             )}
           </div>
           {app.photo && (
-            <div className="relative w-full max-w-sm mx-auto h-40 rounded-xl overflow-hidden border border-emerald-100">
+            <div className="relative w-full max-w-sm mx-auto h-40 rounded-xl overflow-hidden border border-emerald-100 dark:border-emerald-500/25">
               <Image src={app.photo} alt={app.name} fill className="object-cover" unoptimized={app.photo.startsWith('data:')} />
             </div>
           )}
           <p className="whitespace-pre-wrap">{app.text}</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3">
-              <p className="flex items-center gap-1.5 font-semibold text-emerald-800 text-[13px]">
+            <div className="rounded-lg border border-emerald-100 dark:border-emerald-500/25 bg-emerald-50 dark:bg-emerald-500/10/50 p-3">
+              <p className="flex items-center gap-1.5 font-semibold text-emerald-800 dark:text-emerald-300 text-[13px]">
                 <ShieldCheck className="h-4 w-4" /> نقش‌ها و دسترسی‌ها
               </p>
               <p className="text-xs text-muted-foreground leading-6 mt-1">
@@ -200,8 +200,8 @@ export function AboutView({ user }: { user: SessionUser }) {
                 مدیر می‌تواند هر کاربر را غیرفعال یا حذف کند تا دیگر نتواند وارد سیستم شود.
               </p>
             </div>
-            <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3">
-              <p className="flex items-center gap-1.5 font-semibold text-emerald-800 text-[13px]">
+            <div className="rounded-lg border border-emerald-100 dark:border-emerald-500/25 bg-emerald-50 dark:bg-emerald-500/10/50 p-3">
+              <p className="flex items-center gap-1.5 font-semibold text-emerald-800 dark:text-emerald-300 text-[13px]">
                 <Wifi className="h-4 w-4" /> آنلاین و آفلاین
               </p>
               <p className="text-xs text-muted-foreground leading-6 mt-1">
@@ -209,8 +209,8 @@ export function AboutView({ user }: { user: SessionUser }) {
                 پس از وصل شدن به شبکه به‌صورت خودکار همگام می‌گردد. برای امنیت، با هر بار بازکردن اپ یا سایت، ورود مجدد لازم است.
               </p>
             </div>
-            <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3">
-              <p className="flex items-center gap-1.5 font-semibold text-emerald-800 text-[13px]">
+            <div className="rounded-lg border border-emerald-100 dark:border-emerald-500/25 bg-emerald-50 dark:bg-emerald-500/10/50 p-3">
+              <p className="flex items-center gap-1.5 font-semibold text-emerald-800 dark:text-emerald-300 text-[13px]">
                 <Printer className="h-4 w-4" /> چاپ و خروجی
               </p>
               <p className="text-xs text-muted-foreground leading-6 mt-1">
@@ -218,21 +218,21 @@ export function AboutView({ user }: { user: SessionUser }) {
                 همهٔ تاریخ‌ها شمسی و رابط کاملاً فارسی و راست‌به‌چپ است.
               </p>
             </div>
-            <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3">
-              <p className="flex items-center gap-1.5 font-semibold text-emerald-800 text-[13px]">
+            <div className="rounded-lg border border-emerald-100 dark:border-emerald-500/25 bg-emerald-50 dark:bg-emerald-500/10/50 p-3">
+              <p className="flex items-center gap-1.5 font-semibold text-emerald-800 dark:text-emerald-300 text-[13px]">
                 <DatabaseBackup className="h-4 w-4" /> پشتیبان‌گیری
               </p>
               <p className="text-xs text-muted-foreground leading-6 mt-1">
                 مدیر می‌تواند از تمام داده‌ها فایل پشتیبان (Backup) تهیه کند و تنها مدیر اجازهٔ بازیابی عمومی را دارد.
               </p>
             </div>
-            <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3">
-              <p className="flex items-center gap-1.5 font-semibold text-emerald-800 text-[13px]">
+            <div className="rounded-lg border border-emerald-100 dark:border-emerald-500/25 bg-emerald-50 dark:bg-emerald-500/10/50 p-3">
+              <p className="flex items-center gap-1.5 font-semibold text-emerald-800 dark:text-emerald-300 text-[13px]">
                 <Smartphone className="h-4 w-4" /> نصب روی گوشی (اندروید و آیفون)
               </p>
               <p className="text-xs text-muted-foreground leading-6 mt-1">
-                <b className="text-emerald-800">اندروید:</b> فایل APK را از صفحهٔ انتشار (Releases) گیت‌هاب دانلود و نصب کنید.
-                <b className="text-emerald-800"> آیفون (iOS):</b> سایت را با Safari باز کنید، دکمهٔ اشتراک (مربع با فلش به‌بالا) را بزنید و
+                <b className="text-emerald-800 dark:text-emerald-300">اندروید:</b> فایل APK را از صفحهٔ انتشار (Releases) گیت‌هاب دانلود و نصب کنید.
+                <b className="text-emerald-800 dark:text-emerald-300"> آیفون (iOS):</b> سایت را با Safari باز کنید، دکمهٔ اشتراک (مربع با فلش به‌بالا) را بزنید و
                 «Add to Home Screen / افزودن به صفحهٔ اصلی» را انتخاب کنید — اپ مثل یک برنامهٔ واقعی تمام‌صفحه با آیکون خودش نصب می‌شود و آفلاین هم کار می‌کند.
               </p>
             </div>
@@ -247,7 +247,7 @@ export function AboutView({ user }: { user: SessionUser }) {
       {/* دکمهٔ ویرایش اطلاعات سازنده — تنها مدیر */}
       {isAdmin && (
         <div className="flex justify-start">
-          <Button variant="outline" className="gap-1.5 border-emerald-300 text-emerald-800" onClick={() => openEdit('dev')}>
+          <Button variant="outline" className="gap-1.5 border-emerald-300 dark:border-emerald-500/40 text-emerald-800 dark:text-emerald-300" onClick={() => openEdit('dev')}>
             <Pencil className="h-4 w-4" /> ویرایش اطلاعات سازنده و عکس
           </Button>
         </div>

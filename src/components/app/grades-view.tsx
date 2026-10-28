@@ -276,12 +276,12 @@ export function GradesView({ user }: { user: SessionUser }) {
 
       {/* بنر مضامین معلم — با تشخیص دقیق مشکل: بدون پیوند حساب ≠ بدون مضمون */}
       {isTeacher && (
-        <div className="rounded-lg border border-sky-200 bg-sky-50/70 px-3.5 py-3 mb-4">
-          <p className="text-sm font-semibold text-sky-900 flex items-center gap-1.5">
+        <div className="rounded-lg border border-sky-200 dark:border-sky-500/30 bg-sky-50 dark:bg-sky-500/10/70 px-3.5 py-3 mb-4">
+          <p className="text-sm font-semibold text-sky-900 dark:text-sky-200 flex items-center gap-1.5">
             <BookOpen className="h-4 w-4" /> مضامین سپرده‌شده به شما
           </p>
           {!user.teacherId ? (
-            <p className="text-xs text-amber-700 mt-1">
+            <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
               حساب شما به پروندهٔ معلم پیوند ندارد؛ به همین سبب مضامین و صنف‌های شما نمایش داده نمی‌شود.
               از مدیر بخواهید در بخش «کاربران و دسترسی‌ها» حساب شما را با پروندهٔ معلم‌تان پیوند بزند.
               (نکته: با یک بار خروج و ورود مجدد، پیوند به‌صورت خودکار هم برقرار می‌شود.)
@@ -289,21 +289,21 @@ export function GradesView({ user }: { user: SessionUser }) {
           ) : myAssignments.length > 0 ? (
             <div className="flex flex-wrap gap-1.5 mt-2">
               {myAssignments.map((a, i) => (
-                <Badge key={i} variant="outline" className="border-sky-300 text-sky-800">
+                <Badge key={i} variant="outline" className="border-sky-300 dark:border-sky-500/40 text-sky-800 dark:text-sky-300">
                   {a.subjectName} — {a.className}
                 </Badge>
               ))}
             </div>
           ) : (
-            <p className="text-xs text-amber-700 mt-1">هنوز مضمونی به شما سپرده نشده است — از مدیر مکتب بخواهید در بخش «صنف‌ها و تقسیم مضامین» مضامین شما را ثبت کند.</p>
+            <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">هنوز مضمونی به شما سپرده نشده است — از مدیر مکتب بخواهید در بخش «صنف‌ها و تقسیم مضامین» مضامین شما را ثبت کند.</p>
           )}
           {!permGrades && (
-            <p className="text-xs text-amber-700 mt-2">
+            <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">
               در حال حاضر مدیر اجازهٔ ثبت و ویرایش نمرات را به معلمان نداده است — جدول فقط برای مشاهده است.
             </p>
           )}
           {permGrades && !permDelete && (
-            <p className="text-xs text-amber-700 mt-1.5">
+            <p className="text-xs text-amber-700 dark:text-amber-300 mt-1.5">
               حذف نمرات توسط مدیر غیرفعال شده است — فقط می‌توانید نمرات را ثبت و ویرایش کنید.
             </p>
           )}
@@ -354,11 +354,11 @@ export function GradesView({ user }: { user: SessionUser }) {
         <EmptyState message="این صنف شاگرد فعال ندارد." icon={ClipboardList} />
       ) : (
         <>
-          <Card className="border-emerald-100">
+          <Card className="border-emerald-100 dark:border-emerald-500/25">
             <CardContent className="p-0">
               <div className="overflow-x-auto nice-scroll max-h-[62vh] overflow-y-auto">
                 <Table>
-                  <TableHeader className="sticky top-0 bg-emerald-50 z-10">
+                  <TableHeader className="sticky top-0 bg-emerald-50 dark:bg-emerald-500/10 z-10">
                     <TableRow>
                       <TableHead className="w-10">شماره</TableHead>
                       <TableHead className="min-w-[170px]">شهرت شاگرد</TableHead>
@@ -380,7 +380,7 @@ export function GradesView({ user }: { user: SessionUser }) {
                           <TableCell className="text-muted-foreground">{toPersianDigits(s.rollNo ?? i + 1)}</TableCell>
                           <TableCell className="font-medium">
                             {fullName(s)}
-                            {approved && <BadgeCheck className="inline h-4 w-4 text-emerald-600 mr-1" />}
+                            {approved && <BadgeCheck className="inline h-4 w-4 text-emerald-600 dark:text-emerald-400 mr-1" />}
                             {(s.fatherName || s.grandFather) && (
                               <span className="block text-[10px] font-normal text-muted-foreground">
                                 {s.fatherName ? `ولد ${s.fatherName}` : ''}
@@ -401,7 +401,7 @@ export function GradesView({ user }: { user: SessionUser }) {
                               />
                             </TableCell>
                           ))}
-                          <TableCell className="font-bold text-emerald-800">{total != null ? toPersianDigits(total) : '—'}</TableCell>
+                          <TableCell className="font-bold text-emerald-800 dark:text-emerald-300">{total != null ? toPersianDigits(total) : '—'}</TableCell>
                           <TableCell>
                             <span className={cn('text-sm', letterColor(total))}>{letterGrade(total)}</span>
                           </TableCell>
@@ -412,7 +412,7 @@ export function GradesView({ user }: { user: SessionUser }) {
                                 onClick={() => deleteRow(s)}
                                 aria-label={`حذف نمرات ${fullName(s)}`}
                               >
-                                <Trash2 className="h-4 w-4 text-rose-600" />
+                                <Trash2 className="h-4 w-4 text-rose-600 dark:text-rose-400" />
                               </Button>
                             </TableCell>
                           )}
@@ -429,9 +429,9 @@ export function GradesView({ user }: { user: SessionUser }) {
             <div className="text-xs text-muted-foreground">
               {stats && (
                 <>
-                  اوسط صنف در این مضمون: <b className="text-emerald-800">{toPersianDigits(stats.avg)}</b>
-                  {' | '}قبول: <b className="text-emerald-700">{toPersianDigits(stats.pass)}</b>
-                  {' | '}تکرار: <b className="text-rose-600">{toPersianDigits(stats.fail)}</b>
+                  اوسط صنف در این مضمون: <b className="text-emerald-800 dark:text-emerald-300">{toPersianDigits(stats.avg)}</b>
+                  {' | '}قبول: <b className="text-emerald-700 dark:text-emerald-300">{toPersianDigits(stats.pass)}</b>
+                  {' | '}تکرار: <b className="text-rose-600 dark:text-rose-400">{toPersianDigits(stats.fail)}</b>
                 </>
               )}
             </div>
@@ -442,7 +442,7 @@ export function GradesView({ user }: { user: SessionUser }) {
                 </Button>
               )}
               {canApprove && allApproved && (
-                <Button variant="ghost" onClick={() => toggleApprove(false)} className="gap-1.5 text-amber-700">
+                <Button variant="ghost" onClick={() => toggleApprove(false)} className="gap-1.5 text-amber-700 dark:text-amber-300">
                   <RotateCcw className="h-4 w-4" /> لغو تایید (بازگشت به پیش‌نویس)
                 </Button>
               )}
@@ -454,7 +454,7 @@ export function GradesView({ user }: { user: SessionUser }) {
             </div>
           </div>
           {allApproved && (
-            <p className={cn('text-xs mt-2', canApprove ? 'text-emerald-700' : 'text-amber-700')}>
+            <p className={cn('text-xs mt-2', canApprove ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300')}>
               {canApprove
                 ? 'نمرات نهایی و تایید شده‌اند — برای ویرایش، تایید را لغو کنید.'
                 : 'نمرات این مضمون تایید نهایی شده و برای معلم قابل ویرایش نیست.'}

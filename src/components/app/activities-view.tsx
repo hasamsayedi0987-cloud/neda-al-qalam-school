@@ -193,14 +193,14 @@ export function ActivitiesView({ user }: { user: SessionUser }) {
       )}
 
       {!canEdit || classId || isSelf ? (
-        <Card className="border-emerald-100">
+        <Card className="border-emerald-100 dark:border-emerald-500/25">
           <CardContent className="p-0">
             {activities.length === 0 ? (
               <EmptyState message={canEdit ? 'صنف را انتخاب و اولین فعالیت را ثبت کنید.' : 'فعالیتی ثبت نشده است.'} icon={ClipboardCheck} />
             ) : (
               <div className="overflow-x-auto nice-scroll max-h-[62vh] overflow-y-auto">
                 <Table>
-                  <TableHeader className="sticky top-0 bg-emerald-50">
+                  <TableHeader className="sticky top-0 bg-emerald-50 dark:bg-emerald-500/10">
                     <TableRow>
                       {!isSelf && <TableHead>شاگرد</TableHead>}
                       <TableHead>تاریخ</TableHead>
@@ -219,19 +219,19 @@ export function ActivitiesView({ user }: { user: SessionUser }) {
                             {canEdit && guardianSms(a.studentId) && (
                               <a href={guardianSms(a.studentId)} className="inline-flex h-6 w-6 items-center justify-center rounded-md border mr-1.5 hover:bg-accent align-middle"
                                 aria-label="پیام به والد" title="پیام به والد در پیام‌رسان تلفن">
-                                <MessageSquare className="h-3 w-3 text-emerald-700" />
+                                <MessageSquare className="h-3 w-3 text-emerald-700 dark:text-emerald-300" />
                               </a>
                             )}
                           </TableCell>
                         )}
                         <TableCell className="text-xs whitespace-nowrap">
                           <span className="inline-flex items-center gap-1">
-                            <CalendarDays className="h-3 w-3 text-emerald-600" />
+                            <CalendarDays className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
                             {isoToJalaliDisplay(a.date)}
                           </span>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="border-emerald-200 text-emerald-700">
+                          <Badge variant="outline" className="border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300">
                             {ACTIVITY_TYPE_LABELS[a.type] || a.type}
                           </Badge>
                         </TableCell>
@@ -251,7 +251,7 @@ export function ActivitiesView({ user }: { user: SessionUser }) {
                                 <Pencil className="h-4 w-4 text-primary" />
                               </Button>
                               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => remove(a)} aria-label="حذف" title="حذف">
-                                <Trash2 className="h-4 w-4 text-rose-600" />
+                                <Trash2 className="h-4 w-4 text-rose-600 dark:text-rose-400" />
                               </Button>
                             </div>
                           </TableCell>

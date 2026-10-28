@@ -280,7 +280,7 @@ export function ComposePanel({
             <div className="flex items-center justify-between gap-2">
               <Label className="text-xs">مخاطبان مجاز شما {selected.size > 0 && `— ${toPersianDigits(selected.size)} انتخاب‌شده`}</Label>
               {selected.size > 0 && (
-                <button type="button" onClick={() => setSelected(new Set())} className="text-[11px] text-rose-600">پاک‌کردن انتخاب</button>
+                <button type="button" onClick={() => setSelected(new Set())} className="text-[11px] text-rose-600 dark:text-rose-400">پاک‌کردن انتخاب</button>
               )}
             </div>
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="جست‌وجوی نام یا صنف…" className="h-9" />
@@ -363,7 +363,7 @@ export function ComposePanel({
             {perms.allUsers && (
               <div className="flex items-center justify-between rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2.5">
                 <div>
-                  <p className="text-sm font-medium flex items-center gap-1.5"><Globe2 className="h-4 w-4 text-amber-600" /> همهٔ کاربران سیستم</p>
+                  <p className="text-sm font-medium flex items-center gap-1.5"><Globe2 className="h-4 w-4 text-amber-600 dark:text-amber-400" /> همهٔ کاربران سیستم</p>
                   <p className="text-[11px] text-muted-foreground">پیام به تمام کاربران فعال مکتب</p>
                 </div>
                 <Switch checked={wantAll} onCheckedChange={setWantAll} aria-label="همهٔ کاربران" />
@@ -410,7 +410,7 @@ export function ComposePanel({
                       {preview.breakdown.filter((b) => b.count > 0).map((b) => `${b.label}: ${toPersianDigits(b.count)}`).join(' • ')}
                     </p>
                   )}
-                  {!preview.total && <p className="text-[11px] text-rose-600">هیچ گیرنده‌ای یافت نشد — انتخاب را بررسی کنید</p>}
+                  {!preview.total && <p className="text-[11px] text-rose-600 dark:text-rose-400">هیچ گیرنده‌ای یافت نشد — انتخاب را بررسی کنید</p>}
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground">

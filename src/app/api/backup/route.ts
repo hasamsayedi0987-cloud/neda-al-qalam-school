@@ -21,6 +21,7 @@ export async function GET() {
       attendance, staffAttendance, activities, grades, books, loans,
       notifications, tasks, settings, customSections, customEntries, certificates,
       feePayments, messages, scheduleSlots, messageRecipients, guardianLinks, auditLogs,
+      employeeAttendance,
     ] = await Promise.all([
       db.user.findMany(),
       db.class.findMany(),
@@ -46,6 +47,7 @@ export async function GET() {
       db.messageRecipient.findMany(),
       db.guardianLink.findMany(),
       db.auditLog.findMany({ orderBy: { createdAt: 'desc' }, take: 500 }),
+      db.employeeAttendance.findMany(),
     ]);
     const backup = {
       version: 4,
@@ -58,6 +60,7 @@ export async function GET() {
         books, loans, notifications, tasks,
         feePayments, messages, scheduleSlots,
         messageRecipients, guardianLinks, auditLogs,
+        employeeAttendance,
         // کلید امنیتی نشست هرگز پشتیبان نمی‌شود
         settings: settings.filter((s) => s.key !== 'authSecret'),
         customSections, customEntries, certificates,
@@ -123,6 +126,7 @@ export async function POST(req: NextRequest) {
       await tx.studentActivity.deleteMany({});
       await tx.attendanceRecord.deleteMany({});
       await tx.staffAttendance.deleteMany({});
+      await tx.employeeAttendance.deleteMany({});
       await tx.bookLoan.deleteMany({});
       await tx.staffTask.deleteMany({});
       await tx.customEntry.deleteMany({});
@@ -211,6 +215,11 @@ export async function POST(req: NextRequest) {
       if (Array.isArray(data.staffAttendance)) {
         for (const r of data.staffAttendance) {
           await tx.staffAttendance.create({ data: { id: r.id, teacherId: r.teacherId, date: r.date, status: r.status } });
+        }
+      }
+      if (Array.isArray(data.employeeAttendance)) {
+        for (const r of data.employeeAttendance) {
+          await tx.employeeAttendance.create({ data: { id: r.id, userId: r.userId, date: r.date, status: r.status } });
         }
       }
       if (Array.isArray(data.activities)) {

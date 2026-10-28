@@ -361,7 +361,7 @@ export function DashboardView({ user, onNavigate }: { user: SessionUser; onNavig
         <Card className="border-amber-500/30 bg-amber-500/5 animate-fade-up">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <ClipboardList className="h-5 w-5 text-amber-600" /> نمرات در انتظار بررسی و تایید
+              <ClipboardList className="h-5 w-5 text-amber-600 dark:text-amber-400" /> نمرات در انتظار بررسی و تایید
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-1.5">
@@ -374,7 +374,7 @@ export function DashboardView({ user, onNavigate }: { user: SessionUser; onNavig
                 <span className="font-medium">{p.subjectName} — {p.className}</span>
                 <span className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">{p.period === 'MIDTERM' ? 'چهارو‌نیم‌ماهه' : 'سالانه'}</span>
-                  <Badge variant="outline" className="border-amber-400 text-amber-700">{toPersianDigits(p.count)} شاگرد</Badge>
+                  <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-300">{toPersianDigits(p.count)} شاگرد</Badge>
                 </span>
               </button>
             ))}

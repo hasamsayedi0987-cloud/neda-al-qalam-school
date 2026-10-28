@@ -114,14 +114,14 @@ export function TasksView({ user }: { user: SessionUser }) {
         <div className="space-y-4">
           {pending.length > 0 && (
             <>
-              <h2 className="text-sm font-semibold text-emerald-900">در جریان ({toPersianDigits(pending.length)})</h2>
+              <h2 className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">در جریان ({toPersianDigits(pending.length)})</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {pending.map((t) => (
-                  <Card key={t.id} className="border-emerald-100">
+                  <Card key={t.id} className="border-emerald-100 dark:border-emerald-500/25">
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="font-semibold text-emerald-900">{t.title}</p>
+                          <p className="font-semibold text-emerald-900 dark:text-emerald-200">{t.title}</p>
                           {t.description && <p className="text-xs text-muted-foreground mt-1 leading-5">{t.description}</p>}
                           <div className="flex flex-wrap items-center gap-2 mt-2 text-[11px] text-muted-foreground">
                             {t.staff && <Badge variant="outline" className="text-[10px]">{t.staff.name} ({t.staff.position})</Badge>}
@@ -141,11 +141,11 @@ export function TasksView({ user }: { user: SessionUser }) {
                             <Loader className="h-3 w-3" /> شروع
                           </Button>
                         )}
-                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-emerald-300 text-emerald-800" onClick={() => setStatus(t, 'DONE')}>
+                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-emerald-300 dark:border-emerald-500/40 text-emerald-800 dark:text-emerald-300" onClick={() => setStatus(t, 'DONE')}>
                           <CheckCircle2 className="h-3 w-3" /> انجام شد
                         </Button>
                         {canAssign && (
-                          <Button size="sm" variant="ghost" className="h-7 text-xs text-rose-600 gap-1" onClick={() => remove(t)}>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs text-rose-600 dark:text-rose-400 gap-1" onClick={() => remove(t)}>
                             <Trash2 className="h-3 w-3" /> حذف
                           </Button>
                         )}
@@ -159,15 +159,15 @@ export function TasksView({ user }: { user: SessionUser }) {
 
           {done.length > 0 && (
             <>
-              <h2 className="text-sm font-semibold text-emerald-900 mt-6">انجام‌شده ({toPersianDigits(done.length)})</h2>
+              <h2 className="text-sm font-semibold text-emerald-900 dark:text-emerald-200 mt-6">انجام‌شده ({toPersianDigits(done.length)})</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                 {done.map((t) => (
-                  <div key={t.id} className={cn('rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-2.5 text-sm flex items-center justify-between gap-2')}>
+                  <div key={t.id} className={cn('rounded-lg border border-emerald-100 dark:border-emerald-500/25 bg-emerald-50 dark:bg-emerald-500/10/50 px-3 py-2.5 text-sm flex items-center justify-between gap-2')}>
                     <div className="min-w-0">
                       <p className="font-medium truncate">{t.title}</p>
                       <p className="text-[10px] text-muted-foreground">{t.staff?.name}</p>
                     </div>
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   </div>
                 ))}
               </div>

@@ -147,6 +147,7 @@ export interface NotificationInfo {
   body: string;
   type: string;
   read: boolean;
+  messageId?: string | null; // پیوند با پیام — کلیک → بازشدن پیام‌ها؛ خواندن پیام → حذف اعلان
   createdAt: string;
 }
 

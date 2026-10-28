@@ -209,7 +209,7 @@ function FileEntryInput({ value, onPick, onClear }: { value: string; onPick: (f:
             <img src={fv.url} alt={fv.name} className="h-14 w-14 rounded-md object-cover border border-emerald-200 dark:border-emerald-800" />
           )}
           <span className="text-xs text-muted-foreground truncate max-w-[180px]" dir="ltr">{fv.name}</span>
-          <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 text-rose-600" onClick={onClear}>
+          <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 text-rose-600 dark:text-rose-400" onClick={onClear}>
             <Trash2 className="h-3 w-3" /> حذف فایل
           </Button>
         </div>
@@ -589,7 +589,7 @@ export function CustomSectionsView({ user, initialSectionId }: { user: SessionUs
               )}
               {isAdmin && (
                 <>
-                  <Button size="sm" variant="outline" onClick={() => openBuilder(active)} className="gap-1 border-emerald-300">
+                  <Button size="sm" variant="outline" onClick={() => openBuilder(active)} className="gap-1 border-emerald-300 dark:border-emerald-500/40">
                     <Pencil className="h-3.5 w-3.5" /> ویرایش بخش
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => deleteSection(active)} className="gap-1 border-rose-200 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30">
@@ -612,7 +612,7 @@ export function CustomSectionsView({ user, initialSectionId }: { user: SessionUs
                 />
               </div>
               <Button
-                variant="outline" size="sm" className="gap-1.5 border-emerald-300"
+                variant="outline" size="sm" className="gap-1.5 border-emerald-300 dark:border-emerald-500/40"
                 onClick={() => setSortDir((d) => (d === 'newest' ? 'oldest' : 'newest'))}
                 title="مرتب‌سازی بر اساس تاریخ"
               >
@@ -620,7 +620,7 @@ export function CustomSectionsView({ user, initialSectionId }: { user: SessionUs
                 {sortDir === 'newest' ? 'جدیدترین' : 'قدیمی‌ترین'}
               </Button>
               <Button
-                variant="outline" size="sm" className="gap-1.5 border-emerald-300"
+                variant="outline" size="sm" className="gap-1.5 border-emerald-300 dark:border-emerald-500/40"
                 onClick={() => exportCsv(active)}
                 disabled={filteredEntries.length === 0}
               >
@@ -687,7 +687,7 @@ export function CustomSectionsView({ user, initialSectionId }: { user: SessionUs
                                 <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEntry(active, e.id)} aria-label="ویرایش" title="ویرایش">
                                   <Pencil className="h-3.5 w-3.5" />
                                 </Button>
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-rose-600" onClick={() => deleteEntry(e.id)} aria-label="حذف" title="حذف">
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-rose-600 dark:text-rose-400" onClick={() => deleteEntry(e.id)} aria-label="حذف" title="حذف">
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
                               </div>
@@ -761,13 +761,13 @@ export function CustomSectionsView({ user, initialSectionId }: { user: SessionUs
                       onChange={(e) => setBFields((fs) => fs.map((x, ix) => ix === i ? { ...x, required: e.target.checked } : x))} />
                     الزامی
                   </label>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-600" aria-label="حذف فیلد" title="حذف فیلد"
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-600 dark:text-rose-400" aria-label="حذف فیلد" title="حذف فیلد"
                     onClick={() => setBFields((fs) => fs.filter((_, ix) => ix !== i))}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               ))}
-              <Button variant="outline" size="sm" className="gap-1 border-emerald-300"
+              <Button variant="outline" size="sm" className="gap-1 border-emerald-300 dark:border-emerald-500/40"
                 onClick={() => setBFields((fs) => [...fs, { key: `field${fs.length + 1}`, label: '', type: 'text' }])}>
                 <Plus className="h-3.5 w-3.5" /> افزودن فیلد
               </Button>

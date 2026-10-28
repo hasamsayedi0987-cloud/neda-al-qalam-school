@@ -221,24 +221,24 @@ export function ClassesView({ user }: { user: SessionUser }) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {classes.map((c) => (
-            <Card key={c.id} className="border-emerald-100">
+            <Card key={c.id} className="border-emerald-100 dark:border-emerald-500/25">
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="font-bold text-emerald-900">{c.name}</p>
+                    <p className="font-bold text-emerald-900 dark:text-emerald-200">{c.name}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       شاگردان: {toPersianDigits(c.studentCount || 0)}
                       {c.capacity ? ` از ${toPersianDigits(c.capacity)}` : ''}
                       {' | '}نگران صنف: {c.supervisorName || 'تعیین نشده'}
                     </p>
                     {c.capacity != null && c.studentCount != null && c.studentCount >= c.capacity && (
-                      <p className="text-xs text-rose-600 mt-1 flex items-center gap-1 font-medium">
+                      <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 flex items-center gap-1 font-medium">
                         <AlertTriangle className="h-3 w-3" />
                         ظرفیت تکمیل است ({toPersianDigits(c.studentCount)}/{toPersianDigits(c.capacity)})
                       </p>
                     )}
                     {c.actingSupervisorName && (
-                      <p className="text-xs text-amber-700 mt-0.5 flex items-center gap-1">
+                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5 flex items-center gap-1">
                         <UserLock className="h-3 w-3" /> نگران موقت: {c.actingSupervisorName}
                       </p>
                     )}
@@ -258,11 +258,11 @@ export function ClassesView({ user }: { user: SessionUser }) {
                         }}
                         aria-label="ویرایش صنف"
                       >
-                        <Pencil className="h-4 w-4 text-emerald-700" />
+                        <Pencil className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
                       </Button>
                       {user.role === 'ADMIN' && (
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => remove(c)} aria-label="حذف صنف">
-                          <Trash2 className="h-4 w-4 text-rose-600" />
+                          <Trash2 className="h-4 w-4 text-rose-600 dark:text-rose-400" />
                         </Button>
                       )}
                     </div>
@@ -271,17 +271,17 @@ export function ClassesView({ user }: { user: SessionUser }) {
 
                 <Separator className="my-3" />
 
-                <p className="text-xs font-semibold text-emerald-800 mb-2 flex items-center gap-1">
+                <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300 mb-2 flex items-center gap-1">
                   <BookOpen className="h-3.5 w-3.5" /> مضامین سپرده‌شده ({toPersianDigits(c.classSubjects?.length || 0)})
                 </p>
                 <div className="space-y-1 max-h-44 overflow-y-auto nice-scroll">
                   {(c.classSubjects || []).map((cs) => (
-                    <div key={cs.id} className="flex items-center justify-between rounded-md bg-emerald-50/70 border border-emerald-50 px-2.5 py-1.5 text-xs">
+                    <div key={cs.id} className="flex items-center justify-between rounded-md bg-emerald-50 dark:bg-emerald-500/10/70 border border-emerald-50 px-2.5 py-1.5 text-xs">
                       <span className="font-medium">{cs.subject.name}</span>
                       <span className="flex items-center gap-1.5 text-muted-foreground">
-                        {cs.teacher ? cs.teacher.name : <span className="text-amber-600">بدون معلم</span>}
+                        {cs.teacher ? cs.teacher.name : <span className="text-amber-600 dark:text-amber-400">بدون معلم</span>}
                         {canEdit && (
-                          <button onClick={() => removeAssignment(cs)} className="text-rose-500 hover:text-rose-700" aria-label="حذف مضمون">
+                          <button onClick={() => removeAssignment(cs)} className="text-rose-500 dark:text-rose-400 hover:text-rose-700 dark:text-rose-300" aria-label="حذف مضمون">
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         )}
@@ -295,11 +295,11 @@ export function ClassesView({ user }: { user: SessionUser }) {
 
                 {canEdit && (
                   <div className="grid grid-cols-2 gap-2 mt-3">
-                    <Button variant="outline" size="sm" className="gap-1 text-emerald-800 border-emerald-300"
+                    <Button variant="outline" size="sm" className="gap-1 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-500/40"
                       onClick={() => { setAssignClass(c); setAssignSubject(''); setAssignTeacher(''); setCopyFrom(''); }}>
                       <Plus className="h-3.5 w-3.5" /> سپردن مضمون
                     </Button>
-                    <Button variant="outline" size="sm" className="gap-1 text-teal-800 border-teal-300"
+                    <Button variant="outline" size="sm" className="gap-1 text-teal-800 dark:text-teal-300 border-teal-300 dark:border-teal-500/40"
                       onClick={() => openSchedule(c)}>
                       <CalendarDays className="h-3.5 w-3.5" /> برنامهٔ هفتگی
                     </Button>
@@ -500,7 +500,7 @@ export function ClassesView({ user }: { user: SessionUser }) {
                 </SelectContent>
               </Select>
               {(schedClass?.classSubjects || []).length === 0 && (
-                <p className="text-[11px] text-amber-600">اول برای این صنف مضمون سپرده شود (دکمهٔ «سپردن مضمون»)</p>
+                <p className="text-[11px] text-amber-600 dark:text-amber-400">اول برای این صنف مضمون سپرده شود (دکمهٔ «سپردن مضمون»)</p>
               )}
             </Field>
             <Field label="معلم">
@@ -519,7 +519,7 @@ export function ClassesView({ user }: { user: SessionUser }) {
                 </SelectContent>
               </Select>
               {slotEdit && slotTeacher && clashInfo(slotTeacher, slotEdit.day, slotEdit.period, schedClass?.id) && (
-                <p className="text-[11px] text-rose-600 flex items-center gap-1">
+                <p className="text-[11px] text-rose-600 dark:text-rose-400 flex items-center gap-1">
                   <AlertTriangle className="h-3 w-3" />
                   این معلم در همین وقت در صنف {clashInfo(slotTeacher, slotEdit.day, slotEdit.period, schedClass?.id)} است
                 </p>
@@ -528,7 +528,7 @@ export function ClassesView({ user }: { user: SessionUser }) {
           </div>
           <DialogFooter>
             {slotEdit?.existing && (
-              <Button variant="ghost" className="text-rose-600 ms-auto" onClick={clearSlot}>خالی کردن این وقت</Button>
+              <Button variant="ghost" className="text-rose-600 dark:text-rose-400 ms-auto" onClick={clearSlot}>خالی کردن این وقت</Button>
             )}
             <Button variant="outline" onClick={() => setSlotEdit(null)}>انصراف</Button>
             <Button onClick={saveSlot}>ذخیره</Button>

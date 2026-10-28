@@ -142,14 +142,14 @@ export function TeachersView({ user }: { user: SessionUser }) {
         )}
       />
 
-      <Card className="border-emerald-100">
+      <Card className="border-emerald-100 dark:border-emerald-500/25">
         <CardContent className="p-0">
           {teachers.length === 0 ? (
             <EmptyState message="هیچ معلم یا کارمندی ثبت نشده است." icon={UserCog} />
           ) : (
             <div className="overflow-x-auto nice-scroll max-h-[65vh] overflow-y-auto">
               <Table>
-                <TableHeader className="sticky top-0 bg-emerald-50 z-10">
+                <TableHeader className="sticky top-0 bg-emerald-50 dark:bg-emerald-500/10 z-10">
                   <TableRow>
                     <TableHead className="w-10">#</TableHead>
                     <TableHead>نام</TableHead>
@@ -180,10 +180,10 @@ export function TeachersView({ user }: { user: SessionUser }) {
                         {t.phone ? (
                           <div className="flex items-center gap-1">
                             <a href={`tel:${t.phone}`} className="inline-flex h-6 w-6 items-center justify-center rounded-md border hover:bg-accent" aria-label={`تماس با ${t.name}`}>
-                              <Phone className="h-3 w-3 text-emerald-700" />
+                              <Phone className="h-3 w-3 text-emerald-700 dark:text-emerald-300" />
                             </a>
                             <a href={`sms:${t.phone}`} className="inline-flex h-6 w-6 items-center justify-center rounded-md border hover:bg-accent" aria-label={`پیام به ${t.name}`}>
-                              <MessageSquare className="h-3 w-3 text-emerald-700" />
+                              <MessageSquare className="h-3 w-3 text-emerald-700 dark:text-emerald-300" />
                             </a>
                             <span>{t.phone}</span>
                           </div>
@@ -191,13 +191,13 @@ export function TeachersView({ user }: { user: SessionUser }) {
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-xs" dir="ltr">
                         {t.username ? (
-                          <span className={t.userActive ? 'text-emerald-700' : 'text-rose-600'}>
+                          <span className={t.userActive ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-400'}>
                             @{t.username}{t.userActive ? '' : ' (غیرفعال)'}
                           </span>
                         ) : (
                           user.role === 'ADMIN' ? (
                             <Button
-                              variant="outline" size="sm" className="h-7 text-[11px] gap-1 border-amber-300 text-amber-800"
+                              variant="outline" size="sm" className="h-7 text-[11px] gap-1 border-amber-300 dark:border-amber-500/40 text-amber-800 dark:text-amber-300"
                               onClick={() => { setAccDialog(t); setAccForm({ username: '', password: '', role: 'TEACHER' }); }}
                             >
                               <UserPlus className="h-3 w-3" /> ساخت حساب
@@ -207,12 +207,12 @@ export function TeachersView({ user }: { user: SessionUser }) {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-0.5 text-xs" title="واحدها و پریودهای هفتگی">
-                          <span className={cn((weeklyPeriods[t.id] || 0) > 20 && 'text-amber-600 font-semibold')}>
+                          <span className={cn((weeklyPeriods[t.id] || 0) > 20 && 'text-amber-600 dark:text-amber-400 font-semibold')}>
                             <CalendarClock className="inline h-3 w-3 ml-1 opacity-60" />
                             {toPersianDigits(t.assignments?.length || 0)} مضمون
                             {weeklyPeriods[t.id] != null && ` — ${toPersianDigits(weeklyPeriods[t.id])} پریود/هفته`}
                           </span>
-                          {(weeklyPeriods[t.id] || 0) > 20 && <span className="text-[10px] text-amber-600">تراکم کاری بالا!</span>}
+                          {(weeklyPeriods[t.id] || 0) > 20 && <span className="text-[10px] text-amber-600 dark:text-amber-400">تراکم کاری بالا!</span>}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -224,7 +224,7 @@ export function TeachersView({ user }: { user: SessionUser }) {
                               <Badge
                                 key={j}
                                 variant="outline"
-                                className="border-emerald-200 text-emerald-700 text-[10px] gap-0.5"
+                                className="border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-[10px] gap-0.5"
                                 title={`${a.subjectName} در ${a.className}`}
                               >
                                 <BookOpen className="h-2.5 w-2.5" />
@@ -238,7 +238,7 @@ export function TeachersView({ user }: { user: SessionUser }) {
                         {canEdit ? (
                           <Switch checked={t.active} onCheckedChange={() => toggleActive(t)} aria-label="فعال/غیرفعال" />
                         ) : (
-                          <span className={t.active ? 'text-emerald-700 text-xs' : 'text-rose-600 text-xs'}>
+                          <span className={t.active ? 'text-emerald-700 dark:text-emerald-300 text-xs' : 'text-rose-600 dark:text-rose-400 text-xs'}>
                             {t.active ? 'فعال' : 'غیرفعال'}
                           </span>
                         )}
@@ -258,11 +258,11 @@ export function TeachersView({ user }: { user: SessionUser }) {
                               }}
                               aria-label="ویرایش"
                             >
-                              <Pencil className="h-4 w-4 text-emerald-700" />
+                              <Pencil className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
                             </Button>
                             {user.role === 'ADMIN' && (
                               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => remove(t)} aria-label="حذف">
-                                <Trash2 className="h-4 w-4 text-rose-600" />
+                                <Trash2 className="h-4 w-4 text-rose-600 dark:text-rose-400" />
                               </Button>
                             )}
                           </div>

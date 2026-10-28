@@ -27,6 +27,7 @@ model User {
   sentMessages Message[] @relation("sentMessages")
   messageRecipients MessageRecipient[]
   guardianLinks GuardianLink[]
+  employeeAttendance EmployeeAttendance[]
   teacherProfile Teacher?  @relation(fields: [teacherId], references: [id])
   studentProfile Student?  @relation("StudentUsers", fields: [studentId], references: [id])
 }
@@ -184,6 +185,21 @@ model StaffAttendance {
   @@unique([teacherId, date])
 }
 
+// حاضری پرسنل بر پایهٔ حساب کاربری — معلمان، کارمندان، کتابخانه و مدیریت (قدیمی‌ها از StaffAttendance خودکار منتقل می‌شود)
+model EmployeeAttendance {
+  id        String   @id @default(cuid())
+  userId    String
+  date      String // ISO yyyy-mm-dd
+  status    String // PRESENT | ABSENT | SICK | LEAVE
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([date])
+}
+
 // ═══════════════ فعالیت‌های شاگرد ═══════════════
 
 model StudentActivity {
@@ -270,11 +286,13 @@ model Notification {
   body      String
   type      String   @default("INFO") // INFO | SUCCESS | WARNING | GRADE | ATTENDANCE
   read      Boolean  @default(false)
+  messageId String? // پیوند با پیام — پس از خواندن/حذف پیام، اعلان مرتبط هم پاک می‌شود
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([messageId])
 }
 
 // ═══════════════ وظایف کارمندان ═══════════════
@@ -331,6 +349,7 @@ model Message {
   read      Boolean  @default(false) // برای پیام مستقیم قدیمی — جدید: وضعیت در MessageRecipient
   editedAt  DateTime? // ویرایش پیام توسط فرستنده (پنجرهٔ محدود)
   deletedFor String? // JSON آرایهٔ شناسهٔ کاربرانی که این پیام را برای خودشان حذف کرده‌اند
+  deletedForAll Boolean @default(false) // فراخوانی از طرف فرستنده — گیرنده به‌جای متن، «این پیام حذف شد» می‌بیند
   createdAt DateTime @default(now())
 
   fromUser User @relation("sentMessages", fields: [fromUserId], references: [id], onDelete: Cascade)

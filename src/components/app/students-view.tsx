@@ -474,7 +474,7 @@ export function StudentsView({ user }: { user: SessionUser }) {
                           )}
                           {isAdmin && (
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => remove(s)} aria-label="حذف" title="حذف">
-                              <Trash2 className="h-4 w-4 text-rose-600" />
+                              <Trash2 className="h-4 w-4 text-rose-600 dark:text-rose-400" />
                             </Button>
                           )}
                         </div>
@@ -515,7 +515,7 @@ export function StudentsView({ user }: { user: SessionUser }) {
                 <Upload className="h-4 w-4" /> {form.photo ? 'تغییر عکس' : 'انتخاب عکس'}
               </Button>
               {form.photo && (
-                <Button type="button" variant="ghost" size="sm" className="text-rose-600" onClick={() => setForm({ ...form, photo: '' })}>
+                <Button type="button" variant="ghost" size="sm" className="text-rose-600 dark:text-rose-400" onClick={() => setForm({ ...form, photo: '' })}>
                   حذف عکس
                 </Button>
               )}

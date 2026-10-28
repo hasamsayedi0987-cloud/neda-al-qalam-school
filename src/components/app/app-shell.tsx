@@ -23,7 +23,7 @@ import {
   Home, Library, LogOut, Menu, RefreshCw, School, Settings,
   ShieldCheck, UserCog, Users, ClipboardCheck, BookMarked, Wifi, KeyRound,
   FileSpreadsheet, UserCheck, Award, LayoutGrid, AlertTriangle, Loader2,
-  Sun, Moon, Monitor, Wallet, MessageSquare,
+  Sun, Moon, Monitor, Wallet, MessageSquare, X,
 } from 'lucide-react';
 
 /* ─── بارگذاری تنبل ویوها: هر بخش فقط هنگام باز شدن دانلود می‌شود (بستهٔ اولیه سبک‌تر) ─── */
@@ -299,6 +299,27 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
     loadNotifications();
   };
 
+  /** حذف یک اعلان (دستی) */
+  const removeNotification = async (id: string) => {
+    setNotifications((list) => list.filter((n) => n.id !== id));
+    setUnread((u) => Math.max(0, u - 1));
+    await apiSend(`/api/notifications?id=${id}`, 'DELETE').catch(() => {});
+  };
+
+  /** پاک‌کردن همهٔ اعلان‌ها */
+  const clearAllNotifications = async () => {
+    setNotifications([]);
+    setUnread(0);
+    await apiSend('/api/notifications', 'DELETE').catch(() => {});
+  };
+
+  // پس از خواندن/حذف پیام در چت‌خانه، زنگ بدون انتظار برای پول ۴۵ ثانیه‌ای تازه می‌شود
+  useEffect(() => {
+    const onRefresh = () => { void loadNotifications(); };
+    window.addEventListener('noq:notif-refresh', onRefresh);
+    return () => window.removeEventListener('noq:notif-refresh', onRefresh);
+  }, [loadNotifications]);
+
   const navButtonClass = (active: boolean) =>
     cn(
       'w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-right transition-all min-h-[44px] group',
@@ -349,7 +370,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
         </nav>
       </div>
       <div className="px-4 py-3 border-t text-[11px] text-muted-foreground">
-        نسخهٔ ۲.۴.۰ — حسام الدین سیدی
+        نسخهٔ ۲.۴.۱ — حسام الدین سیدی
       </div>
     </div>
   );
@@ -395,7 +416,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
             variant="outline"
             className={cn(
               'gap-1 shrink-0',
-              online ? 'text-primary border-primary/40 bg-primary/5' : 'text-rose-600 border-rose-300 bg-rose-500/5',
+              online ? 'text-primary border-primary/40 bg-primary/5' : 'text-rose-600 dark:text-rose-400 border-rose-300 dark:border-rose-500/40 bg-rose-500/5',
             )}
             title={
               online
@@ -424,21 +445,28 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
           {/* اعلان‌ها */}
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="icon" className="relative" aria-label="اعلان‌ها">
+              <Button variant="outline" size="icon" className="relative" aria-label={`اعلان‌ها${unread > 0 ? ` — ${toPersianDigits(unread)} نخوانده` : ''}`}>
                 {unread > 0 ? <Bell className="h-5 w-5 text-primary" /> : <BellOff className="h-5 w-5 text-muted-foreground" />}
                 {unread > 0 && (
-                  <span className="absolute -top-1.5 -left-1.5 h-5 min-w-5 px-1 rounded-full bg-rose-600 text-white text-[10px] flex items-center justify-center">
-                    {toPersianDigits(unread)}
+                  <span className="absolute -top-1.5 -left-1.5 h-5 min-w-5 px-1 rounded-full bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center border-2 border-background">
+                    {toPersianDigits(unread > 99 ? 99 : unread)}
                   </span>
                 )}
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-80 p-0">
               <div className="flex items-center justify-between px-3 py-2 border-b">
-                <p className="font-semibold text-sm">اعلان‌ها</p>
-                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={markAllRead}>
-                  خواندن همه
-                </Button>
+                <p className="font-semibold text-sm">اعلان‌ها {unread > 0 && <span className="text-xs text-rose-600 dark:text-rose-400">({toPersianDigits(unread)} نخوانده)</span>}</p>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={markAllRead}>
+                    خواندن همه
+                  </Button>
+                  {notifications.length > 0 && (
+                    <Button variant="ghost" size="sm" className="h-7 text-xs text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:text-rose-300 hover:bg-rose-500/10" onClick={clearAllNotifications}>
+                      پاک‌کردن
+                    </Button>
+                  )}
+                </div>
               </div>
               <div className="max-h-80 overflow-y-auto overscroll-contain">
                 {notifications.length === 0 ? (
@@ -447,13 +475,44 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
                   notifications.map((n) => (
                     <div
                       key={n.id}
-                      className={cn('px-3 py-2.5 border-b text-sm', !n.read && 'bg-accent/60')}
+                      className={cn('group relative px-3 py-2.5 border-b text-sm', !n.read && 'bg-accent/60')}
                     >
-                      <p className="font-medium text-[13px]">{n.title}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5 leading-5">{n.body}</p>
-                      <p className="text-[10px] text-muted-foreground mt-1">
-                        {isoToJalaliDisplay(new Date(n.createdAt).toISOString().slice(0, 10))}
-                      </p>
+                      <button
+                        type="button"
+                        className="w-full text-right"
+                        title={n.messageId ? 'رفتن به پیام‌ها' : undefined}
+                        onClick={async () => {
+                          // خواندن این اعلان + اگر پیام است، بازشدن بخش پیام‌ها
+                          if (!n.read) {
+                            setNotifications((list) => list.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
+                            setUnread((u) => Math.max(0, u - 1));
+                            void apiSend('/api/notifications', 'PATCH', { id: n.id }).catch(() => {});
+                          }
+                          if (n.messageId) {
+                            setView('messages');
+                          }
+                        }}
+                      >
+                        <span className="flex items-start gap-2">
+                          {n.messageId && <MessageSquare className="h-4 w-4 mt-0.5 shrink-0 text-primary" />}
+                          <span className="min-w-0 flex-1">
+                            <span className="font-medium text-[13px] block pr-0">{n.title}</span>
+                            <span className="text-xs text-muted-foreground mt-0.5 leading-5 block">{n.body}</span>
+                            <span className="text-[10px] text-muted-foreground mt-1 block">
+                              {isoToJalaliDisplay(new Date(n.createdAt).toISOString().slice(0, 10))}
+                            </span>
+                          </span>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="حذف این اعلان"
+                        title="حذف اعلان"
+                        className="absolute top-1.5 left-1.5 rounded-md p-1 text-muted-foreground/60 hover:text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                        onClick={() => void removeNotification(n.id)}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   ))
                 )}
@@ -493,7 +552,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
                 <RefreshCw className="h-4 w-4 ml-2" /> همگام‌سازی اعلان‌ها
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={logout} className="text-rose-600 focus:text-rose-600">
+              <DropdownMenuItem onClick={logout} className="text-rose-600 dark:text-rose-400 focus:text-rose-600 dark:text-rose-400">
                 <LogOut className="h-4 w-4 ml-2" /> خروج از حساب
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -504,6 +563,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
       {/* نوار وضعیت همگام‌سازی — در همهٔ صفحه‌ها (مخصوصاً موبایل) تغییرات معطل را نشان می‌دهد */}
       {(!online || pending > 0) && (
         <div
+          id="noq-syncbar"
           className={cn(
             'px-3 md:px-6 py-2 flex flex-wrap items-center gap-2 text-xs border-b',
             failedItems.length > 0
@@ -589,8 +649,8 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
       )}
 
       <div className="flex flex-1">
-        {/* سایدبار دسکتاپ */}
-        <aside className="hidden lg:block w-[270px] shrink-0 border-l bg-sidebar sticky top-16 h-[calc(100vh-4rem)]">
+        {/* سایدبار دسکتاپ — ارتفاع = ناحیهٔ قابل‌مشاهده منهای هدر و پانویس تا صفحه اسکرول اضافی نگیرد */}
+        <aside className="hidden lg:block w-[270px] shrink-0 border-l bg-sidebar sticky top-16 h-[calc(100vh-7rem)]">
           {navContent}
         </aside>
 

@@ -776,9 +776,9 @@ export function CertificatesView({ user }: { user: SessionUser }) {
         {/* ═══════ پنل طراحی ═══════ */}
         <div className="space-y-4 print:hidden">
           {/* قالب‌ها */}
-          <Card className="border-emerald-100">
+          <Card className="border-emerald-100 dark:border-emerald-500/25">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base text-emerald-900">قالب‌ها</CardTitle>
+              <CardTitle className="text-base text-emerald-900 dark:text-emerald-200">قالب‌ها</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="flex flex-wrap gap-2">
@@ -797,14 +797,14 @@ export function CertificatesView({ user }: { user: SessionUser }) {
               <div className="flex flex-wrap gap-1.5">
                 {canEdit && (
                   <>
-                    <Button size="sm" variant="outline" className="gap-1 border-emerald-300" onClick={() => setNameOpen(true)}>
+                    <Button size="sm" variant="outline" className="gap-1 border-emerald-300 dark:border-emerald-500/40" onClick={() => setNameOpen(true)}>
                       <Plus className="h-3.5 w-3.5" /> قالب جدید
                     </Button>
-                    <Button size="sm" variant="outline" className="gap-1 border-emerald-300" onClick={saveTemplate} disabled={saving}>
+                    <Button size="sm" variant="outline" className="gap-1 border-emerald-300 dark:border-emerald-500/40" onClick={saveTemplate} disabled={saving}>
                       <Save className="h-3.5 w-3.5" /> {active.id ? 'به‌روزرسانی قالب' : 'ذخیرهٔ قالب'}
                     </Button>
                     {active.id && (
-                      <Button size="sm" variant="outline" className="gap-1 border-rose-200 text-rose-600 hover:bg-rose-50" onClick={() => deleteTemplate(active)}>
+                      <Button size="sm" variant="outline" className="gap-1 border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:bg-rose-500/10" onClick={() => deleteTemplate(active)}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     )}
@@ -815,9 +815,9 @@ export function CertificatesView({ user }: { user: SessionUser }) {
           </Card>
 
           {/* ابزار طراحی آزاد */}
-          <Card className="border-emerald-100">
+          <Card className="border-emerald-100 dark:border-emerald-500/25">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base text-emerald-900 flex items-center gap-2">
+              <CardTitle className="text-base text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
                 <Wand2 className="h-4 w-4" /> ابزار طراحی آزاد
               </CardTitle>
             </CardHeader>
@@ -857,8 +857,8 @@ export function CertificatesView({ user }: { user: SessionUser }) {
 
                   <div className="border-t pt-3 space-y-2">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-emerald-900">بلوک‌های متنی آزاد</p>
-                      <Button size="sm" variant="outline" className="gap-1 border-emerald-300" onClick={addTextBlock}>
+                      <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">بلوک‌های متنی آزاد</p>
+                      <Button size="sm" variant="outline" className="gap-1 border-emerald-300 dark:border-emerald-500/40" onClick={addTextBlock}>
                         <Plus className="h-3.5 w-3.5" /> افزودن بلوک
                       </Button>
                     </div>
@@ -870,7 +870,7 @@ export function CertificatesView({ user }: { user: SessionUser }) {
                     {cfg.textBlocks.map((b, i) => (
                       <div key={b.id} className="rounded-lg border bg-muted/40 p-2.5 space-y-2">
                         <div className="flex items-center justify-between">
-                          <Badge variant="outline" className="border-emerald-300 text-emerald-800">
+                          <Badge variant="outline" className="border-emerald-300 dark:border-emerald-500/40 text-emerald-800 dark:text-emerald-300">
                             بلوک {toPersianDigits(i + 1)}
                           </Badge>
                           <div className="flex items-center gap-0.5">
@@ -880,7 +880,7 @@ export function CertificatesView({ user }: { user: SessionUser }) {
                             <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={i === cfg.textBlocks.length - 1} onClick={() => moveTextBlock(b.id, 1)} aria-label="انتقال به پایین">
                               <MoveDown className="h-3.5 w-3.5" />
                             </Button>
-                            <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-rose-600 hover:bg-rose-50" onClick={() => removeTextBlock(b.id)} aria-label="حذف بلوک">
+                            <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:bg-rose-500/10" onClick={() => removeTextBlock(b.id)} aria-label="حذف بلوک">
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </div>
@@ -945,14 +945,14 @@ export function CertificatesView({ user }: { user: SessionUser }) {
                     <>
                       <div className="flex flex-wrap items-center gap-4">
                         <div className="flex items-center gap-1.5">
-                          <Rows3 className="h-4 w-4 text-emerald-700" />
+                          <Rows3 className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
                           <span className="text-xs text-muted-foreground">سطر</span>
                           <Button type="button" variant="outline" size="icon" className="h-7 w-7" aria-label="کاهش سطر" onClick={() => resizeTable(cfg.table.rows.length - 1, cfg.table.rows[0]?.length ?? 1)}>−</Button>
                           <span className="text-sm font-semibold w-6 text-center">{toPersianDigits(cfg.table.rows.length)}</span>
                           <Button type="button" variant="outline" size="icon" className="h-7 w-7" aria-label="افزایش سطر" onClick={() => resizeTable(cfg.table.rows.length + 1, cfg.table.rows[0]?.length ?? 1)}>+</Button>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <Columns3 className="h-4 w-4 text-emerald-700" />
+                          <Columns3 className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
                           <span className="text-xs text-muted-foreground">ستون</span>
                           <Button type="button" variant="outline" size="icon" className="h-7 w-7" aria-label="کاهش ستون" onClick={() => resizeTable(cfg.table.rows.length, (cfg.table.rows[0]?.length ?? 1) - 1)}>−</Button>
                           <span className="text-sm font-semibold w-6 text-center">{toPersianDigits(cfg.table.rows[0]?.length ?? 0)}</span>
@@ -1003,7 +1003,7 @@ export function CertificatesView({ user }: { user: SessionUser }) {
                 {/* ─── لوگو و رنگ ─── */}
                 <TabsContent value="style" className="space-y-3 mt-0">
                   <div className="rounded-lg border bg-muted/40 p-2.5 space-y-2.5">
-                    <p className="text-sm font-semibold text-emerald-900 flex items-center gap-1.5">
+                    <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
                       <ImageIcon className="h-4 w-4" /> لوگو
                     </p>
                     <label className="flex items-center gap-2 text-sm">
@@ -1040,11 +1040,11 @@ export function CertificatesView({ user }: { user: SessionUser }) {
                               e.target.value = '';
                             }}
                           />
-                          <Button type="button" size="sm" variant="outline" className="gap-1 border-emerald-300" onClick={() => logoFileRef.current?.click()}>
+                          <Button type="button" size="sm" variant="outline" className="gap-1 border-emerald-300 dark:border-emerald-500/40" onClick={() => logoFileRef.current?.click()}>
                             <Upload className="h-3.5 w-3.5" /> لوگوی دلخواه
                           </Button>
                           {cfg.logoSrc && (
-                            <Button type="button" size="sm" variant="outline" className="gap-1 border-amber-300 text-amber-700" onClick={() => setCfg({ logoSrc: '' })}>
+                            <Button type="button" size="sm" variant="outline" className="gap-1 border-amber-300 dark:border-amber-500/40 text-amber-700 dark:text-amber-300" onClick={() => setCfg({ logoSrc: '' })}>
                               <RotateCcw className="h-3.5 w-3.5" /> بازگشت به لوگوی مکتب
                             </Button>
                           )}
@@ -1055,7 +1055,7 @@ export function CertificatesView({ user }: { user: SessionUser }) {
                   </div>
 
                   <div className="rounded-lg border bg-muted/40 p-2.5 space-y-2.5">
-                    <p className="text-sm font-semibold text-emerald-900 flex items-center gap-1.5">
+                    <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
                       <Palette className="h-4 w-4" /> رنگ‌ها و قاب
                     </p>
                     <div className="grid grid-cols-2 gap-2">
@@ -1095,7 +1095,7 @@ export function CertificatesView({ user }: { user: SessionUser }) {
                 {/* ─── امضاها و تاریخ ─── */}
                 <TabsContent value="sign" className="space-y-3 mt-0">
                   <div className="rounded-lg border bg-muted/40 p-2.5 space-y-2.5">
-                    <p className="text-sm font-semibold text-emerald-900 flex items-center gap-1.5">
+                    <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
                       <PenLine className="h-4 w-4" /> خط‌های امضا (حداکثر ۲)
                     </p>
                     {cfg.signatures.map((s, i) => (
@@ -1105,13 +1105,13 @@ export function CertificatesView({ user }: { user: SessionUser }) {
                           onChange={(e) => updateSignature(s.id, e.target.value)}
                           placeholder={`عنوان امضاکنندهٔ ${toPersianDigits(i + 1)}`}
                         />
-                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-rose-600 hover:bg-rose-50" onClick={() => removeSignature(s.id)} aria-label="حذف امضا">
+                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:bg-rose-500/10" onClick={() => removeSignature(s.id)} aria-label="حذف امضا">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     ))}
                     {cfg.signatures.length < 2 && (
-                      <Button type="button" size="sm" variant="outline" className="gap-1 border-emerald-300" onClick={addSignature}>
+                      <Button type="button" size="sm" variant="outline" className="gap-1 border-emerald-300 dark:border-emerald-500/40" onClick={addSignature}>
                         <Plus className="h-3.5 w-3.5" /> افزودن خط امضا
                       </Button>
                     )}
@@ -1174,9 +1174,9 @@ export function CertificatesView({ user }: { user: SessionUser }) {
           </Card>
 
           {/* گیرنده و چاپ */}
-          <Card className="border-emerald-100">
+          <Card className="border-emerald-100 dark:border-emerald-500/25">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base text-emerald-900">گیرنده و چاپ</CardTitle>
+              <CardTitle className="text-base text-emerald-900 dark:text-emerald-200">گیرنده و چاپ</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <Select value={receiverType} onValueChange={(v) => setReceiverType(v as 'student' | 'teacher' | 'manual')}>
@@ -1227,7 +1227,7 @@ export function CertificatesView({ user }: { user: SessionUser }) {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span>پیش‌نمایش زنده — همان چیزی که چاپ می‌شود</span>
-              <Badge variant="outline" className="border-emerald-300 text-emerald-800">{paperLabel}</Badge>
+              <Badge variant="outline" className="border-emerald-300 dark:border-emerald-500/40 text-emerald-800 dark:text-emerald-300">{paperLabel}</Badge>
             </div>
             <Button size="sm" onClick={printCertificate} className="gap-1">
               <Printer className="h-4 w-4" /> چاپ / ذخیره PDF

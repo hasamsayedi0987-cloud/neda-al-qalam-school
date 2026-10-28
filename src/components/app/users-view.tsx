@@ -231,14 +231,14 @@ export function UsersView({ user: me }: { user: SessionUser }) {
         }
       />
 
-      <Card className="border-emerald-100">
+      <Card className="border-emerald-100 dark:border-emerald-500/25">
         <CardContent className="p-0">
           {users.length === 0 ? (
             <EmptyState message="هیچ کاربری ثبت نشده است." icon={ShieldCheck} />
           ) : (
             <div className="overflow-x-auto nice-scroll max-h-[62vh] overflow-y-auto">
               <Table>
-                <TableHeader className="sticky top-0 bg-emerald-50 z-10">
+                <TableHeader className="sticky top-0 bg-emerald-50 dark:bg-emerald-500/10 z-10">
                   <TableRow>
                     <TableHead>نام کاربری</TableHead>
                     <TableHead>نام</TableHead>
@@ -259,12 +259,12 @@ export function UsersView({ user: me }: { user: SessionUser }) {
                         <TableCell className="font-medium">{u.name}</TableCell>
                         <TableCell>
                           {u.id === me.id || u.role === 'ADMIN' ? (
-                            <Badge variant="outline" className={u.role === 'ADMIN' ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-emerald-200 text-emerald-700'}>
+                            <Badge variant="outline" className={u.role === 'ADMIN' ? 'border-emerald-300 dark:border-emerald-500/40 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-300' : 'border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300'}>
                               {ROLE_LABELS[u.role] || u.role}
                             </Badge>
                           ) : (
                             <Select value={u.role} onValueChange={(v) => quickRole(u, v)}>
-                              <SelectTrigger className="h-8 w-[130px] text-xs border-emerald-200" aria-label={`تغییر نقش ${u.name}`}>
+                              <SelectTrigger className="h-8 w-[130px] text-xs border-emerald-200 dark:border-emerald-500/30" aria-label={`تغییر نقش ${u.name}`}>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -275,8 +275,8 @@ export function UsersView({ user: me }: { user: SessionUser }) {
                         </TableCell>
                         <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
                           {u.studentName ? `شاگرد: ${u.studentName}` : u.teacherId ? `کارمند: ${teachers.find((t) => t.id === u.teacherId)?.name || '—'}` : needsLink ? (
-                            <span className="inline-flex items-center gap-1 text-amber-700 font-medium" title="بدون پیوند، معلم مضامین خود را نمی‌بیند">
-                              <LinkIcon className="h-3 w-3 text-amber-600" /> بدون پیوند!
+                            <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300 font-medium" title="بدون پیوند، معلم مضامین خود را نمی‌بیند">
+                              <LinkIcon className="h-3 w-3 text-amber-600 dark:text-amber-400" /> بدون پیوند!
                             </span>
                           ) : '—'}
                         </TableCell>
@@ -285,7 +285,7 @@ export function UsersView({ user: me }: { user: SessionUser }) {
                             <span className="text-xs text-muted-foreground">همهٔ بخش‌ها</span>
                           ) : (
                             <Button
-                              variant="outline" size="sm" className="h-8 text-xs gap-1 border-emerald-200 text-emerald-800"
+                              variant="outline" size="sm" className="h-8 text-xs gap-1 border-emerald-200 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-300"
                               onClick={() => openPerms(u)}
                             >
                               <Lock className="h-3 w-3" />
@@ -295,11 +295,11 @@ export function UsersView({ user: me }: { user: SessionUser }) {
                         </TableCell>
                         <TableCell>
                           {u.active ? (
-                            <span className="inline-flex items-center gap-1 text-emerald-700 text-xs font-medium">
+                            <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300 text-xs font-medium">
                               <CheckCircle2 className="h-3.5 w-3.5" /> فعال
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-rose-600 text-xs font-medium">
+                            <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 text-xs font-medium">
                               <Ban className="h-3.5 w-3.5" /> غیرفعال
                             </span>
                           )}
@@ -323,14 +323,14 @@ export function UsersView({ user: me }: { user: SessionUser }) {
                               }}
                               aria-label="ویرایش"
                             >
-                              <Pencil className="h-4 w-4 text-emerald-700" />
+                              <Pencil className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
                             </Button>
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setPwDialog(u); setNewPw(''); }} aria-label="بازنشانی رمز">
-                              <KeyRound className="h-4 w-4 text-amber-600" />
+                              <KeyRound className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                             </Button>
                             {u.id !== me.id && (
                               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => remove(u)} aria-label="حذف">
-                                <Trash2 className="h-4 w-4 text-rose-600" />
+                                <Trash2 className="h-4 w-4 text-rose-600 dark:text-rose-400" />
                               </Button>
                             )}
                           </div>
@@ -346,7 +346,7 @@ export function UsersView({ user: me }: { user: SessionUser }) {
       </Card>
 
       <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-xs text-amber-800 leading-6">
+        <div className="rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10/70 p-3 text-xs text-amber-800 dark:text-amber-300 leading-6">
           <p className="flex items-center gap-1.5 font-semibold">
             <ShieldOff className="h-4 w-4" /> کنترل دسترسی
           </p>
@@ -355,7 +355,7 @@ export function UsersView({ user: me }: { user: SessionUser }) {
             برای تعیین مدیر جدید یا سرمعلم، نقش او را از ستون نقش تغییر دهید — چندین مدیر هم‌زمان مجاز است (حداقل یک مدیر فعال باید بماند).
           </p>
         </div>
-        <div className="rounded-lg border border-sky-200 bg-sky-50/70 p-3 text-xs text-sky-800 leading-6">
+        <div className="rounded-lg border border-sky-200 dark:border-sky-500/30 bg-sky-50 dark:bg-sky-500/10/70 p-3 text-xs text-sky-800 dark:text-sky-300 leading-6">
           <p className="flex items-center gap-1.5 font-semibold">
             <LinkIcon className="h-4 w-4" /> پیوند حساب با پرونده
           </p>
@@ -447,13 +447,13 @@ export function UsersView({ user: me }: { user: SessionUser }) {
               const isDefault = def.roles.includes(permsUser?.role || '') && permDraft[key] === undefined;
               const value = sectionAllowed({ role: permsUser?.role || '', perms: JSON.stringify(permDraft) }, key);
               return (
-                <div key={key} className="flex items-center justify-between gap-3 rounded-lg border border-emerald-100 bg-emerald-50/40 px-3 py-2">
+                <div key={key} className="flex items-center justify-between gap-3 rounded-lg border border-emerald-100 dark:border-emerald-500/25 bg-emerald-50 dark:bg-emerald-500/10/40 px-3 py-2">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-emerald-900">
+                    <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
                       {def.label}
                       {isDefault && <span className="text-[10px] text-muted-foreground mr-1.5">(پیش‌فرض نقش)</span>}
                       {permDraft[key] !== undefined && (
-                        <span className={`text-[10px] mr-1.5 ${permDraft[key] ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        <span className={`text-[10px] mr-1.5 ${permDraft[key] ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                           ({permDraft[key] ? 'فعال‌شده توسط مدیر' : 'محدودشده توسط مدیر'})
                         </span>
                       )}
@@ -470,8 +470,8 @@ export function UsersView({ user: me }: { user: SessionUser }) {
             })}
           </div>
           <Separator className="my-2" />
-          <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-3 space-y-2">
-            <p className="text-xs font-semibold text-sky-900 flex items-center gap-1.5">
+          <div className="rounded-lg border border-sky-200 dark:border-sky-500/30 bg-sky-50 dark:bg-sky-500/10/60 p-3 space-y-2">
+            <p className="text-xs font-semibold text-sky-900 dark:text-sky-200 flex items-center gap-1.5">
               <Copy className="h-3.5 w-3.5" /> کپی دسترسی از کاربر دیگر
             </p>
             <p className="text-[11px] text-muted-foreground leading-5">

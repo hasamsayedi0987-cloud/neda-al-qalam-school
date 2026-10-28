@@ -5,6 +5,7 @@ import { requireUser, requireRole, requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
 import { jalaliMonthRange, jalaliToGregorian } from '@/lib/jalali';
 import { teacherClassIds } from '@/lib/teacher-scope';
+import { ROLE_LABELS } from '@/lib/grading';
 
 /** بررسی دسترسی معلم به صنف — مدیر و سرمعلم همه صنف‌ها */
 async function assertClassScope(me: { role: string; teacherId: string | null }, classId: string) {
@@ -15,6 +16,35 @@ async function assertClassScope(me: { role: string; teacherId: string | null }, 
   }
 }
 
+/** نقش‌های پرسنل — همهٔ کارمندان مکتب (معلم، کارمند، کتابخانه و مدیریت) */
+const EMPLOYEE_ROLES: string[] = ['ADMIN', 'HEADTEACHER', 'TEACHER', 'STAFF', 'LIBRARIAN'];
+
+/**
+ * انتقال خودکار حاضری قدیمی (StaffAttendance بر پایهٔ معلم) به EmployeeAttendance بر پایهٔ حساب کاربری.
+ * یک‌بار‌کننده و بی‌خطر: ردیف موجود دست نمی‌خورد.
+ */
+async function ensureEmployeeAttendanceMigrated() {
+  try {
+    const rows = await db.staffAttendance.findMany({
+      include: { teacher: { select: { user: { select: { id: true } } } } },
+    });
+    if (!rows.length) return;
+    const ops: Prisma.PrismaPromise<unknown>[] = [];
+    for (const r of rows) {
+      const uid = r.teacher?.user?.id;
+      if (!uid) continue;
+      ops.push(db.employeeAttendance.upsert({
+        where: { userId_date: { userId: uid, date: r.date } },
+        update: {},
+        create: { userId: uid, date: r.date, status: r.status },
+      }));
+    }
+    if (ops.length) await db.$transaction(ops);
+  } catch {
+    /* مهاجرت هرگز نمایش حاضری را نمی‌شکند */
+  }
+}
+
 /** حاضری شاگردان — یومیه و گزارش ماهانه؛ و حاضری معلمان/کارمندان */
 export async function GET(req: NextRequest) {
   try {
@@ -22,12 +52,12 @@ export async function GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams;
     const mode = sp.get('mode') || 'daily';
 
-    // ─── حاضری معلمان/کارمندان ───
+    // ─── حاضری پرسنل (معلمان، کارمندان و مدیریت) ───
     if (mode === 'staff') {
       if (sp.get('mine') === '1') {
-        if (!me.teacherId) throw new ApiError('حساب شما به هیچ کارمندی پیوند ندارد', 403);
-        const records = await db.staffAttendance.findMany({
-          where: { teacherId: me.teacherId },
+        // حاضری خودم — بر پایهٔ حساب کاربری، برای هر نقش پرسنلی
+        const records = await db.employeeAttendance.findMany({
+          where: { userId: me.id },
           orderBy: { date: 'desc' },
           take: 90,
         });
@@ -35,12 +65,24 @@ export async function GET(req: NextRequest) {
       }
       await requireRole('ADMIN', 'HEADTEACHER');
       const date = sp.get('date') || '';
-      const records = await db.staffAttendance.findMany({
-        where: date ? { date } : {},
-        include: { teacher: { select: { id: true, name: true, position: true } } },
-        orderBy: { date: 'desc' },
-      });
-      const staff = await db.teacher.findMany({ where: { active: true }, orderBy: { name: 'asc' } });
+      await ensureEmployeeAttendanceMigrated();
+      const [records, staffUsers] = await Promise.all([
+        db.employeeAttendance.findMany({
+          where: date ? { date } : {},
+          orderBy: { date: 'desc' },
+        }),
+        db.user.findMany({
+          where: { active: true, role: { in: EMPLOYEE_ROLES } },
+          include: { teacherProfile: { select: { position: true } } },
+          orderBy: { name: 'asc' },
+        }),
+      ]);
+      const staff = staffUsers.map((u) => ({
+        id: u.id,
+        name: u.name,
+        role: u.role,
+        position: u.teacherProfile?.position || ROLE_LABELS[u.role] || 'کارمند',
+      }));
       return NextResponse.json({ records, staff });
     }
 
@@ -146,7 +188,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const action = str(body.action);
 
-    // ─── ثبت حاضری معلمان/کارمندان ───
+    // ─── ثبت حاضری پرسنل (معلمان، کارمندان و مدیریت) ───
     if (action === 'staff') {
       await requireRole('ADMIN', 'HEADTEACHER');
       const date = str(body.date);
@@ -154,13 +196,22 @@ export async function POST(req: NextRequest) {
       if (!date) throw new ApiError('تاریخ لازم است');
       const staffOps: Prisma.PrismaPromise<unknown>[] = [];
       for (const item of items) {
-        const teacherId = str(item.teacherId);
         const status = str(item.status);
-        if (!teacherId || !['PRESENT', 'ABSENT', 'SICK', 'LEAVE'].includes(status)) continue;
-        staffOps.push(db.staffAttendance.upsert({
-          where: { teacherId_date: { teacherId, date } },
+        if (!['PRESENT', 'ABSENT', 'SICK', 'LEAVE'].includes(status)) continue;
+        // فرمت جدید: userId — فرمت قدیمی: teacherId (سازگاری صف آفلاین)
+        let userId = str(item.userId);
+        const legacyTeacherId = str(item.teacherId);
+        if (!userId && legacyTeacherId) {
+          const t = await db.teacher.findUnique({ where: { id: legacyTeacherId }, select: { user: { select: { id: true } } } });
+          userId = t?.user?.id || '';
+        }
+        if (!userId) continue;
+        const u = await db.user.findFirst({ where: { id: userId, active: true, role: { in: EMPLOYEE_ROLES } }, select: { id: true } });
+        if (!u) continue;
+        staffOps.push(db.employeeAttendance.upsert({
+          where: { userId_date: { userId, date } },
           update: { status },
-          create: { teacherId, date, status },
+          create: { userId, date, status },
         }));
       }
       if (staffOps.length) await db.$transaction(staffOps);
