@@ -598,3 +598,20 @@ Stage Summary:
 - APK: /home/z/my-project/download/nedaalqalam-school.apk (SHA-256 a1cd0b3d…)
 - نکتهٔ ابری: برای سرور PostgreSQL اسکیمای prisma/schema.postgres.prisma باید db push شود (اعلان/پیام/حاضری پرسنل)
 - یادآوری امنیتی: توکن قبلی (ghp_nZDDsD6U…) همچنان باید Revoke شود
+
+---
+Task ID: v241-verify
+Agent: main (Z.ai)
+Task: تأیید نهایی چهار بخش اصلاحی کاربر (اعلان‌ها، پیام‌ها، حالت تاریک، حاضری) — وضعیت انتشار v2.4.1
+
+Work Log:
+- بررسی worklog و git: نسخهٔ ۲.۴.۱ در نشست قبلی کامل شده — commit 71f40ac روی main + tag v2.4.1 + Release id 426212906
+- تأیید پایگاه کد: tombstone «این پیام حذف شد» در messages-view + API، نشان نخواندهٔ زنگ در app-shell، فشردن طولانی (pressTimer ۵۵۰ms)، تأخیر ویرایش ۵ ثانیه‌ای (EDIT_DELAY_MS=5000)، مدل EmployeeAttendance در schema، TabsList flex-wrap در attendance-view، کادر پایین با visualViewport/ResizeObserver
+- تأیید انتشار: SHA-256 APK دانلودی از ریلیز (a1cd0b3d…) برابر بیلد محلی؛ هر ۱۵ ریلیز تاریخی با asset سالم؛ versionCode 14 / versionName 2.4.1 در AndroidManifest
+- تأیید ابر: پروداکشن Vercel سرویس‌ورکر v10-1 را می‌دهد (یعنی دیپلوی ۲.۴.۱ فعال است)؛ scripts/prisma-setup.mjs در Build ابری اسکیمای PostgreSQL را خودکار db push می‌کند (Notification.messageId، Message.deletedForAll، EmployeeAttendance) — نیازی به اقدام دستی نیست
+
+Stage Summary:
+- هر ۴ بخش درخواست کاربر پیاده، تست (۵۲/۵۲ + رگرسیون کامل)، منتشر و روی پروداکشن تأیید شد
+- لینک دانلود: https://github.com/hasamsayedi0987-cloud/neda-al-qalam-school/releases/download/v2.4.1/nedaalqalam-school.apk
+- کاربر باید APK نسخهٔ ۲.۴.۱ را نصب کند تا تغییرات را روی گوشی ببیند
+- یادآوری امنیتی: توکن قبلی (ghp_nZDDsD6U…) همچنان باید Revoke شود
