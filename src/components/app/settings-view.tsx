@@ -12,9 +12,10 @@ import { toPersianDigits, toLatinDigits, isoToJalaliDisplay, gregorianToJalali }
 import { DEFAULT_SCALE, scaleRangesText, type GradeScaleEntry } from '@/lib/grading';
 import { SECTIONS } from '@/lib/access';
 import { useToast } from '@/hooks/use-toast';
+import { enablePushNotifications, disablePushNotifications, isNativeApp, pushSupported } from '@/lib/client/push';
 import { Switch } from '@/components/ui/switch';
 import type { SessionUser, AppSettings } from '@/lib/types';
-import { Download, Upload, Save, Settings as SettingsIcon, KeyRound, DatabaseBackup, AlertTriangle, Plus, Trash2, ShieldCheck, Wallet, CalendarClock, History, Eraser, AlarmClock } from 'lucide-react';
+import { Download, Upload, Save, Settings as SettingsIcon, KeyRound, DatabaseBackup, AlertTriangle, Plus, Trash2, ShieldCheck, Wallet, CalendarClock, History, Eraser, AlarmClock, BellRing } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 /** کلیدهای اضافی تنظیمات — در سرور whitelist شده‌اند (EDITABLE_KEYS) */
@@ -42,6 +43,8 @@ const DEFAULTS: SettingsForm = {
 export function SettingsView({ user }: { user: SessionUser }) {
   const { toast } = useToast();
   const isAdmin = user.role === 'ADMIN';
+  // وضعیت اعلان‌های «خارج از اپ» — بومی اندروید یا پوش مرورگر (نسخهٔ ۳.۰.۰)
+  const [pushState, setPushState] = useState<'native' | 'granted' | 'denied' | 'default' | 'unsupported'>('default');
   const [settings, setSettings] = useState<SettingsForm>({ ...DEFAULTS });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -54,6 +57,48 @@ export function SettingsView({ user }: { user: SessionUser }) {
   const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
   const [clearYear, setClearYear] = useState('');
   const [clearing, setClearing] = useState(false);
+
+  useEffect(() => {
+    // وضعیت اعلان‌های بیرون از اپ — بومی اندروید همیشه فعال است
+    try {
+      if (isNativeApp()) setPushState('native');
+      else if (!pushSupported() || typeof Notification === 'undefined') setPushState('unsupported');
+      else setPushState(Notification.permission as 'granted' | 'denied' | 'default');
+    } catch { setPushState('unsupported'); }
+  }, []);
+
+  const handleEnablePush = async () => {
+    const r = await enablePushNotifications();
+    if (r.ok) {
+      setPushState('granted');
+      toast({ title: 'اعلان‌ها فعال شد', description: 'از این پس اعلان‌های مکتب مثل پیام گوشی می‌آیند — حتی وقتی اپ بسته است.' });
+    } else if (r.reason === 'denied') {
+      setPushState('denied');
+      toast({ title: 'اجازهٔ اعلان داده نشد', description: 'در تنظیمات مرورگر، اجازهٔ Notification برای این سایت را «Allow» کنید.', variant: 'destructive' });
+    } else if (r.reason === 'unsupported') {
+      toast({ title: 'مرورگر پشتیبانی نمی‌کند', description: 'این مرورگر اعلان Push ندارد. از اپ اندروید استفاده کنید.', variant: 'destructive' });
+    } else {
+      toast({ title: 'فعال‌سازی ناموفق بود', description: 'دوباره تلاش کنید.', variant: 'destructive' });
+    }
+  };
+
+  const handleTestPush = async () => {
+    try {
+      if (isNativeApp()) {
+        toast({ title: 'اعلان بومی اندروید فعال است', description: 'اعلان‌های واقعی حاضری و پیام‌ها به‌شکل خودکار می‌آیند.' });
+        return;
+      }
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification('اعلان آزمایشی — مکتب نداالقلم', {
+        body: 'اگر این را می‌بینید، اعلان‌ها درست کار می‌کنند. همین اعلان‌ها برای حاضری، نمرات و پیام‌ها هم می‌آیند.',
+        icon: './icon-192.png',
+        dir: 'rtl',
+        lang: 'fa',
+      });
+    } catch {
+      toast({ title: 'نمایش اعلان آزمایشی ناموفق بود', variant: 'destructive' });
+    }
+  };
 
   useEffect(() => {
     apiGet<{ settings: SettingsForm }>('/api/settings')
@@ -451,6 +496,62 @@ export function SettingsView({ user }: { user: SessionUser }) {
           <Button variant="outline" onClick={() => setPwOpen(true)} className="gap-1.5 border-emerald-300 dark:border-emerald-500/40 text-emerald-800 dark:text-emerald-300">
             <KeyRound className="h-4 w-4" /> تغییر رمز عبور
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* اعلان‌های «مثل پیام گوشی» — حتی وقتی اپ بسته است (نسخهٔ ۳.۰.۰) */}
+      <Card className="border-emerald-100 dark:border-emerald-500/25">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
+            <BellRing className="h-5 w-5" /> اعلان‌های بیرون از اپ
+            {pushState === 'native' || pushState === 'granted' ? (
+              <span className="mr-auto text-xs font-medium rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 px-2.5 py-0.5">فعال</span>
+            ) : pushState === 'denied' ? (
+              <span className="mr-auto text-xs font-medium rounded-full bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300 px-2.5 py-0.5">مسدود</span>
+            ) : null}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground leading-6">
+            اعلان‌های غیبت شاگرد، نمرات و پیام‌های جدید به‌شکل «اعلان واقعی گوشی» می‌آیند — با صدا و لرزش،
+            حتی وقتی اپ کاملاً بسته است. لمس اعلان، شما را مستقیم به همان بخش می‌برد.
+          </p>
+          {pushState === 'native' ? (
+            <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+              در اپ اندروید، سرویس اعلان بومی فعال است — کاری لازم نیست انجام دهید. اگر اعلان‌ها نمی‌آیند، در تنظیمات گوشی اجازهٔ Notification برای اپ را فعال کنید.
+            </p>
+          ) : pushState === 'unsupported' ? (
+            <p className="text-sm text-muted-foreground">
+              این مرورگر اعلان Push ندارد. اپ اندروید اعلان‌ها را به‌شکل بومی نشان می‌دهد.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {pushState !== 'granted' && (
+                <Button onClick={handleEnablePush} className="gap-1.5">
+                  <BellRing className="h-4 w-4" /> فعال‌سازی اعلان‌ها
+                </Button>
+              )}
+              {pushState === 'granted' && (
+                <Button variant="outline" onClick={handleTestPush} className="gap-1.5 border-emerald-300 dark:border-emerald-500/40 text-emerald-800 dark:text-emerald-300">
+                  <BellRing className="h-4 w-4" /> اعلان آزمایشی
+                </Button>
+              )}
+              {pushState === 'granted' && (
+                <Button
+                  variant="ghost"
+                  className="gap-1.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10"
+                  onClick={() => { void disablePushNotifications(); setPushState('default'); }}
+                >
+                  غیرفعال‌سازی
+                </Button>
+              )}
+            </div>
+          )}
+          {pushState === 'denied' && (
+            <p className="text-xs text-rose-600 dark:text-rose-400 leading-5">
+              اجازهٔ اعلان مسدود شده است. در تنظیمات مرورگر (آیکون قفل در نوار آدرس) اجازهٔ Notification را «Allow» کنید و صفحه را دوباره باز کنید.
+            </p>
+          )}
         </CardContent>
       </Card>
 

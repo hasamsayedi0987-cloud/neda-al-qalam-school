@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import type { Prisma } from '@prisma/client';
 import { requireUser, requireRole, requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
+import { pushToUsers } from '@/lib/push';
 import { clampComponent, componentTotal } from '@/lib/grading';
 import { getTeacherPerms, ownsClassSubject } from '@/lib/teacher-scope';
 
@@ -120,6 +121,13 @@ export async function POST(req: NextRequest) {
               type: 'GRADE',
             })),
           });
+          void pushToUsers(tUsers.map((u) => u.id), {
+            title: approved ? 'تایید نمرات' : 'لغو تایید نمرات',
+            body: `نمرات ${period === 'MIDTERM' ? 'چهارو‌نیم‌ماهه' : 'سالانه'} مضمون ${cs.subject.name} صنف ${cs.class.name} ${approved ? 'تایید' : 'به حالت عدم تایید'} گردید.`,
+            type: 'GRADE',
+            url: '/?view=grades',
+            tag: 'grade',
+          });
         }
       }
       // اعلان به والدین پس از تایید
@@ -135,6 +143,13 @@ export async function POST(req: NextRequest) {
               body: `نمرات ${period === 'MIDTERM' ? 'چهارو‌نیم‌ماهه' : 'سالانه'} مضمون ${cs.subject.name} صنف ${cs.class.name} در سیستم ثبت و تایید گردید.`,
               type: 'GRADE',
             })),
+          });
+          void pushToUsers(guardianUsers.map((u) => u.id), {
+            title: 'نمرات جدید',
+            body: `نمرات ${period === 'MIDTERM' ? 'چهارو‌نیم‌ماهه' : 'سالانه'} مضمون ${cs.subject.name} صنف ${cs.class.name} در سیستم ثبت و تایید گردید.`,
+            type: 'GRADE',
+            url: '/?view=grades',
+            tag: 'grade',
           });
         }
       }

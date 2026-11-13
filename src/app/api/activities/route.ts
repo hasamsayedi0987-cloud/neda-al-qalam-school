@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireUser, requireRole, requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, optNum, str } from '@/lib/api-helpers';
+import { pushToUsers } from '@/lib/push';
 import { studentInTeacherScope, teacherClassIds } from '@/lib/teacher-scope';
 
 export async function GET(req: NextRequest) {
@@ -88,13 +89,21 @@ export async function POST(req: NextRequest) {
     });
     if (guardians.length > 0) {
       const label = { HOMEWORK: 'کارخانگی', BEHAVIOR: 'رفتار و انضباط', PARTICIPATION: 'شرکت در درس', OTHER: 'فعالیت' }[type] || 'فعالیت';
+      const actTitle = `${label} جدید ثبت شد`;
       await db.notification.createMany({
         data: guardians.map((g) => ({
           userId: g.id,
-          title: `${label} جدید ثبت شد`,
+          title: actTitle,
           body: note.slice(0, 140),
           type: 'INFO',
         })),
+      });
+      void pushToUsers(guardians.map((g) => g.id), {
+        title: actTitle,
+        body: note.slice(0, 140),
+        type: 'INFO',
+        url: '/?view=activities',
+        tag: 'activity',
       });
     }
     return NextResponse.json({ id: activity.id });

@@ -1,10 +1,10 @@
 /**
- * تست‌های نسخهٔ ۲.۵.۰ — بازشدن همیشگی، برگشت گوشی، به‌روزرسانی وب
+ * تست‌های نسخهٔ ۳.۰.۰ — بازشدن همیشگی، برگشت گوشی، به‌روزرسانی وب
  *
  * ۱) بازگردانی خودکار آخرین کاربر (بدون دیوار ورود) — آنلاین و آفلاین
  * ۲) دکمهٔ برگشت: بین بخش‌ها + بستن دیالوگ قبل از خروج
  * ۳) «مرا به خاطر بسپار» غیرفعال → خروج → صفحهٔ ورود
- * ۴) نشان نسخهٔ ۲.۵.۰ در صفحهٔ ورود و پانویس منو
+ * ۴) نشان نسخهٔ ۳.۰.۰ در صفحهٔ ورود و پانویس منو
  * ۵) سرویس‌ورکر v11 فعال و کنترل‌کنندهٔ صفحه
  * ۶) storage.persist درخواست شده باشد
  *
@@ -32,8 +32,8 @@ function check(name, ok, detail = '') {
   page.on('pageerror', (e) => jsErrors.push(e.message));
 
   await page.goto(BASE + '/', { waitUntil: 'networkidle' });
-  const versionShown = await page.locator('text=نسخهٔ ۲.۵.۰').first().isVisible().catch(() => false);
-  check('نشان نسخهٔ ۲.۵.۰ در صفحهٔ ورود هست (نه ۲.۱.۰)', versionShown);
+  const versionShown = await page.locator('text=نسخهٔ ۳.۰.۰').first().isVisible().catch(() => false);
+  check('نشان نسخهٔ جاری در صفحهٔ ورود هست', versionShown);
 
   await page.fill('#username', 'admin');
   await page.fill('#password', 'admin123');

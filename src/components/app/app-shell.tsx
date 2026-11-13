@@ -420,9 +420,9 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
     || visibleNav[0];
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col bg-background ambient-bg">
       {/* هدر */}
-      <header className="sticky top-0 z-40 bg-card/90 backdrop-blur-md border-b shadow-[0_1px_12px_-6px_rgb(0_0_0/0.15)] pt-[env(safe-area-inset-top)]">
+      <header className="glass-bar sticky top-0 z-40 pt-[env(safe-area-inset-top)]">
         <div className="flex items-center gap-2 px-3 md:px-5 h-16">
           {/* منوی موبایل */}
           <Sheet open={navOpen} onOpenChange={setNavOpen}>

@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import type { Prisma } from '@prisma/client';
 import { requireUser, requireRole, requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
+import { pushToUsers } from '@/lib/push';
 import { jalaliMonthRange, jalaliToGregorian } from '@/lib/jalali';
 import { teacherClassIds } from '@/lib/teacher-scope';
 import { ROLE_LABELS } from '@/lib/grading';
@@ -256,13 +257,23 @@ export async function POST(req: NextRequest) {
         where: { studentId: { in: absentStudents }, active: true, role: { in: ['GUARDIAN', 'STUDENT'] } },
       });
       if (users.length > 0) {
+        const attTitle = 'غیبت شاگرد';
+        const attBody = 'شاگرد شما امروز در مکتب حاضر نبود. لطفاً رهنمایی لازم را مبذول دارید.';
         await db.notification.createMany({
           data: users.map((u) => ({
             userId: u.id,
-            title: 'غیبت شاگرد',
-            body: 'شاگرد شما امروز در مکتب حاضر نبود. لطفاً رهنمایی لازم را مبذول دارید.',
+            title: attTitle,
+            body: attBody,
             type: 'ATTENDANCE',
           })),
+        });
+        // اعلان «خارج از اپ» — مثل پیام گوشی (نسخهٔ ۳.۰.۰)
+        void pushToUsers(users.map((u) => u.id), {
+          title: attTitle,
+          body: attBody,
+          type: 'ATTENDANCE',
+          url: '/?view=attendance',
+          tag: 'attendance',
         });
       }
     }

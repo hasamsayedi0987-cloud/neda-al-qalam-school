@@ -10,7 +10,7 @@
  *  - نوشتن‌ها (POST/PATCH/DELETE) دست‌نخورده — صف آفلاین در api.ts مدیریت می‌شود
  */
 
-const VERSION = 'v11';
+const VERSION = 'v12';
 const SHELL_CACHE = 'noq-shell-' + VERSION;
 const RUNTIME_CACHE = 'noq-runtime-' + VERSION;
 const API_CACHE = 'noq-api-' + VERSION;
@@ -195,6 +195,52 @@ self.addEventListener('fetch', (event) => {
 /* به‌روزرسانی فوری + اعلام صف آفلاین پس از برگشت اتصال */
 self.addEventListener('message', (event) => {
   if (event.data === 'skip-waiting') self.skipWaiting();
+});
+
+/* ═══════ اعلان‌های Push — حتی وقتی اپ/تب باز نیست (نسخهٔ ۳.۰.۰) ═══════
+ * مثل پیام گوشی: بنر بالای صفحه + صدا + لرزش؛ لمس → باز شدن همان بخش */
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    data = { title: 'مکتب خصوصی نداالقلم', body: event.data ? event.data.text() : 'اعلان جدید' };
+  }
+  const options = {
+    body: data.body || '',
+    icon: './icon-192.png',
+    badge: './icon-192.png',
+    dir: 'rtl',
+    lang: 'fa',
+    vibrate: [80, 40, 80],
+    data: { url: data.url || '/' },
+  };
+  if (data.tag) {
+    options.tag = data.tag;
+    options.renotify = true; // اعلان جدید همان گروه، دوباره با صدا
+  }
+  event.waitUntil(self.registration.showNotification(data.title || 'مکتب خصوصی نداالقلم', options));
+});
+
+/* لمس اعلان: تمرکز روی پنجرهٔ باز + رفتن به بخش مربوط؛ وگرنه باز کردن اپ */
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(
+    (async () => {
+      const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const c of all) {
+        if ('focus' in c) {
+          await c.focus();
+          if ('navigate' in c) {
+            try { await c.navigate(target); } catch (e) { /* همان صفحه کافی است */ }
+          }
+          return;
+        }
+      }
+      await self.clients.openWindow(target);
+    })(),
+  );
 });
 
 self.addEventListener('sync', (event) => {

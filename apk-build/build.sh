@@ -22,6 +22,7 @@ rm -rf "$OUT"; mkdir -p "$OUT/classes" "$OUT/dex" "$OUT/apk" "$OUT/gen" assets
 echo "0/5 تزریق آدرس سرور از server-url.txt…"
 SERVER_URL=$(tr -d '[:space:]' < server-url.txt 2>/dev/null || echo "")
 sed "s|__DEFAULT_SERVER_URL__|${SERVER_URL}|" java/$PKG/MainActivity.java > "$OUT/MainActivity.java"
+cp java/$PKG/NotifyService.java java/$PKG/PollReceiver.java java/$PKG/BootReceiver.java "$OUT/"
 
 echo "1/5 کامپایل منابع (aapt2)…"
 "$BT/aapt2" compile --dir res -o "$OUT/res.zip"
@@ -31,13 +32,15 @@ echo "1/5 کامپایل منابع (aapt2)…"
 echo "2/5 کامپایل جاوا…"
 if command -v javac >/dev/null 2>&1; then
   javac -source 11 -target 11 -classpath "$PLATFORM" \
-    -d "$OUT/classes" "$OUT/MainActivity.java" "$OUT/gen/$PKG/R.java"
+    -d "$OUT/classes" "$OUT/MainActivity.java" "$OUT/NotifyService.java" \
+    "$OUT/PollReceiver.java" "$OUT/BootReceiver.java" "$OUT/gen/$PKG/R.java"
 else
   # جایگزین: کامپایلر Eclipse (در صورت نبود دانلود می‌شود)
   if [ ! -f ecj.jar ]; then curl -sL -o ecj.jar "https://repo1.maven.org/maven2/org/eclipse/jdt/ecj/3.33.0/ecj-3.33.0.jar"; fi
   java -jar ecj.jar -source 1.8 -target 1.8 -encoding UTF-8 \
     -cp "$PLATFORM" -d "$OUT/classes" \
-    "$OUT/MainActivity.java" "$OUT/gen/$PKG/R.java"
+    "$OUT/MainActivity.java" "$OUT/NotifyService.java" "$OUT/PollReceiver.java" \
+    "$OUT/BootReceiver.java" "$OUT/gen/$PKG/R.java"
 fi
 
 echo "3/5 تبدیل به DEX (d8)…"

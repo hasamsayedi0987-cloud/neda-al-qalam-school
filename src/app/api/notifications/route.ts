@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireUser, requireRole, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
+import { pushToUsers } from '@/lib/push';
 
 export async function GET() {
   try {
@@ -41,6 +42,14 @@ export async function POST(req: NextRequest) {
     if (users.length === 0) throw new ApiError('هیچ گیرنده‌ای یافت نشد');
     await db.notification.createMany({
       data: users.map((u) => ({ userId: u.id, title, body: msg, type: 'INFO' })),
+    });
+    // اعلان «خارج از اپ» برای همهٔ گیرندگان (نسخهٔ ۳.۰.۰)
+    void pushToUsers(users.map((u) => u.id), {
+      title,
+      body: msg,
+      type: 'INFO',
+      url: '/?view=dashboard',
+      tag: 'broadcast',
     });
     return NextResponse.json({ ok: true, sent: users.length });
   } catch (e) {

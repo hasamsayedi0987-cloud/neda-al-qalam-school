@@ -160,7 +160,7 @@ export function LoginView({
       </div>
 
       {/* بخش فرم */}
-      <div className="flex-1 flex flex-col items-center justify-center p-4 relative">
+      <div className="flex-1 flex flex-col items-center justify-center p-4 relative ambient-bg">
         {/* لوگوی موبایل */}
         <div className="w-full max-w-md lg:hidden mb-6 animate-fade-up">{branding}</div>
 
@@ -228,7 +228,7 @@ export function LoginView({
                 <span className="text-sm text-foreground/90">مرا به خاطر بسپار — بازشدن بعدی بدون ورود مجدد (حتی آفلاین)</span>
               </label>
 
-              <Button type="submit" className="w-full h-12 text-base shadow-md shadow-primary/25 transition-all hover:shadow-lg hover:shadow-primary/30 hover:-translate-y-0.5 active:translate-y-0" disabled={loading}>
+              <Button type="submit" className="btn-hero w-full h-12 text-base text-white transition-all hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0" disabled={loading}>
                 {loading ? (
                   'در حال ورود...'
                 ) : (

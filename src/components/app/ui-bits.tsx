@@ -45,16 +45,16 @@ export function StatCard({
   tone?: 'emerald' | 'amber' | 'rose' | 'sky' | 'teal';
 }) {
   const tones: Record<string, string> = {
-    emerald: 'bg-primary/10 text-primary',
-    amber: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
-    rose: 'bg-rose-500/15 text-rose-700 dark:text-rose-400',
-    sky: 'bg-sky-500/15 text-sky-700 dark:text-sky-400',
-    teal: 'bg-teal-500/15 text-teal-700 dark:text-teal-400',
+    emerald: 'icon-tile icon-tile-emerald',
+    amber: 'icon-tile icon-tile-amber',
+    rose: 'icon-tile icon-tile-rose',
+    sky: 'icon-tile icon-tile-sky',
+    teal: 'icon-tile icon-tile-teal',
   };
   return (
-    <Card className="border transition-all hover:shadow-md hover:-translate-y-0.5">
+    <Card className="border card-lift group">
       <CardContent className="p-4 flex items-center gap-3">
-        <div className={cn('h-12 w-12 rounded-xl flex items-center justify-center shrink-0', tones[tone])}>
+        <div className={cn('h-12 w-12 shrink-0', tones[tone])}>
           <Icon className="h-6 w-6" />
         </div>
         <div className="min-w-0">

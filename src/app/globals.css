@@ -176,6 +176,88 @@ html {
 }
 .nice-scroll::-webkit-scrollbar-thumb:hover { background: oklch(0.6 0.04 165 / 65%); }
 
+/* ═══════════ نسخهٔ ۳.۰.۰ — لایهٔ طراحی مدرن ═══════════ */
+
+/* پس‌زمینهٔ محیطی — ته‌مایهٔ سبز بسیار ملایم با نور بالای صفحه */
+.ambient-bg {
+  background:
+    radial-gradient(1200px 500px at 50% -10%, oklch(0.93 0.045 165 / 55%), transparent 70%),
+    var(--background);
+}
+.dark .ambient-bg {
+  background:
+    radial-gradient(1200px 500px at 50% -10%, oklch(0.32 0.05 168 / 38%), transparent 70%),
+    var(--background);
+}
+
+/* دکمهٔ قهرمان — درجهٔ سبز + درخشش عبوری هنگام هاور */
+.btn-hero {
+  position: relative;
+  overflow: hidden;
+  background-image: linear-gradient(135deg, oklch(0.55 0.13 166) 0%, oklch(0.46 0.12 170) 55%, oklch(0.4 0.11 173) 100%);
+  box-shadow: 0 8px 20px -8px oklch(0.45 0.12 168 / 55%);
+}
+.btn-hero::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40%;
+  inset-inline-start: -60%;
+  background: linear-gradient(100deg, transparent, oklch(1 0 0 / 28%), transparent);
+  transform: skewX(-18deg);
+  transition: inset-inline-start 0.6s ease;
+}
+.btn-hero:hover::after { inset-inline-start: 120%; }
+.btn-hero:hover { filter: brightness(1.05); }
+.btn-hero:active { filter: brightness(0.97); }
+
+/* کاشی آیکون گرادیانی — کارت‌های آمار */
+.icon-tile {
+  color: oklch(0.99 0 0);
+  border-radius: 0.875rem;
+  box-shadow: 0 6px 14px -6px oklch(0.4 0.1 168 / 45%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.group:hover .icon-tile, a:hover .icon-tile { transform: scale(1.06) rotate(-3deg); }
+.icon-tile-emerald { background-image: linear-gradient(135deg, oklch(0.66 0.14 163), oklch(0.5 0.12 168)); }
+.icon-tile-teal    { background-image: linear-gradient(135deg, oklch(0.7 0.12 190), oklch(0.55 0.11 200)); }
+.icon-tile-sky     { background-image: linear-gradient(135deg, oklch(0.72 0.11 235), oklch(0.56 0.13 250)); }
+.icon-tile-amber   { background-image: linear-gradient(135deg, oklch(0.8 0.13 80), oklch(0.66 0.14 60)); }
+.icon-tile-rose    { background-image: linear-gradient(135deg, oklch(0.72 0.15 15), oklch(0.6 0.17 10)); }
+
+/* هدر شیشه‌ای — چسبان با بلور و مرز نازک */
+.glass-bar {
+  background: oklch(1 0 0 / 78%);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  border-bottom: 1px solid oklch(0.5 0.05 165 / 8%);
+}
+.dark .glass-bar {
+  background: oklch(0.2 0.02 168 / 72%);
+  border-bottom-color: oklch(1 0 0 / 8%);
+}
+
+/* بازخورد لمسی — همه‌جا حس اپ واقعی */
+.tap { transition: transform 0.15s ease; }
+.tap:active { transform: scale(0.97); }
+
+/* کارت‌ها — سایهٔ نرم‌تر و پرش هاورِ روان */
+.card-lift {
+  transition: box-shadow 0.25s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.25s ease;
+}
+.card-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px -14px oklch(0.35 0.08 168 / 28%);
+  border-color: oklch(0.6 0.1 165 / 35%);
+}
+
+/* فاصلهٔ امن پایین — نوار ناوبری گوشی‌های جدید */
+.pb-safe { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem); }
+
 /* ═══════════ چاپ ═══════════ */
 @media print {
   /* چاپ همیشه با رنگ‌های روشن انجام می‌شود حتی اگر اپ در حالت تاریک باشد */

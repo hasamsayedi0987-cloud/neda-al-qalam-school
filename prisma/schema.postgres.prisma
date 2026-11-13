@@ -24,6 +24,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   notifications Notification[]
+  pushSubscriptions PushSubscription[]
   sentMessages Message[] @relation("sentMessages")
   messageRecipients MessageRecipient[]
   guardianLinks GuardianLink[]
@@ -145,6 +146,9 @@ model Student {
   updatedAt     DateTime @updatedAt
 
   class      Class?            @relation(fields: [classId], references: [id])
+
+  @@index([classId])
+
   attendance AttendanceRecord[]
   activities StudentActivity[]
   grades     Grade[]
@@ -240,6 +244,7 @@ model Grade {
   classSubject ClassSubject @relation(fields: [classSubjectId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, classSubjectId, period])
+  @@index([classSubjectId])
 }
 
 // ═══════════════ کتابخانه ═══════════════
@@ -293,6 +298,23 @@ model Notification {
 
   @@index([userId])
   @@index([messageId])
+  @@index([userId, read])
+  @@index([userId, createdAt])
+}
+
+// اشتراک‌های Push مرورگر — برای اعلان‌های بیرون از اپ (نسخهٔ ۳.۰.۰)
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique // آدرس یکتای سرویس پوش (FCM/Mozilla autopush)
+  p256dh    String // کلید عمومی رمزنگاری
+  auth      String // کلید رمز احراز
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // ═══════════════ وظایف کارمندان ═══════════════
@@ -310,6 +332,8 @@ model StaffTask {
 
   staff      Teacher? @relation("assignedTo", fields: [staffId], references: [id])
   assigner   Teacher? @relation("assignedBy", fields: [assignedBy], references: [id])
+
+  @@index([staffId, status])
 }
 
 // ═══════════════ مدیریت مالی و فیس ═══════════════
@@ -330,6 +354,7 @@ model FeePayment {
 
   @@index([studentId, month])
   @@index([month])
+  @@index([paidAt])
 }
 
 // ═══════════════ پیام‌ها و ارتباطات ═══════════════
@@ -357,6 +382,8 @@ model Message {
 
   @@index([toUserId, read])
   @@index([fromUserId])
+  @@index([toRole])
+  @@index([toClassId])
 }
 
 // گیرندگان واقعی هر پیام — وضعیت خوانده‌شدن و حذف به‌ازای هر فرد

@@ -18,6 +18,44 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: false,
   },
   reactStrictMode: true,
+  poweredByHeader: false,
+  // ═══ نسخهٔ ۳.۰.۰ — سپر امنیتی پاسخ‌ها (امنیت ده‌ساله) ═══
+  // HSTS فقط روی HTTPS معنا دارد؛ بقیه هدرها روی همهٔ پاسخ‌ها اعمال می‌شوند
+  headers: async () => [
+    {
+      source: "/:path*",
+      headers: [
+        { key: "X-Content-Type-Options", value: "nosniff" },
+        { key: "X-Frame-Options", value: "SAMEORIGIN" },
+        { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        {
+          key: "Permissions-Policy",
+          value: "geolocation=(), microphone=(), payment=(), usb=()",
+        },
+        {
+          key: "Strict-Transport-Security",
+          value: "max-age=31536000; includeSubDomains",
+        },
+        // CSP کاربردی: اسکریپت/سبک خود سایت + inline (الزام Next)؛ منابع خارجی بسته می‌شوند
+        {
+          key: "Content-Security-Policy",
+          value: [
+            "default-src 'self'",
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' data: blob:",
+            "font-src 'self' data:",
+            "connect-src 'self'",
+            "media-src 'self' data: blob:",
+            "object-src 'none'",
+            "base-uri 'self'",
+            "form-action 'self'",
+            "frame-ancestors 'self'",
+          ].join("; "),
+        },
+      ],
+    },
+  ],
 };
 
 export default nextConfig;

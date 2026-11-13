@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { LoginView } from '@/components/app/login-view';
 import { AppShell } from '@/components/app/app-shell';
 import { apiGet, markAuthRestored, setCacheScope, restoreLastUser, tryAutoRelogin } from '@/lib/client/api';
+import { ensurePushAfterLogin } from '@/lib/client/push';
 import type { SessionUser } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
 
@@ -48,6 +49,8 @@ export default function Page() {
         setCacheScope(data.user.id);
         // ورود معتبر شد — ثبت‌های آفلاین مانده در صف ارسال می‌شوند
         markAuthRestored();
+        // اگر اجازهٔ اعلان از قبل هست، اشتراک پوش ساکت تضمین می‌شود (نسخهٔ ۳.۰.۰)
+        void ensurePushAfterLogin();
       } else sessionStorage.removeItem(ALIVE_KEY);
     } catch {
       setUser(null);
@@ -115,6 +118,7 @@ export default function Page() {
       // ورود آفلاین — کاربر از اعتبار محلی، بدون خواندن کش
       setCacheScope(u.id);
       setUser(u);
+      void ensurePushAfterLogin();
       return;
     }
     queueMicrotask(loadSession);

@@ -165,7 +165,9 @@ async function startServer() {
 
   const ids = {
     admin: (staffList.data.staff || []).find((s) => s.role === 'ADMIN')?.id,
-    teacher: (staffList.data.staff || []).find((s) => s.role === 'TEACHER')?.id,
+    // معلم باید همان حساب ورودی «teacher» باشد — با فیکسچرهای معلم اضافه، اولین TEACHER فهرست دیگر این حساب نیست
+    teacher: (staffList.data.staff || []).find((s) => s.id === teacherUser?.id)?.id
+      || (staffList.data.staff || []).find((s) => s.role === 'TEACHER')?.id,
     staff: (staffList.data.staff || []).find((s) => s.role === 'STAFF')?.id,
     lib: (staffList.data.staff || []).find((s) => s.role === 'LIBRARIAN')?.id,
   };

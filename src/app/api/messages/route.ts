@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireUser, ApiError, type AuthUser } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
+import { pushToUsers } from '@/lib/push';
 import { sectionAllowed } from '@/lib/access';
 import { teacherClassIds } from '@/lib/teacher-scope';
 import {
@@ -375,6 +376,14 @@ async function notifyRecipients(fromName: string, recipients: ResolvedRecipient[
         type: priority === 'URGENT' ? 'WARNING' : 'INFO',
         messageId: messageId || null,
       })),
+    });
+    // اعلان «خارج از اپ» — پوش مرورگر/گوشی (نسخهٔ ۳.۰.۰)
+    void pushToUsers(recipients.map((r) => r.id), {
+      title: notifyTitle(kind, priority, category, fromName),
+      body: notifyBody(subject, text),
+      type: priority === 'URGENT' ? 'WARNING' : 'INFO',
+      url: '/?view=messages',
+      tag: 'message',
     });
   } catch {
     /* اعلان حتماً نباید ارسال پیام را بشکند */

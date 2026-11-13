@@ -48,6 +48,7 @@ import android.widget.Toast;
  * - دکمهٔ برگشت گوشی: اول به صفحهٔ قبلی داخل اپ برمی‌گردد؛ در صفحهٔ اصلی با تأیید خارج می‌شود
  * - آنلاین: ارتباط مستقیم با سرور مکتب | آفلاین: آخرین داده‌ها از حافظه، ثبت‌ها در صف
  * - صفحهٔ خطای هوشمند با اتصال مجدد خودکار هنگام برگشت انترنت
+ * - نسخهٔ ۳.۰.۰: اعلان بومی گوشی (حاضری/نمرات/پیام‌ها) حتی وقتی اپ بسته است — NotifyService
  */
 public class MainActivity extends Activity {
 
@@ -170,7 +171,53 @@ public class MainActivity extends Activity {
             return;
         }
         buildWebView();
-        webView.loadUrl(serverUrl);
+        // نسخهٔ ۳.۰.۰ — لمس اعلان بومی → باز شدن مستقیم همان بخش (مثلاً پیام‌ها)
+        String openUrl = resolveOpenUrl(getIntent());
+        webView.loadUrl(openUrl != null ? openUrl : serverUrl);
+        requestNotificationPermission();
+        startNotifyService();
+    }
+
+    /** اگر فعالیت از اعلان بومی باز شده، مستقیم به همان بخش می‌رویم */
+    private String resolveOpenUrl(Intent intent) {
+        if (intent == null) return null;
+        String openUrl = intent.getStringExtra("open_url");
+        if (openUrl == null || openUrl.isEmpty()) return null;
+        if (!openUrl.startsWith(serverUrl)) return null; // فقط آدرس همان سرور — امنیت
+        return openUrl;
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        // اپ باز بود و اعلان لمس شد → همان بخش داخل وب‌ویو بارگذاری می‌شود
+        String openUrl = resolveOpenUrl(intent);
+        if (openUrl != null && webView != null) {
+            showingError = false;
+            retryHandler.removeCallbacks(retryRun);
+            webView.loadUrl(openUrl);
+        }
+    }
+
+    /** سرویس اعلان بومی — اعلان‌های حاضری/نمرات/پیام حتی وقتی اپ بسته است */
+    private void startNotifyService() {
+        try {
+            Intent i = new Intent(this, NotifyService.class);
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(i);
+            else startService(i);
+        } catch (Exception ignored) { }
+    }
+
+    /** اجازهٔ اعلان اندروید ۱۳+ — بدون آن اعلان‌های گوشی نمایش داده نمی‌شوند */
+    private void requestNotificationPermission() {
+        try {
+            if (Build.VERSION.SDK_INT >= 33) {
+                int granted = checkSelfPermission("android.permission.POST_NOTIFICATIONS");
+                if (granted != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 4001);
+                }
+            }
+        } catch (Exception ignored) { }
     }
 
     // ───────── صفحهٔ خوش‌آمد یک‌باره — آدرس سرور (تنها بار اول) ─────────
@@ -319,6 +366,12 @@ public class MainActivity extends Activity {
                     // صفحهٔ واقعی سایت بارگذاری شد (آنلاین یا از کش سرویس‌ورکر)
                     showingError = false;
                     retryHandler.removeCallbacks(retryRun);
+                    // نسخهٔ ۳.۰.۰ — ذخیرهٔ پایدار کوکی نشست برای سرویس اعلان بومی
+                    try {
+                        CookieManager cm = CookieManager.getInstance();
+                        cm.setAcceptCookie(true);
+                        cm.flush();
+                    } catch (Exception ignored) { }
                 }
             }
 
