@@ -10,7 +10,7 @@
  *  - نوشتن‌ها (POST/PATCH/DELETE) دست‌نخورده — صف آفلاین در api.ts مدیریت می‌شود
  */
 
-const VERSION = 'v10-1';
+const VERSION = 'v11';
 const SHELL_CACHE = 'noq-shell-' + VERSION;
 const RUNTIME_CACHE = 'noq-runtime-' + VERSION;
 const API_CACHE = 'noq-api-' + VERSION;
@@ -94,19 +94,29 @@ function withCacheHeader(res) {
   }
 }
 
-/* شبکه‌اول با سقف زمانی + برگشت به کش */
+/* شبکه‌اول با سقف زمانی + برگشت به کش + به‌روزرسانی پس‌زمینه
+ * پیشتر: روی شبکهٔ کند، پاسخِ شبکه بعد از سپری‌شدن سقف دور ریخته می‌شد →
+ * کاربر برای همیشه روی پوستهٔ کهنه می‌ماند («نسخهٔ وب همیشه قدیمی»).
+ * اکنون: پس از سقف از کش پاسخ می‌دهیم اما دریافت از شبکه در پس‌زمینه ادامه
+ * می‌یابد و نتیجه در کش ذخیره می‌شود → بازشدن بعدی، نسخهٔ تازه است. */
 async function networkFirst(request, cacheName, timeout) {
   const cached = await caches.match(request);
+  const networkPromise = fetch(request)
+    .then((res) => {
+      if (isCacheable(res)) {
+        const clone = res.clone();
+        caches.open(cacheName).then((c) => c.put(request, clone)).catch(() => {});
+      }
+      return res;
+    })
+    .catch(() => undefined);
   try {
     const res = await Promise.race([
-      fetch(request),
+      networkPromise,
       new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), timeout || NAV_TIMEOUT)),
     ]);
-    if (isCacheable(res)) {
-      const clone = res.clone();
-      caches.open(cacheName).then((c) => c.put(request, clone)).catch(() => {});
-    }
-    return res;
+    if (res) return res;
+    throw new Error('empty');
   } catch (e) {
     if (cached) return withCacheHeader(cached);
     // تلاش برای نسخه‌های مشابه (مثلاً / با و بدون اسلش)

@@ -89,7 +89,7 @@ async function api(method, url, body, cookie) {
     notif1.status === 200 &&
       notif1.data.unread === unread0 + 1 &&
       String(topNotif.title).includes('پیام جدید') &&
-      String(topNotif.title).includes('مدیر مکتب') &&
+      String(topNotif.title).includes('حسام الدین سیدی') &&
       String(topNotif.body).includes(subj),
     `unread ${unread0}→${notif1.data.unread} | title=${topNotif.title}`,
   );

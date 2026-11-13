@@ -38,15 +38,16 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 /**
- * مکتب خصوصی نداالقلم — اپلیکیشن اندروید (نسخهٔ ۱.۴ — آفلاین کامل)
+ * مکتب خصوصی نداالقلم — اپلیکیشن اندروید (نسخهٔ ۱.۵ — آفلاین کامل)
  * توسعه‌دهنده: حسام الدین سیدی — 0791680632 — hasamsayedi0987@gmail.com
  *
  * - هیچ توکنی لازم نیست: فقط نام کاربری و رمز عبور
  * - آدرس سرور یک بار ذخیره می‌شود و همیشه مستقیم وارد اپ می‌شوید
- * - با هر بازکردن اپ، نشست پاک می‌شود و ورود مجدد لازم است (حتی آفلاین)
+ * - نسخهٔ ۱.۵: نشست حذف نمی‌شود — بازشدن بعدی مستقیم وارد اپ می‌شوید (حتی آفلاین)
+ *   (ریشهٔ «اپ بعد از چند روز آفلاین باز نمی‌شد»: پاک‌سازی کوکی در هر بازشدن + دیوار ورود)
+ * - دکمهٔ برگشت گوشی: اول به صفحهٔ قبلی داخل اپ برمی‌گردد؛ در صفحهٔ اصلی با تأیید خارج می‌شود
  * - آنلاین: ارتباط مستقیم با سرور مکتب | آفلاین: آخرین داده‌ها از حافظه، ثبت‌ها در صف
- * - جدید در ۱.۴: صفحهٔ خطای هوشمند با اتصال مجدد خودکار هنگام برگشت انترنت
- *   (دکمهٔ تلاش مجدد قدیمی خراب بود — location.reload روی URL داده‌ای گیر می‌کرد)
+ * - صفحهٔ خطای هوشمند با اتصال مجدد خودکار هنگام برگشت انترنت
  */
 public class MainActivity extends Activity {
 
@@ -154,12 +155,9 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
 
-        // پاک‌سازی نشست — با هر بازکردن اپ، ورود مجدد لازم است
-        try {
-            CookieManager cm = CookieManager.getInstance();
-            cm.removeAllCookies(null);
-            cm.flush();
-        } catch (Exception ignored) { }
+        // نسخهٔ ۱.۵ — کوکی نشست دیگر پاک نمی‌شود؛ بازشدن بعدی اپ مستقیم وارد می‌شود
+        // (حتی آفلاین — وب‌اپ خودش با اعتبار ذخیره‌شدهٔ محلی باز می‌شود)
+        // پاک‌سازی فقط هنگام تغییر آدرس سرور انجام می‌شود (promptChangeUrl)
 
         String saved = prefs.getString(KEY_URL, "");
         if (!saved.isEmpty()) {
@@ -464,6 +462,12 @@ public class MainActivity extends Activity {
                             u = u.replaceAll("/+$", "");
                             prefs.edit().putString(KEY_URL, u).apply();
                             serverUrl = u;
+                            // تغییر آدرس سرور = سیستم دیگر — نشست قبلی بی‌معناست
+                            try {
+                                CookieManager cm = CookieManager.getInstance();
+                                cm.removeAllCookies(null);
+                                cm.flush();
+                            } catch (Exception ignored) { }
                             webView.loadUrl(serverUrl);
                         }
                     }

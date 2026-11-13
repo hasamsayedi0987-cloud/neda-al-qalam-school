@@ -5,8 +5,9 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { apiGet, apiSend, offlineLogin, saveOfflineCred, isOnline } from '@/lib/client/api';
+import { apiGet, apiSend, offlineLogin, saveOfflineCred, forgetLastUser, isOnline } from '@/lib/client/api';
 import { todayJalali, toPersianDigits } from '@/lib/jalali';
+import { APP_VERSION_FA } from '@/lib/version';
 import { BookOpenCheck, Eye, EyeOff, Lock, User, LogIn, CloudOff, ClipboardList, CalendarCheck, Library, ShieldCheck } from 'lucide-react';
 import type { SessionUser } from '@/lib/types';
 
@@ -30,6 +31,8 @@ export function LoginView({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [offlineMode, setOfflineMode] = useState(false);
+  // «مرا به خاطر بسپار» — پیشفرض فعال: بازشدن بعدی اپ مستقیم وارد می‌شود (حتی آفلاین)
+  const [remember, setRemember] = useState(true);
   // نام مکتب و شعار قابل‌تغییر توسط مدیر — با مقدار پیش‌فرض شروع می‌شود
   const [titles, setTitles] = useState({
     schoolName: 'مکتب خصوصی نداالقلم',
@@ -63,8 +66,12 @@ export function LoginView({
     if (navigator.onLine) {
       const res = await apiSend<{ user: SessionUser }>('/api/auth', 'POST', { action: 'login', username: uname, password: pass }, { allowQueue: false });
       if (res.data?.user) {
-        // ذخیرهٔ مشخصات ورود برای امکان ورود در حالت آفلاین (روی همین دستگاه)
-        void saveOfflineCred(res.data.user, pass);
+        if (remember) {
+          // ذخیرهٔ مشخصات ورود برای بازشدن خودکار و ورود آفلاین بعدی (روی همین دستگاه)
+          void saveOfflineCred(res.data.user, pass);
+        } else {
+          forgetLastUser();
+        }
         setLoading(false);
         onLoggedIn();
         return;
@@ -82,6 +89,7 @@ export function LoginView({
     // ─── ورود آفلاین: بررسی محلی نام کاربری و رمز ───
     const user = await offlineLogin(uname, pass);
     setLoading(false);
+    if (!remember) forgetLastUser();
     if (!user) {
       setError(
         networkFailed
@@ -131,7 +139,7 @@ export function LoginView({
             </div>
             <div>
               <p className="text-xl font-bold leading-tight">{titles.schoolName}</p>
-              <p className="text-sm text-white/75">نسخهٔ ۲.۱.۰</p>
+              <p className="text-sm text-white/75">نسخهٔ {APP_VERSION_FA}</p>
             </div>
           </div>
           <div className="space-y-4 stagger">
@@ -208,6 +216,17 @@ export function LoginView({
                   {error}
                 </div>
               )}
+
+              <label className="flex items-center gap-2.5 cursor-pointer select-none -mt-1" htmlFor="remember-me">
+                <input
+                  id="remember-me"
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  className="h-4 w-4 rounded border-2 border-primary/60 text-primary accent-emerald-600 cursor-pointer"
+                />
+                <span className="text-sm text-foreground/90">مرا به خاطر بسپار — بازشدن بعدی بدون ورود مجدد (حتی آفلاین)</span>
+              </label>
 
               <Button type="submit" className="w-full h-12 text-base shadow-md shadow-primary/25 transition-all hover:shadow-lg hover:shadow-primary/30 hover:-translate-y-0.5 active:translate-y-0" disabled={loading}>
                 {loading ? (

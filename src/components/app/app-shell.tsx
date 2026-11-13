@@ -10,12 +10,13 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/s
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
-import { apiGet, apiSend, onSyncStateChange, pendingSyncCount, failedSyncItems, isOnline, isAuthRequired, flushQueue, tryAutoRelogin, discardQueueItem, discardAllFailedItems } from '@/lib/client/api';
+import { apiGet, apiSend, onSyncStateChange, pendingSyncCount, failedSyncItems, isOnline, isAuthRequired, flushQueue, tryAutoRelogin, discardQueueItem, discardAllFailedItems, forgetLastUser } from '@/lib/client/api';
 import { configureExports } from '@/lib/client/exports';
 import { SECTIONS, sectionAllowed } from '@/lib/access';
 import { isoToJalaliDisplay, toPersianDigits } from '@/lib/jalali';
 import { ROLE_LABELS } from '@/lib/grading';
 import { cn } from '@/lib/utils';
+import { APP_VERSION_FA } from '@/lib/version';
 import type { SessionUser, NotificationInfo } from '@/lib/types';
 import type { CustomSectionData } from './custom-view';
 import {
@@ -134,13 +135,29 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
     if (v.startsWith('custom:')) return v;
     return NAV_ITEMS.some((n) => n.key === v && sectionAllowed(user, v)) ? v : 'dashboard';
   });
-  const setView = (v: string) => {
+  /**
+   * جابه‌جایی بخش با تاریخچهٔ مرورگر — دکمهٔ برگشت گوشی به بخش قبلی برمی‌گردد
+   * (ریشهٔ «دکمهٔ برگشت باعث بسته‌شدن ناگهانی برنامه می‌شود»)
+   */
+  const setView = (v: string, fromPop = false) => {
     setViewRaw(v);
-    // پاک‌کردن پارامترهای لینک هنگام جابه‌جایی منو
-    if (typeof window !== 'undefined' && window.location.search) {
-      window.history.replaceState(null, '', '/');
+    if (!fromPop && typeof window !== 'undefined') {
+      const url = v === 'dashboard' ? '/' : `/?view=${encodeURIComponent(v)}`;
+      try { window.history.pushState({ noqView: v }, '', url); } catch { /* ignore */ }
     }
   };
+  // دکمهٔ برگشت گوشی/مرورگر: اگر در تاریخچهٔ بخش‌ها هستیم، به بخش قبلی برمی‌گردیم
+  useEffect(() => {
+    const onPop = () => {
+      const v = new URLSearchParams(window.location.search).get('view');
+      if (v?.startsWith('custom:')) { setViewRaw(v); return; }
+      if (v && NAV_ITEMS.some((n) => n.key === v && sectionAllowed(user, v))) { setViewRaw(v); return; }
+      setViewRaw('dashboard');
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [navOpen, setNavOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationInfo[]>([]);
   const [unread, setUnread] = useState(0);
@@ -277,6 +294,8 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
   const logout = async () => {
     // خروج هرگز صف نمی‌شود — صف‌شدنش بعد از ورود مجدد نشست را می‌شکند
     await apiSend('/api/auth', 'POST', { action: 'logout' }, { allowQueue: false });
+    // فراموش‌کردن آخرین کاربر — بازشدن بعدی صفحهٔ ورود می‌آید (کنترل امنیتی دست کاربر)
+    forgetLastUser();
     onLogout();
   };
 
@@ -319,6 +338,27 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
     window.addEventListener('noq:notif-refresh', onRefresh);
     return () => window.removeEventListener('noq:notif-refresh', onRefresh);
   }, [loadNotifications]);
+
+  /* ─── به‌روزرسانی خودکار نسخهٔ وب — ریشهٔ «نسخهٔ وب کهنه است» ───
+   * هر دقیقه برای سرویس‌ورکر جدید چک می‌شود؛ سرویس‌ورکر تازه فعال شد → بارگیری مجدد خودکار.
+   * (اسکرول نسخهٔ قبل: کاربر روی شبکهٔ کند برای همیشه روی پوستهٔ کهنه می‌ماند) */
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    let reloading = false;
+    let hadController = Boolean(navigator.serviceWorker.controller);
+    const onController = () => {
+      if (!hadController) { hadController = true; return; } // فعال‌شدن اول — بارگیری مجدد لازم نیست
+      if (!reloading) { reloading = true; window.location.reload(); }
+    };
+    navigator.serviceWorker.addEventListener('controllerchange', onController);
+    const check = () => { navigator.serviceWorker.getRegistration().then((reg) => reg?.update().catch(() => {})).catch(() => {}); };
+    check();
+    const t = setInterval(check, 60_000);
+    return () => {
+      navigator.serviceWorker.removeEventListener('controllerchange', onController);
+      clearInterval(t);
+    };
+  }, []);
 
   const navButtonClass = (active: boolean) =>
     cn(
@@ -370,7 +410,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
         </nav>
       </div>
       <div className="px-4 py-3 border-t text-[11px] text-muted-foreground">
-        نسخهٔ ۲.۴.۱ — حسام الدین سیدی
+        نسخهٔ {APP_VERSION_FA} — حسام الدین سیدی
       </div>
     </div>
   );

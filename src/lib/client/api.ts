@@ -1386,3 +1386,34 @@ export function clearOfflineCreds() {
     localStorage.removeItem(CREDS_KEY);
   } catch { /* ignore */ }
 }
+
+/**
+ * بازگردانی خودکار آخرین کاربر بدون دیوارِ ورود — ریشهٔ «اپ بعد از چند روز آفلاین باز نمی‌شود»
+ *
+ * پیشتر با هر بازشدن اپ، صفحهٔ ورود الزامی بود؛ اگر کاربر چند روز آفلاین می‌ماند و
+ * کش/نشست دچار مشکل می‌شد، ورودِ آفلاین هم گاهی ممکن نمی‌شد و اپ عملاً «باز نمی‌شد».
+ * اکنون: اگر این کاربر قبلاً روی همین دستگاه وارد شده باشد، مستقیم وارد اپ می‌شود
+ * (داده از کش محلی خوانده می‌شود) و در پس‌زمینه با اولین انترنت نشست واقعی تازه می‌شود.
+ * امنیت: مشخصات فقط روی همین دستگاه است و خروج آگاهانه (دکمهٔ خروج) آن را فراموش می‌کند.
+ */
+export function restoreLastUser(): OfflineCred['user'] | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const uname = lastUsername();
+    if (!uname) return null;
+    const all = JSON.parse(localStorage.getItem(CREDS_KEY) || '{}') as Record<string, OfflineCred>;
+    const cred = all[uname];
+    if (!cred?.user?.id) return null;
+    return cred.user;
+  } catch {
+    return null;
+  }
+}
+
+/** فراموش‌کردن «آخرین کاربر» — هنگام خروج آگاهانه کاربر، تا بازشدن بعدی صفحهٔ ورود بیاید */
+export function forgetLastUser() {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(LAST_USER_KEY);
+  } catch { /* ignore */ }
+}

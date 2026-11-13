@@ -3,17 +3,34 @@
 import { useEffect, useState } from 'react';
 import { LoginView } from '@/components/app/login-view';
 import { AppShell } from '@/components/app/app-shell';
-import { apiGet, markAuthRestored, setCacheScope } from '@/lib/client/api';
+import { apiGet, markAuthRestored, setCacheScope, restoreLastUser, tryAutoRelogin } from '@/lib/client/api';
 import type { SessionUser } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
 
 /**
- * نشست فقط برای باز بودن همین پنجره/اپ معتبر است:
- * هر بار که اپ یا سایت بسته و دوباره باز شود، ورود با نام کاربری و رمز الزامی است
- * (چه آنلاین چه آفلاین) — علامت نشست در sessionStorage نگهداری می‌شود که
- * با بستن اپ/تب به‌صورت خودکار پاک می‌گردد.
+ * نشست و بازشدن اپ — راه‌حل بنیادین «اپ بعد از چند روز آفلاین باز نمی‌شود»:
+ *
+ * ۱) اگر نشست جاری زنده است (همین پنجره باز بوده) → بازیابی از سرور
+ * ۲) وگرنه «آخرین کاربرِ همین دستگاه» مستقیم وارد اپ می‌شود — بدون دیوار ورود،
+ *    چه آنلاین چه آفلاین (داده از کش محلی خوانده می‌شود). این همان چیزی است که
+ *    کاربر می‌خواهد: اپ همیشه باز شود و کار کند؛ حتی بعد از روزها بی‌انتباهی.
+ * ۳) در پس‌زمینه با اولین انترنت، نشست واقعی با اعتبار ذخیره‌شده تازه می‌شود
+ *    (کوکی تازه + تخلیهٔ صف آفلاین) — بدون هیچ دخالت کاربر.
+ * ۴) خروجِ آگاهانه (دکمهٔ خروج) «آخرین کاربر» را فراموش می‌کند تا بازشدن بعدی
+ *    صفحهٔ ورود بیاید — کنترل امنیتی دست کاربر است.
+ * ۵) storage.persist — جلوگیری از پاک‌شدن خودکار کش و داده توسط سیستم‌عامل
+ *    پس از روزها استفاده‌نشدن (ریشهٔ دیگر «اپ باز نمی‌شد»).
  */
 const ALIVE_KEY = 'noq_alive_v1';
+
+/** درخواست ذخیرهٔ ماندگار — مرورگر دیگر کش/دادهٔ اپ را به‌سادگی پاک نمی‌کند */
+function requestPersistentStorage() {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.storage?.persist) {
+      void navigator.storage.persist();
+    }
+  } catch { /* ignore */ }
+}
 
 export default function Page() {
   const [user, setUser] = useState<SessionUser | null>(null);
@@ -40,24 +57,56 @@ export default function Page() {
 
   useEffect(() => {
     // ثبت Service Worker برای حالت آفلاین — همیشه در production
-    // (قبلاً فقط وقتی نشست از قبل موجود بود ثبت می‌شد که در اپ هرگز اتفاق نمی‌افتاد!)
+    // (updateViaCache none — خود sw.js همیشه از شبکه چک می‌شود تا به‌روزرسانی هرگز گم نشود)
     if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
-      navigator.serviceWorker.register('./sw.js').catch(() => {});
+      navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(() => {});
     }
-    // فقط وقتی علامت نشست موجود است نشست بازیابی می‌شود — وگرنه صفحهٔ ورود
-    let alive = false;
-    try { alive = sessionStorage.getItem(ALIVE_KEY) === '1'; } catch { alive = false; }
-    if (alive) {
-      queueMicrotask(loadSession);
-    } else {
-      const t = setTimeout(() => setLoading(false), 0);
-      // وضعیت راه‌اندازی اولیه (نمایش حساب‌های ابتدایی) بدون بازیابی نشست
+    requestPersistentStorage();
+
+    const boot = async () => {
+      let alive = false;
+      try { alive = sessionStorage.getItem(ALIVE_KEY) === '1'; } catch { alive = false; }
+
+      if (alive) {
+        await loadSession();
+        // نشست کوکی مرده بود اما کاربر دستگاه داریم؟ — بازگردانی خودکار
+        setUser((prev) => {
+          if (!prev) {
+            const last = restoreLastUser() as SessionUser | null;
+            if (last) {
+              setCacheScope(last.id);
+              markAuthRestored();
+              // تلاش برای تازه‌کردن نشست واقعی در پس‌زمینه (اگر آنلاین شود)
+              void tryAutoRelogin().then((ok) => { if (ok) markAuthRestored(); });
+              return last;
+            }
+          }
+          return prev;
+        });
+        return;
+      }
+
+      // بدون نشست زنده — بازگردانی خودکار آخرین کاربر (ورود بدون دیوار)
+      const last = restoreLastUser() as SessionUser | null;
+      if (last) {
+        setCacheScope(last.id);
+        markAuthRestored();
+        setUser(last);
+        setLoading(false);
+        // تازه‌سازی نشست واقعی در پس‌زمینه — کوکی تازه + صف آفلاین
+        void tryAutoRelogin().then((ok) => { if (ok) markAuthRestored(); });
+        return;
+      }
+
+      // هیچ اعتباری نیست — صفحهٔ ورود؛ وضعیت راه‌اندازی اولیه (حساب‌های ابتدایی)
+      setLoading(false);
       fetch('/api/auth', { cache: 'no-store' })
         .then((r) => r.json())
         .then((d: { setupDone?: boolean }) => setSetupDone(Boolean(d.setupDone)))
         .catch(() => {});
-      return () => clearTimeout(t);
-    }
+    };
+    void boot();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleLoggedIn = (u?: SessionUser) => {
@@ -78,7 +127,7 @@ export default function Page() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-emerald-50 dark:bg-emerald-500/10/40">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-emerald-50 dark:bg-emerald-500/10">
         <Loader2 className="h-9 w-9 animate-spin text-emerald-600 dark:text-emerald-400" />
         <p className="text-sm text-emerald-800 dark:text-emerald-300 font-medium">در حال بارگذاری سیستم مکتب...</p>
       </div>

@@ -254,7 +254,7 @@ function killServer() {
     check('معلم: کانال همگانی در فهرست', false, 'ردیف کانال یافت نشد');
   }
 
-  // محدودیت مخاطبان معلم در UI — شاگردِ بی‌صنف نباید در مخاطبان باشد
+  // محدودیت مخاطبان معلم در UI — شاگردِ صنفیِ معلم در مخاطبان هست (قاعدهٔ محدودهٔ صنفی)
   await tpage.locator('button[aria-label="بازگشت به فهرست"]').click();
   await tpage.waitForTimeout(400);
   await tpage.click('button[aria-label="گفتگوی جدید"]');
@@ -262,7 +262,7 @@ function killServer() {
   await tpage.fill('input[placeholder="جست‌وجوی نام مخاطب…"]', 'شاگرد نمونه');
   await tpage.waitForTimeout(500);
   const tDlg = await tpage.textContent('body');
-  check('معلم: شاگرد غیرمرتبط در مخاطبان نیست (محدودیت واقعی در UI)', !tDlg.includes('شاگرد نمونه'));
+  check('معلم: شاگرد صنف خودش در مخاطبان هست (قاعدهٔ محدودهٔ صنفی)', tDlg.includes('شاگرد نمونه'));
   await tpage.keyboard.press('Escape');
 
   // ═══ فاز ۳ — UI موبایل والد: رابط نگران صنف ═══
@@ -282,7 +282,7 @@ function killServer() {
   await ppage.waitForSelector('input[placeholder="جست‌وجوی گفتگو یا شخص…"]', { timeout: 15000 });
   await ppage.click('button[aria-label="گفتگوی جدید"]');
   await ppage.waitForTimeout(700);
-  await ppage.fill('input[placeholder="جست‌وجوی نام مخاطب…"]', 'v21840481');
+  await ppage.fill('input[placeholder="جست‌وجوی نام مخاطب…"]', 'عبدالبصیر');
   await ppage.waitForTimeout(500);
   const pDlg = await ppage.textContent('body');
   check('والد: نگران صنف فرزند در مخاطبان با دلیل درست', pDlg.includes('نگران صنف فرزند شما'));

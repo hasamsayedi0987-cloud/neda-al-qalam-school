@@ -5,9 +5,33 @@ import * as SheetPrimitive from "@radix-ui/react-dialog"
 import { XIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { useDialogHistory } from "@/hooks/use-dialog-history"
 
-function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
-  return <SheetPrimitive.Root data-slot="sheet" {...props} />
+/** Sheet با پیوند تاریخچه: دکمهٔ برگشت گوشی اول این لایه را می‌بندد */
+function Sheet({
+  open: openProp,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof SheetPrimitive.Root>) {
+  const [internalOpen, setInternalOpen] = React.useState(false)
+  const isControlled = openProp !== undefined
+  const open = isControlled ? openProp : internalOpen
+  const setOpen = React.useCallback(
+    (v: boolean) => {
+      if (!isControlled) setInternalOpen(v)
+      onOpenChange?.(v)
+    },
+    [isControlled, onOpenChange]
+  )
+  useDialogHistory(open, () => setOpen(false))
+  return (
+    <SheetPrimitive.Root
+      data-slot="sheet"
+      open={open}
+      onOpenChange={setOpen}
+      {...props}
+    />
+  )
 }
 
 function SheetTrigger({
