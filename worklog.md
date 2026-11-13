@@ -615,3 +615,23 @@ Stage Summary:
 - لینک دانلود: https://github.com/hasamsayedi0987-cloud/neda-al-qalam-school/releases/download/v2.4.1/nedaalqalam-school.apk
 - کاربر باید APK نسخهٔ ۲.۴.۱ را نصب کند تا تغییرات را روی گوشی ببیند
 - یادآوری امنیتی: توکن قبلی (ghp_nZDDsD6U…) همچنان باید Revoke شود
+
+---
+Task ID: v250-release
+Agent: main (Z.ai)
+Task: درخواست کاربر — «اصلاح، تکمیل و پیشرفته‌سازی اپلیکیشن مکتب»: به‌روزرسانی نسخهٔ وب، ریشه‌کنی «اپ بعد از چند روز آفلاین باز نمی‌شود»، دکمهٔ برگشت گوشی، طراحی/آسانی/امنیت/سرعت، آزمایش کامل
+
+Work Log:
+- ریشه‌یابی سه شکایت با بازبینی کد: ① صفحهٔ ورود «نسخهٔ ۲.۱.۰» سخت‌کد (پانویس ۲.۴.۱) → کاربر نسخهٔ وب را کهنه می‌دید؛ ۲) سرویس‌ورکر navigation network-first پاسخ شبکه را بعد از سقف ۴ ثانیه دور می‌ریخت → روی شبکهٔ کند کاربر برای همیشه روی پوستهٔ کهنه می‌ماند؛ ۳) MainActivity هر بازشدن همهٔ کوکی‌ها را پاک می‌کرد + دیوار ورود با هر بازشدن (sessionStorage ALIVE_KEY) + بدون storage.persist → پس از چند روز (تخلیهٔ کش + نشست مرده + ورود آفلاین ناممکن) اپ «باز نمی‌شد»
+- بازشدن همیشگی: restoreLastUser/forgetLastUser در api.ts + بازگردانی خودکار آخرین کاربر در page.tsx (بدون دیوار ورود، حتی آفلاین) + تازه‌سازی نشست واقعی در پس‌زمینه (tryAutoRelogin) + چک‌باکس «مرا به خاطر بسپار» (پیشفرض فعال) در لاگین + خروج آگاهانه فراموش می‌کند + requestPersistentStorage (navigator.storage.persist)
+- دکمهٔ برگشت گوشی: setView با pushState/?view= + popstate در app-shell (برگشت بین بخش‌ها) + use-dialog-history.ts (پشتهٔ لایه + programmaticBack با فرونشانی) پیوندشده با Dialog/Sheet/AlertDialog/Drawer (برگشت اول لایهٔ رویانی را می‌بندد) + onBackPressed در MainActivity (goBack یا تأیید خروج؛ پاک‌سازی کوکی فقط در تغییر آدرس سرور) — نسخهٔ ۱.۵
+- نسخهٔ وب همیشه تازه: sw.js v11 — navigation network-first با به‌روزرسانی پس‌زمینه (پاسخ کند شبکه دور ریخته نمی‌شود، در کش ذخیره می‌شود) + register با updateViaCache:'none' + چک هر ۶۰ ثانیه + بارگیری مجدد خودکار روی controllerchange (با گارد فعال‌شدن اول) + src/lib/version.ts منبع واحد (لاگین/پانویس منو)
+- پاک‌سازی: ۳۰ فایل قالب شادکن UI بلااستفاده (accordion…tooltip — وابستگی‌های نصب‌نشدهٔ آنها tsc را می‌شکست) + حذف اسکریپت‌های مرده (backend-common/handlers-core/handlers-data بدون مصرف‌کننده + tailwind.config.ts نسخهٔ v3) + حذف assets/www کهنهٔ ۶.۲MB از بستهٔ APK (۲۴× سبک‌تر شد) — tsc و eslint صفر
+- تست: scripts/test-v250.js جدید ۱۷/۱۷ PASS (نشان نسخه، remember پیشفرض، بازگردانی خودکار بدون کوکی/نشست، فراموشی پس از خروج، برگشت بین بخش‌ها با URL، بسته‌شدن دیالوگ با برگشت، سرویس‌ورکر کنترل‌کننده، persist API، آفلاین با ورود خودکار معلم، صفر خطای JS) + رگرسیون کامل: v241 (۵۲/۵۲)، v23 (۶۲/۶۲)، v24 (۴۰/۴۰)، v221 (۳۴/۳۴)، v22 (۵۳/۵۳)، v21 (۳۷/۳۷)، v2 (PASS)، UI-smoke (۱۰/۱۰)
+- محیط: بازسازی Android SDK (build-tools r34 + platform-34-ext7) + فیکسچر تست scripts/fixture-teachers.ts (tv21840481=استاد v21840481/tch-4 + 42le7=استاد پیام/tch-5) + seed.ts (admin=حسام الدین سیدی (مدیر مکتب)) + به‌روزرسانی دو انتظار کهنهٔ تست v221/v24 (نام مدیر/قاعدهٔ محدودهٔ صنفی معلم — رفتار درست فعلی)
+- انتشار: SW → v11 | versionCode 15 / versionName 2.5.0 | commit 3ff86d8 روی main + tag v2.5.0 + Release id 444101553 + APK 230635 بایت (SHA-256 fcd30d55…) — هر ۱۶ ریلیز تاریخی با asset سالم
+
+Stage Summary:
+- سه شکایت اصلی حل شد: وب همیشه تازه (نشان نسخه + به‌روزرسانی خودکار)، اپ بعد از روزها آفلاین باز می‌شود و مستقیم داخل می‌رود، برگشت گوشی در همه‌جا درست است
+- لینک دانلود: https://github.com/hasamsayedi0987-cloud/neda-al-qalam-school/releases/download/v2.5.0/nedaalqalam-school.apk
+- یادآوری امنیتی: توکن‌های قبلی (ghp_nZDDsD6U… و ghp_L6PDBO6e…) همچنان باید Revoke شوند
