@@ -107,6 +107,9 @@ function notify() {
 
 /** وضعیت اتصال بر اساس نتیجهٔ واقعی fetch — نه فقط navigator.onLine (وای‌فای بدون انترنت دروغ می‌گوید) */
 function setOnlineState(v: boolean) {
+  // نسخهٔ ۳.۲.۰ — هر گزارش قطعی ثبت می‌شود (نه فقط تغییر وضعیت) تا پیش‌بارگیریِ
+  // بعد از برگشت اتصال همیشه از قفل زمانی معاف شود
+  if (!v) lastOfflineAt = Date.now();
   if (online !== v) {
     online = v;
     notify();
@@ -947,7 +950,8 @@ export async function apiGet<T>(url: string): Promise<T> {
     } catch {
       /* هیچ */
     }
-    throw new Error('آفلاین — داده‌ای برای این بخش ذخیره نشده است');
+    // نسخهٔ ۳.۲.۰ — پیام دوستانه به‌جای خطای خام؛ پس از اتصال، ویوی فعال خودکار دوباره بارگیری می‌شود
+    throw new Error('این بخش هنوز برای استفادهٔ آفلاین بارگیری نشده — به‌محض اتصال انترنت خودکار بارگیری می‌شود');
   }
 
   try {
@@ -973,6 +977,63 @@ export async function apiGet<T>(url: string): Promise<T> {
     if (cached !== undefined) return applyOverlay(url, cached) as T;
     throw e instanceof Error && e.message ? e : new Error('خطا در دریافت اطلاعات');
   }
+}
+
+/* ───────────────  نسخهٔ ۳.۲.۰ — پیش‌بارگیری همهٔ بخش‌ها هنگام بازشدن اپ  ───────────────
+ * «وقتی اپ را باز می‌کنم تمام مواردش بروز شود» — پس از ورود، همهٔ بخش‌های مجاز
+ * در پس‌زمینه واکشی و در حافظهٔ گوشی ذخیره می‌شوند تا در حالت آفلاین حتی بخشی
+ * که هرگز آنلاین باز نشده، با آخرین داده کار کند (نه پیام «بارگیری نشده»).
+ * فقط GET خالص، دوبه‌دو با وقفهٔ کوتاه — نقش‌های بدون دسترسی (۴۰۳) بی‌صدا رد می‌شوند
+ * و هیچ‌گاه در صف همگام‌سازی قرار نمی‌گیرند. */
+const PREFETCH_URLS = [
+  '/api/dashboard', '/api/notifications', '/api/messages', '/api/tasks', '/api/comm',
+  '/api/settings', '/api/classes', '/api/subjects', '/api/teachers', '/api/students',
+  '/api/library', '/api/schedule', '/api/custom-sections', '/api/certificates',
+  '/api/fees', '/api/attendance?mode=staff&mine=1', '/api/users',
+];
+
+let lastPrefetchMs = 0;
+let prefetchRunning = false;
+/** آخرین گزارش قطعی — اگر بعد از آخرین پیش‌بارگیری بوده، پیش‌بارگیری بعدی معاف از throttle است */
+let lastOfflineAt = 0;
+
+/** پیش‌بارگیری همهٔ بخش‌های مجاز — پس از ورود، بازگشت اتصال و همگام‌سازی؛ حداقل فاصله maxAgeMs */
+export async function prefetchSections(maxAgeMs = 5 * 60 * 1000): Promise<number> {
+  if (typeof navigator === 'undefined') return 0;
+  // فقط navigator.onLine — متغیر online ماژول تا موفقیت probe عقب می‌ماند و
+  // پیش‌بارگیریِ لحظهٔ برگشت اتصال را ۱۵ ثانیه عقب می‌انداخت؛ واکشی‌های ناموفق
+  // بی‌صدا رد می‌شوند و گُرِ ok>0 از قفل‌شدن throttle جلوگیری می‌کند
+  if (!navigator.onLine || prefetchRunning) return 0;
+  const offlineSinceLast = lastOfflineAt > lastPrefetchMs; // بعد از آخرین پیش‌بارگیری قطعی گزارش شده → تازه‌سازی الزامی
+  if (!offlineSinceLast && Date.now() - lastPrefetchMs < maxAgeMs) return 0;
+  prefetchRunning = true;
+  let ok = 0;
+  try {
+    for (let i = 0; i < PREFETCH_URLS.length; i += 2) {
+      const pair = PREFETCH_URLS.slice(i, i + 2);
+      // eslint-disable-next-line no-await-in-loop
+      await Promise.allSettled(pair.map(async (u) => {
+        try {
+          const res = await fetchTimeout(u, { cache: 'no-store' }, 8000);
+          if (res.ok && res.headers.get('x-noq-cache') !== '1') {
+            const json = (await res.json().catch(() => null)) as unknown;
+            if (json && typeof json === 'object') {
+              cacheGet(u, json);
+              ok++;
+            }
+          }
+        } catch { /* بی‌صدا — بخش‌های بی‌دسترسی یا شبکهٔ ناپایدار؛ دفعهٔ بعد */ }
+      }));
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((r) => setTimeout(r, 150));
+    }
+  } finally {
+    prefetchRunning = false;
+  }
+  // فقط اگر دست‌کم یک بخش گرفت — اگر ورود هنوز کامل نشده بود، دفعهٔ بعد دوباره تلاش می‌شود
+  if (ok > 0) lastPrefetchMs = Date.now();
+  try { window.dispatchEvent(new CustomEvent('noq:prefetched', { detail: { ok } })); } catch { /* ignore */ }
+  return ok;
 }
 
 function enqueue<T>(url: string, method: string, body: unknown, opts: { queueLabel?: string; allowQueue?: boolean }): ApiResult<T> {

@@ -681,3 +681,22 @@ Stage Summary:
 - هر ۸ مورد واقعاً پیاده شد و با تست عملی ثابت شد (نه ظاهری)؛ رگرسیون کامل سبز — هیچ قابلیت قبلی خراب نشد
 - لینک دانلود: https://github.com/hasamsayedi0987-cloud/neda-al-qalam-school/releases/download/v3.1.0/nedaalqalam-school.apk
 - یادآوری امنیتی: توکن‌های قبلی (ghp_nZDDsD6U… و ghp_L6PDBO6e…) همچنان باید Revoke شوند
+
+---
+Task ID: v320-release
+Agent: main (Z.ai)
+Task: نسخهٔ ۳.۲.۰ — مورد ۹ کاربر: «وقتی اپ را باز می‌کنم تمام مواردش بروز شود؛ آفلاین وارد بخشی که آنلاین باز نشده بودم، می‌گوید بارگیری نشده»
+
+Work Log:
+- prefetchSections در api.ts: ۱۷ GET خالص بدون پارامتر (dashboard/notifications/messages/tasks/comm/settings/classes/subjects/teachers/students/library/schedule/custom-sections/certificates/fees/attendance-staff/users) دوبه‌دو با وقفهٔ ۱۵۰ms؛ ۴۰۳ نقش‌های بی‌دسترسی بی‌صدا؛ هرگز در صف قرار نمی‌گیرد؛ throttle ۵ دقیقه‌ای که با گزارش قطعی (lastOfflineAt) معاف می‌شود؛ رویداد noq:prefetched
+- اتصال در app-shell: پس از ورود (۱۵۰۰ms تأخیر) + رویداد online (فاصلهٔ ۶۰s) + پس از هر همگام‌سازی (۳۰s)
+- تلاش مجدد خودکار ویو: تشخیص برگشت اتصال (prevOnlineRef) → syncTick++ → ویوی فعال دوباره بارگیری می‌شود — بخشِ «بارگیری نشده» بدون رفرش دستی پر می‌شود
+- رفع دو اشکال در حین تست: ① متغیر online ماژول تا موفقیت probe عقب می‌ماند → prefetch فقط به navigator.onLine تکیه می‌کند ② setOnlineState(false) فقط روی «تغییر وضعیت» ثبت می‌شد → اکنون هر گزارش قطعی lastOfflineAt را تازه می‌کند (وگرنه معافیتِ پس از قطعی فعال نمی‌شد)
+- پیام آفلاین دوستانه: «این بخش هنوز برای استفادهٔ آفلاین بارگیری نشده — به‌محض اتصال انترنت خودکار بارگیری می‌شود» به‌جای خطای خام
+- /api/activities از پیش‌بارگیری حذف شد (بدون classId → ۴۰۰ — منبع خطای کنسول در تست دسکتاپ)
+- تست: scripts/test-v320.js (۱۹/۱۹ — سناریوی واقعی: ورود آنلاین → کش ۱۸بخشی → قطع → ورود به کتابخانهٔ بازدیدنشده → جدول از حافظه بدون پیام خطا → برگشت اتصال → پیش‌بارگیری دوباره) + رگرسیون کامل: v310 (۸۱ + ۶ نشان نسخه)، v300 (۳۶ + ۴ نشان نسخه)، v250 (۱۶ + ۱ نشان نسخه)، v241 (۵۲/۵۲)، v24 (۴۰/۴۰)، v23 (۶۲/۶۲)، v22 (۵۳/۵۳)، یونیت نمرات (۲۲/۲۲)، خوانندهٔ PDF (۵/۵) — صفر شکست کارکردی؛ اصلاح تست v310 (هدف اعلان = کاربر نشست دوم + کشش اعلان آتش‌وفراموش)
+- انتشار: SW → v14 | versionCode 18 / versionName 3.2.0 | APK SHA-256 f2d5bb11… با گواهی ثابت
+
+Stage Summary:
+- مورد ۹ واقعاً حل شد و با سناریوی مرورگرِ قطع‌ووصل ثابت شد؛ هیچ قابلیت قبلی خراب نشد
+- لینک دانلود: https://github.com/hasamsayedi0987-cloud/neda-al-qalam-school/releases/download/v3.2.0/nedaalqalam-school.apk

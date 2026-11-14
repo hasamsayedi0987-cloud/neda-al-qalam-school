@@ -155,12 +155,21 @@ async function api(session, method, urlPath, body) {
   // ── مورد ۴: اعلان — خواندن/حذف ماندگار ──
   const loginT = await api('teacher', 'POST', '/api/auth', { action: 'login', username: 'teacher', password: '12345678' });
   check('ورود معلم (نشست دوم)', loginT.status === 200 && !!loginT.json?.user?.id, JSON.stringify(loginT.json));
-  // پیام تازه برای معلم — اعلان آن باید ساخته شود
-  const mNotif = await api('admin', 'POST', '/api/messages', { body: 'تست اعلان ۳.۱', category: 'GENERAL', targets: [{ kind: 'users', userIds: [teacherContact.id] }] });
+  // پاک‌سازی اعلان‌های کهنهٔ اجراهای قبلی (پایگاه دادهٔ آزمون) — فهرست ۵۰تایی شلوغ نشود
+  await api('teacher', 'DELETE', '/api/notifications');
+  // پیام تازه به خودِ کاربر معلمِ نشست دوم (نه مخاطب تصادفی از فهرست) — اعلانش باید ساخته شود
+  const teacherUserId = loginT.json.user.id;
+  const mNotif = await api('admin', 'POST', '/api/messages', { body: 'تست اعلان ۳.۱', category: 'GENERAL', targets: [{ kind: 'users', userIds: [teacherUserId] }] });
   check('پیام برای معلم ارسال شد', mNotif.status === 200 && !!mNotif.json?.id, JSON.stringify(mNotif.json));
-  const nBefore = await api('teacher', 'GET', '/api/notifications');
-  const notif = (nBefore.json?.notifications || []).find((n) => !n.read && n.messageId === mNotif.json?.id);
-  check('اعلان پیام تازه برای معلم آمده است', !!notif, JSON.stringify((nBefore.json?.notifications || [])[0]));
+  // notifyRecipients آتش‌وفراموش است — تا ۵ ثانیه منتظر ساخته‌شدن اعلان می‌مانیم
+  let notif = null;
+  let nBefore = null;
+  for (let i = 0; i < 10 && !notif; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    nBefore = await api('teacher', 'GET', '/api/notifications');
+    notif = (nBefore.json?.notifications || []).find((n) => !n.read && n.messageId === mNotif.json?.id);
+  }
+  check('اعلان پیام تازه برای معلم آمده است', !!notif, JSON.stringify((nBefore?.json?.notifications || [])[0]));
   if (notif) {
     const patch = await api('teacher', 'PATCH', '/api/notifications', { id: notif.id });
     check('خواندن اعلان روی سرور ثبت می‌شود', patch.status === 200);
@@ -175,8 +184,8 @@ async function api(session, method, urlPath, body) {
 
   // ── مورد ۸: نمرات افغانستان ──
   const classes = await api('admin', 'GET', '/api/classes');
-  // اولین صنفی که مضمون سپرده‌شده دارد (دادهٔ آزمون: صنف هفتم)
-  const firstClass = (classes.json?.classes || []).find((c) => (c.classSubjects || []).length > 0);
+  // اولین صنفی که مضمون سپرده‌شده و شاگرد دارد (کلاس‌های آزمونی «صنف جدول» بدون شاگرد رد می‌شوند)
+  const firstClass = (classes.json?.classes || []).find((c) => (c.classSubjects || []).length > 0 && (c.studentCount || 0) > 0);
   const cs = (firstClass?.classSubjects || [])[0];
   check('مضمونی برای تست نمرات هست', !!cs, JSON.stringify((classes.json?.classes || []).slice(0, 2)));
   if (cs) {

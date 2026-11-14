@@ -10,7 +10,7 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/s
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
-import { apiGet, apiSend, onSyncStateChange, pendingSyncCount, failedSyncItems, isOnline, isAuthRequired, flushQueue, tryAutoRelogin, discardQueueItem, discardAllFailedItems, forgetLastUser } from '@/lib/client/api';
+import { apiGet, apiSend, onSyncStateChange, pendingSyncCount, failedSyncItems, isOnline, isAuthRequired, flushQueue, tryAutoRelogin, discardQueueItem, discardAllFailedItems, forgetLastUser, prefetchSections } from '@/lib/client/api';
 import { configureExports } from '@/lib/client/exports';
 import { SECTIONS, sectionAllowed } from '@/lib/access';
 import { isoToJalaliDisplay, toPersianDigits } from '@/lib/jalali';
@@ -170,6 +170,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
   // پس از تخلیهٔ موفق صف، ویوهای باز دوباره بارگذاری می‌شوند (دادهٔ واقعی سرور)
   const [syncTick, setSyncTick] = useState(0);
   const prevPendingRef = useRef(0);
+  const prevOnlineRef = useRef(true);
   const [customSections, setCustomSections] = useState<CustomSectionData[]>([]);
   // نام مدرسه، شعار و برچسب‌های قابل‌تغییر عناوین — از تنظیمات مدیر
   const [titles, setTitles] = useState({
@@ -252,6 +253,15 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
       // صف از «پر» به «خالی» رسید = همگام‌سازی موفق — رندر مجدد ویو فعال با دادهٔ سرور
       if (p === 0 && prevPendingRef.current > 0) setSyncTick((t) => t + 1);
       prevPendingRef.current = p;
+      // نسخهٔ ۳.۲.۰ — برگشت اتصال → ویوی فعال دوباره بارگیری می‌شود
+      // (بخشی که آفلاین «بارگیری نشده» بود، خودش پر می‌شود — بدون نیاز به رفرش دستی)
+      // + همهٔ بخش‌ها با حداقل فاصلهٔ ۶۰ ثانیه دوباره تازه می‌شوند
+      const nowOnline = isOnline();
+      if (nowOnline && !prevOnlineRef.current) {
+        setSyncTick((t) => t + 1);
+        void prefetchSections(60_000);
+      }
+      prevOnlineRef.current = nowOnline;
     };
     update();
     const un = onSyncStateChange(update);
@@ -267,6 +277,24 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
       window.removeEventListener('noq:synced', onSynced);
     };
   }, []);
+
+  // نسخهٔ ۳.۲.۰ — «وقتی اپ را باز می‌کنم تمام مواردش بروز شود»: پس از ورود، همهٔ
+  // بخش‌های مجاز در پس‌زمینه واکشی و در حافظهٔ گوشی ذخیره می‌شوند تا در حالت آفلاین
+  // حتی بخشی که هرگز آنلاین باز نشده، با آخرین داده کار کند. با برگشت اتصال و پس از
+  // هر همگام‌سازی هم دوباره تازه می‌شود.
+  useEffect(() => {
+    if (!user) return;
+    const t = setTimeout(() => { void prefetchSections(); }, 1500);
+    const onOnline = () => { void prefetchSections(60_000); };
+    const onSynced = () => { void prefetchSections(30_000); };
+    window.addEventListener('online', onOnline);
+    window.addEventListener('noq:synced', onSynced);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('noq:synced', onSynced);
+    };
+  }, [user]);
 
   // نسخهٔ ۳.۱.۰ — هشدار آشکار اگر صف همگام‌سازی از سقف ظرفیت سرریز کرد (هیچ‌گاه بی‌صدا داده گم نمی‌شود)
   useEffect(() => {
