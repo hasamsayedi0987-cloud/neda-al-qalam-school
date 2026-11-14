@@ -55,6 +55,12 @@ export async function POST(req: NextRequest) {
   try {
     const me = await requireSection('students');
     const body = await req.json();
+    // ایدمپوتنسی صف آفلاین — replay ثبت شاگرد پس از قطعی، پروندهٔ تکراری نمی‌سازد (نسخهٔ ۳.۱.۰)
+    const clientToken = str(body.clientToken).slice(0, 64);
+    if (clientToken) {
+      const dup = await db.student.findUnique({ where: { clientToken }, select: { id: true } });
+      if (dup) return NextResponse.json({ id: dup.id, duplicate: true });
+    }
     const firstName = str(body.firstName);
     const lastName = str(body.lastName);
     const fatherName = str(body.fatherName);
@@ -95,6 +101,7 @@ export async function POST(req: NextRequest) {
         rollNo,
         enrolledYear: str(body.enrolledYear) || null,
         status: 'ACTIVE',
+        clientToken: clientToken || null,
       },
     });
     return NextResponse.json({ id: student.id });

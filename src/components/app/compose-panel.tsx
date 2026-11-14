@@ -187,8 +187,8 @@ export function ComposePanel({
       if (f.type.startsWith('image/')) {
         data = await compressImage(f);
       } else {
-        if (f.size > 350_000) {
-          toast({ title: 'حجم فایل بیش از حد مجاز است', description: 'حداکثر ۳۵۰ کیلوبایت — عکس‌ها خودکار فشرده می‌شوند', variant: 'destructive' });
+        if (f.size > 1_400_000) {
+          toast({ title: 'حجم فایل بیش از حد مجاز است', description: 'حداکثر حدود ۱.۵ مگابایت — عکس‌ها خودکار فشرده می‌شوند', variant: 'destructive' });
           return;
         }
         data = await new Promise<string>((resolve, reject) => {

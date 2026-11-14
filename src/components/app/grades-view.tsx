@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { PageHeader, LoadingBlock, EmptyState, Field } from './ui-bits';
 import { apiGet, apiSend } from '@/lib/client/api';
 import { toPersianDigits } from '@/lib/jalali';
-import { letterGrade, letterColor, clampComponent, componentTotal, PERIOD_LABELS } from '@/lib/grading';
+import { letterGrade, letterColor, clampComponent, componentTotal, componentCapsFor, PERIOD_LABELS } from '@/lib/grading';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, ClassInfo, GradeCell } from '@/lib/types';
 import { cn, fullName } from '@/lib/utils';
@@ -57,6 +57,11 @@ export function GradesView({ user }: { user: SessionUser }) {
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [cells, setCells] = useState<Record<string, GradeCell>>({});
   const [weights, setWeights] = useState({ maxWritten: 40, maxOral: 20, maxHomework: 20, maxActivity: 20 });
+  // نسخهٔ ۳.۱.۰ — ساختار افغانستان: سقف هر دوره + حد نصاب کامیابی از تنظیمات
+  const [periodMax, setPeriodMax] = useState<{ MIDTERM: number; ANNUAL: number }>({ MIDTERM: 40, ANNUAL: 60 });
+  const [passMark, setPassMark] = useState(40);
+  const [passLabel, setPassLabel] = useState('کامیاب');
+  const [failLabel, setFailLabel] = useState('ناکام');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [allApproved, setAllApproved] = useState(false);
@@ -66,6 +71,15 @@ export function GradesView({ user }: { user: SessionUser }) {
   useEffect(() => {
     apiGet<{ classes: ClassInfo[] }>('/api/classes')
       .then((d) => setClasses(d.classes))
+      .catch(() => {});
+    // حد نصاب و برچسب نتیجه — از تنظیمات مدیر (قابل تغییر بدون کد)
+    apiGet<{ settings: Record<string, string> }>('/api/settings')
+      .then((d) => {
+        const pm = Number(d.settings.passMark);
+        if (Number.isFinite(pm) && pm > 0 && pm <= 100) setPassMark(pm);
+        if (d.settings.passLabel) setPassLabel(d.settings.passLabel);
+        if (d.settings.failLabel) setFailLabel(d.settings.failLabel);
+      })
       .catch(() => {});
     if (isTeacher) {
       apiGet<{ settings: Record<string, string> }>('/api/settings')
@@ -105,9 +119,11 @@ export function GradesView({ user }: { user: SessionUser }) {
         students: StudentRow[];
         grades: Array<{ studentId: string; period: string; written: number | null; oral: number | null; homework: number | null; activity: number | null; total: number; approved: boolean }>;
         weights: typeof weights;
+        periodMax?: { MIDTERM: number; ANNUAL: number };
       }>(`/api/grades?classSubjectId=${csId}`);
       setStudents(data.students);
       setWeights(data.weights);
+      if (data.periodMax) setPeriodMax(data.periodMax);
       const c: Record<string, GradeCell> = {};
       let approved = 0;
       for (const s of data.students) {
@@ -130,13 +146,19 @@ export function GradesView({ user }: { user: SessionUser }) {
 
   useEffect(() => { queueMicrotask(loadGrades); }, [loadGrades]);
 
+  // سقف هر جزء در دورهٔ انتخاب‌شده — مثلاً چهارو‌نیم‌ماهه: تحریری از ۱۶، تقریری از ۸ … (مجموع از ۴۰)
+  const caps = useMemo(
+    () => componentCapsFor(periodMax[period] || 100, weights),
+    [period, periodMax, weights],
+  );
+
   const setCell = (studentId: string, key: keyof GradeCell, value: string) => {
     const prev = cells[studentId] || {};
     if (value === '') {
       setCells({ ...cells, [studentId]: { ...prev, [key]: null, total: componentTotal({ ...prev, [key]: null }) } });
       return;
     }
-    const max = key === 'written' ? weights.maxWritten : key === 'oral' ? weights.maxOral : key === 'homework' ? weights.maxHomework : weights.maxActivity;
+    const max = key === 'written' ? caps.maxWritten : key === 'oral' ? caps.maxOral : key === 'homework' ? caps.maxHomework : caps.maxActivity;
     const raw = Number(value);
     // اعتبارسنجی خودکار — مقدار خارج از سقف با هشدار به سقف محدود می‌شود
     if (Number.isFinite(raw) && raw > max) {
@@ -257,7 +279,8 @@ export function GradesView({ user }: { user: SessionUser }) {
     const totals = students.map((s) => totalOf(s.id)).filter((t): t is number => t != null);
     if (totals.length === 0) return null;
     const avg = totals.reduce((a, b) => a + b, 0) / totals.length;
-    const pass = totals.filter((t) => t >= 50).length;
+    // حد نصاب از تنظیمات — کامیاب/ناکام مطابق نظام نمره‌دهی افغانستان
+    const pass = totals.filter((t) => t >= passMark).length;
     return { avg: Math.round(avg * 100) / 100, pass, fail: totals.length - pass, count: totals.length };
   })();
 
@@ -270,7 +293,7 @@ export function GradesView({ user }: { user: SessionUser }) {
     <div>
       <PageHeader
         title="ثبت نمرات"
-        subtitle="تحریری، تقریری/عملی، کارخانگی و فعالیت صنفی — مجموع به‌صورت خودکار محاسبه می‌شود"
+        subtitle={`تحریری، تقریری/عملی، کارخانگی و فعالیت صنفی — چهارو‌نیم‌ماهه از ${toPersianDigits(periodMax.MIDTERM)} و سالانه از ${toPersianDigits(periodMax.ANNUAL)}، مجموع از ${toPersianDigits(periodMax.MIDTERM + periodMax.ANNUAL)}`}
         icon={ClipboardList}
       />
 
@@ -362,11 +385,11 @@ export function GradesView({ user }: { user: SessionUser }) {
                     <TableRow>
                       <TableHead className="w-10">شماره</TableHead>
                       <TableHead className="min-w-[170px]">شهرت شاگرد</TableHead>
-                      <TableHead className="min-w-[90px]">تحریری <span className="text-[10px] text-muted-foreground">(از {toPersianDigits(weights.maxWritten)})</span></TableHead>
-                      <TableHead className="min-w-[90px]">تقریری/عملی <span className="text-[10px] text-muted-foreground">(از {toPersianDigits(weights.maxOral)})</span></TableHead>
-                      <TableHead className="min-w-[90px]">کارخانگی <span className="text-[10px] text-muted-foreground">(از {toPersianDigits(weights.maxHomework)})</span></TableHead>
-                      <TableHead className="min-w-[90px]">فعالیت صنفی <span className="text-[10px] text-muted-foreground">(از {toPersianDigits(weights.maxActivity)})</span></TableHead>
-                      <TableHead className="min-w-[80px]">مجموع</TableHead>
+                      <TableHead className="min-w-[90px]">تحریری <span className="text-[10px] text-muted-foreground">(از {toPersianDigits(caps.maxWritten)})</span></TableHead>
+                      <TableHead className="min-w-[90px]">تقریری/عملی <span className="text-[10px] text-muted-foreground">(از {toPersianDigits(caps.maxOral)})</span></TableHead>
+                      <TableHead className="min-w-[90px]">کارخانگی <span className="text-[10px] text-muted-foreground">(از {toPersianDigits(caps.maxHomework)})</span></TableHead>
+                      <TableHead className="min-w-[90px]">فعالیت صنفی <span className="text-[10px] text-muted-foreground">(از {toPersianDigits(caps.maxActivity)})</span></TableHead>
+                      <TableHead className="min-w-[80px]">مجموع <span className="text-[10px] text-muted-foreground">(از {toPersianDigits(periodMax[period])})</span></TableHead>
                       <TableHead className="min-w-[70px]">مکتسبه</TableHead>
                       {canDelete && <TableHead className="min-w-[60px] text-center">حذف</TableHead>}
                     </TableRow>
@@ -430,8 +453,9 @@ export function GradesView({ user }: { user: SessionUser }) {
               {stats && (
                 <>
                   اوسط صنف در این مضمون: <b className="text-emerald-800 dark:text-emerald-300">{toPersianDigits(stats.avg)}</b>
-                  {' | '}قبول: <b className="text-emerald-700 dark:text-emerald-300">{toPersianDigits(stats.pass)}</b>
-                  {' | '}تکرار: <b className="text-rose-600 dark:text-rose-400">{toPersianDigits(stats.fail)}</b>
+                  {' | '}{passLabel}: <b className="text-emerald-700 dark:text-emerald-300">{toPersianDigits(stats.pass)}</b>
+                  {' | '}{failLabel}: <b className="text-rose-600 dark:text-rose-400">{toPersianDigits(stats.fail)}</b>
+                  {' | '}حد نصاب: <b>{toPersianDigits(passMark)}</b>
                 </>
               )}
             </div>

@@ -142,6 +142,7 @@ model Student {
   rollNo        Int? // شماره در جدول
   status        String   @default("ACTIVE") // ACTIVE | LEFT | GRADUATED
   enrolledYear  String? // سال شمولیت
+  clientToken   String? @unique // توکن ایدمپوتنسی صف آفلاین — ثبت تکراری پس از replay صف غیرممکن می‌شود
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -257,6 +258,12 @@ model Book {
   copies    Int      @default(1)
   available Int      @default(1)
   shelfNo   String?
+  // کتاب دیجیتال (PDF) — نسخهٔ ۳.۱.۰: بارگذاری، مدیریت و مطالعهٔ داخل اپ
+  fileData  String?  // محتوای PDF به‌صورت dataURL (base64)
+  fileName  String?  // نام فایل اصلی
+  fileType  String?  // MIME — همیشه application/pdf
+  fileSize  Int?     // حجم باینری به بایت
+  clientToken String? @unique // ایدمپوتنسی صف آفلاین
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -347,6 +354,7 @@ model FeePayment {
   method     String   @default("CASH") // CASH | BANK
   note       String?
   recordedBy String?
+  clientToken String?  @unique // ایدمپوتنسی صف آفلاین — پرداخت تکراری پس از replay صف غیرممکن می‌شود
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -371,10 +379,13 @@ model Message {
   kind      String   @default("DIRECT") // DIRECT | GROUP | BROADCAST
   priority  String   @default("NORMAL") // NORMAL | URGENT
   attachment String? // JSON {name,type,data} — پیوست فایل/عکس (در صورت فعال بودن از پنل مدیر)
+  attachName String? // نام پیوست — جدا از محتوا تا فهرست پیام‌ها سبک بماند (نسخهٔ ۳.۱.۰)
+  attachType String? // نوع MIME پیوست — برای پیش‌نمایش عکس بدون دانلود محتوا
   read      Boolean  @default(false) // برای پیام مستقیم قدیمی — جدید: وضعیت در MessageRecipient
   editedAt  DateTime? // ویرایش پیام توسط فرستنده (پنجرهٔ محدود)
   deletedFor String? // JSON آرایهٔ شناسهٔ کاربرانی که این پیام را برای خودشان حذف کرده‌اند
   deletedForAll Boolean @default(false) // فراخوانی از طرف فرستنده — گیرنده به‌جای متن، «این پیام حذف شد» می‌بیند
+  clientToken String?  @unique // ایدمپوتنسی صف آفلاین — ارسال مجدد پس از قطعی، پیام تکراری نمی‌سازد
   createdAt DateTime @default(now())
 
   fromUser User @relation("sentMessages", fields: [fromUserId], references: [id], onDelete: Cascade)

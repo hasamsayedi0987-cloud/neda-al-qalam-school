@@ -102,6 +102,8 @@ public class NotifyService extends Service {
         if (intent != null && "POLL".equals(intent.getAction())) {
             handler.removeCallbacks(pollRun);
             handler.postDelayed(pollRun, 800);
+            // هر بیدارباش آلارم → آلارم دقیق بعدی دوباره مسلح می‌شود (setExact یک‌بارمصرف است)
+            scheduleAlarmWatchdog();
         }
         return START_STICKY;
     }
@@ -162,6 +164,7 @@ public class NotifyService extends Service {
                         } else if (arr != null && arr.length() > 0) {
                             Set<String> shown = readShownIds(prefs);
                             // قدیمی‌ترین اول — ترتیب درست اعلان‌ها
+                            String oldest = arr.getJSONObject(arr.length() - 1).optString("createdAt", "");
                             for (int i = arr.length() - 1; i >= 0; i--) {
                                 JSONObject n = arr.getJSONObject(i);
                                 String id = n.optString("id", "");
@@ -174,11 +177,17 @@ public class NotifyService extends Service {
                                 shown.add(id);
                             }
                             saveShownIds(prefs, shown);
-                            if (!serverTime.isEmpty()) {
+                            if (o.optBoolean("hasMore", false) && !oldest.isEmpty()) {
+                                // نسخهٔ ۳.۱.۰ — صف‌به‌صف: اگر بیش از ۲۰ اعلان عقب‌مانده باشد،
+                                // همهٔ آن‌ها گرفته می‌شوند؛ پیشتر «since» تا سرور‌تایم جلو می‌پرید
+                                // و اعلان‌های قدیمی‌تر از ۲۰ برای همیشه گم می‌شدند.
+                                prefs.edit().putString(KEY_LAST_SHOWN, oldest).apply();
+                                next = 700; // صفحهٔ بعدی بلافاصله
+                            } else if (!serverTime.isEmpty()) {
                                 prefs.edit().putString(KEY_LAST_SHOWN, serverTime).apply();
                             }
                         }
-                        next = POLL_MS;
+                        next = next > 0 && next != POLL_MS ? next : POLL_MS;
                     } else if (code == 401) {
                         // نشست نیست (خارج شده/نشست منقضی) — هیچ اعلانی نشان نمی‌دهیم
                         next = IDLE_MS;
@@ -309,7 +318,8 @@ public class NotifyService extends Service {
         } catch (Exception ignored) { }
     }
 
-    /** حفاظ: حتی وقتی حلقهٔ عادی خوابیده، هر ۳ دقیقه یک پول تضمین می‌شود */
+    /** حفاظ: حتی وقتی حلقهٔ عادی خوابیده، هر ۳ دقیقه یک پول تضمین می‌شود
+     *  نسخهٔ ۳.۱.۰ — آلارم «دقیق» حتی در حالت Doze؛ در نبود اجازه، نادقیق (سازگار) */
     private void scheduleAlarmWatchdog() {
         try {
             AlarmManager am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
@@ -319,8 +329,14 @@ public class NotifyService extends Service {
             PendingIntent pi = PendingIntent.getBroadcast(this, 2001, i,
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             am.cancel(pi);
-            am.setInexactRepeating(AlarmManager.RTC_WAKEUP,
-                    System.currentTimeMillis() + 180_000L, 180_000L, pi);
+            long trigger = System.currentTimeMillis() + 180_000L;
+            boolean canExact = Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms();
+            if (canExact && Build.VERSION.SDK_INT >= 23) {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, trigger, pi);
+            } else {
+                am.setInexactRepeating(AlarmManager.RTC_WAKEUP,
+                        trigger, 180_000L, pi);
+            }
         } catch (Exception ignored) { }
     }
 

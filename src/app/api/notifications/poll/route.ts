@@ -36,13 +36,16 @@ export async function GET(req: NextRequest) {
     const rows = await db.notification.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      take: 20,
+      // ۲۱ گرفته می‌شود تا hasMore محاسبه شود — سرویس اندروید صف‌به‌صف همهٔ عقب‌مانده‌ها را می‌گیرد
+      take: 21,
       select: { id: true, title: true, body: true, type: true, messageId: true, createdAt: true },
     });
+    const hasMore = rows.length > 20;
+    const page = hasMore ? rows.slice(0, 20) : rows;
     const unread = await db.notification.count({ where: { userId: me.id, read: false } });
     maybeCleanup();
     return NextResponse.json({
-      notifications: rows.map((n) => ({
+      notifications: page.map((n) => ({
         id: n.id,
         title: n.title,
         body: n.body,
@@ -50,6 +53,7 @@ export async function GET(req: NextRequest) {
         url: urlFor(n.type, n.messageId),
         createdAt: n.createdAt,
       })),
+      hasMore,
       unread,
       serverTime: new Date().toISOString(),
     });

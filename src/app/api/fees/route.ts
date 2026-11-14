@@ -51,6 +51,12 @@ export async function POST(req: NextRequest) {
       throw new ApiError('فقط مدیر و سرمعلم می‌توانند پرداخت ثبت کنند', 403);
     }
     const body = await req.json();
+    // ایدمپوتنسی صف آفلاین — replay پرداخت پس از قطعی، پرداخت تکراری نمی‌سازد (نسخهٔ ۳.۱.۰)
+    const clientToken = str(body.clientToken).slice(0, 64);
+    if (clientToken) {
+      const dup = await db.feePayment.findUnique({ where: { clientToken }, select: { id: true } });
+      if (dup) return NextResponse.json({ id: dup.id, duplicate: true });
+    }
     const studentId = str(body.studentId);
     const month = str(body.month); // 1405-10
     const amount = optNum(body.amount);
@@ -68,6 +74,7 @@ export async function POST(req: NextRequest) {
         method: ['CASH', 'BANK'].includes(str(body.method)) ? str(body.method) : 'CASH',
         note: str(body.note) || null,
         recordedBy: me.name,
+        clientToken: clientToken || null,
       },
     });
     return NextResponse.json({ id: pay.id });

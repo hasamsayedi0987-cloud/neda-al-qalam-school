@@ -4,7 +4,7 @@ import type { Prisma } from '@prisma/client';
 import { requireUser, requireRole, requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
 import { pushToUsers } from '@/lib/push';
-import { clampComponent, componentTotal } from '@/lib/grading';
+import { clampComponent, componentTotal, componentCapsFor, DEFAULT_PERIOD_MAX } from '@/lib/grading';
 import { getTeacherPerms, ownsClassSubject } from '@/lib/teacher-scope';
 
 async function getWeights() {
@@ -17,6 +17,19 @@ async function getWeights() {
     maxOral: map.get('maxOral') ?? 20,
     maxHomework: map.get('maxHomework') ?? 20,
     maxActivity: map.get('maxActivity') ?? 20,
+  };
+}
+
+/** سقف نمرهٔ هر دوره + حد نصاب — از تنظیمات؛ ساختار افغانستان: ۴۰ (چهارو‌نیم‌ماهه) + ۶۰ (سالانه) */
+async function getPeriodMax() {
+  const settings = await db.setting.findMany({
+    where: { key: { in: ['midtermMax', 'annualMax'] } },
+  });
+  const map = new Map(settings.map((s) => [s.key, Number(s.value)]));
+  const pos = (k: string, d: number) => (Number.isFinite(map.get(k)) && (map.get(k) as number) > 0 ? (map.get(k) as number) : d);
+  return {
+    MIDTERM: pos('midtermMax', DEFAULT_PERIOD_MAX.MIDTERM),
+    ANNUAL: pos('annualMax', DEFAULT_PERIOD_MAX.ANNUAL),
   };
 }
 
@@ -77,6 +90,7 @@ export async function GET(req: NextRequest) {
       students,
       grades,
       weights: await getWeights(),
+      periodMax: await getPeriodMax(),
     });
   } catch (e) {
     return handleApiError(e);
@@ -202,6 +216,9 @@ export async function POST(req: NextRequest) {
       }
     }
     const w = await getWeights();
+    // سقف اجزای همین دوره — مثلاً چهارو‌نیم‌ماهه: تحریری از ۱۶، تقریری از ۸ … (مجموع از ۴۰)
+    const periodMaxMap = await getPeriodMax();
+    const caps = componentCapsFor(periodMaxMap[period as 'MIDTERM' | 'ANNUAL'] || 100, w);
 
     // پیش‌واکشی: یک کوئری برای همهٔ نمرات موجود (قبلاً N+1 کوئری بود)
     const reqStudentIds = items.map((item: { studentId?: unknown }) => str(item.studentId)).filter(Boolean);
@@ -227,10 +244,10 @@ export async function POST(req: NextRequest) {
       const existing = existingMap.get(studentId);
       // پس از تایید، معلم اجازهٔ ویرایش ندارد (مدیر و سرمعلم دارند)
       if (existing?.approved && me.role === 'TEACHER') continue;
-      const written = clampComponent(item.written, w.maxWritten);
-      const oral = clampComponent(item.oral, w.maxOral);
-      const homework = clampComponent(item.homework, w.maxHomework);
-      const activity = clampComponent(item.activity, w.maxActivity);
+      const written = clampComponent(item.written, caps.maxWritten);
+      const oral = clampComponent(item.oral, caps.maxOral);
+      const homework = clampComponent(item.homework, caps.maxHomework);
+      const activity = clampComponent(item.activity, caps.maxActivity);
       const total = componentTotal({ written, oral, homework, activity });
       const hasAny = written != null || oral != null || homework != null || activity != null;
       if (!hasAny && !existing) continue;

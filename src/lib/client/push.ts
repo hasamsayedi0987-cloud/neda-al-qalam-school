@@ -44,9 +44,11 @@ export async function enablePushNotifications(): Promise<{ ok: boolean; reason?:
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
-      const keyRes = await fetch('/api/push/key');
+      // نسخهٔ ۳.۱.۰ — ریشهٔ «اعلان وب کار نمی‌کرد»: مسیر درست GET /api/push است
+      // (پیشتر /api/push/key خوانده می‌شد که وجود نداشت و ۴۰۴ می‌داد)
+      const keyRes = await fetch('/api/push', { cache: 'no-store' });
       if (!keyRes.ok) return { ok: false, reason: 'nokey' };
-      const { publicKey } = (await keyRes.json()) as { publicKey: string };
+      const { publicKey } = (await keyRes.json()) as { publicKey?: string };
       if (!publicKey) return { ok: false, reason: 'nokey' };
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,

@@ -26,6 +26,43 @@ export const PERIOD_LABELS: Record<string, string> = {
   FINAL: 'نمرهٔ نهائی',
 };
 
+/* ───────── نسخهٔ ۳.۱.۰ — ساختار نمره‌دهی مکاتب افغانستان ─────────
+ * نمرهٔ چهارو‌نیم‌ماهه: حداکثر ۴۰ | نمرهٔ سالانه: حداکثر ۶۰ | مجموع: ۱۰۰
+ * حد نصاب کامیابی: ۴۰ از ۱۰۰ (لایحهٔ مکاتب ثانوی، مادهٔ ۲۷)
+ * همهٔ این سقف‌ها از تنظیمات قابل تغییر است (midtermMax / annualMax / passMark). */
+
+export interface PeriodMax {
+  MIDTERM: number;
+  ANNUAL: number;
+}
+
+export const DEFAULT_PERIOD_MAX: PeriodMax = { MIDTERM: 40, ANNUAL: 60 };
+export const DEFAULT_PASS_MARK = 40;
+
+/** سقف اجزای یک دوره — نسبت هر جزء (از تنظیمات، جمعاً از ۱۰۰) × سقف دورهٔ همان امتحان
+ *  مثال پیش‌فرض: چهارو‌نیم‌ماهه ۴۰ → تحریری ۱۶، تقریری ۸، کارخانگی ۸، فعالیت ۸ */
+export function componentCapsFor(periodMax: number, weights: GradeWeights): GradeWeights {
+  const sum = Math.max(
+    1,
+    (weights.maxWritten || 0) + (weights.maxOral || 0) + (weights.maxHomework || 0) + (weights.maxActivity || 0),
+  );
+  const scale = (v: number) => Math.round(((periodMax * v) / sum) * 100) / 100;
+  return {
+    maxWritten: scale(weights.maxWritten || 0),
+    maxOral: scale(weights.maxOral || 0),
+    maxHomework: scale(weights.maxHomework || 0),
+    maxActivity: scale(weights.maxActivity || 0),
+  };
+}
+
+/** هم‌ترازسازی نمرهٔ یک دوره با سقف آن — داده‌های قدیمی (از ۱۰۰) به‌صورت متناسب تبدیل می‌شوند */
+export function normalizePeriodScore(total: number | null | undefined, periodMax: number): number | null {
+  if (total == null || !Number.isFinite(Number(total))) return null;
+  const t = Number(total);
+  if (t <= periodMax) return round2(t);
+  return round2((t * periodMax) / 100);
+}
+
 export function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
@@ -41,11 +78,18 @@ export function componentTotal(g: {
   );
 }
 
-/** نمرهٔ نهائی مضمون = میانگین چهارو‌نیم‌ماهه و سالانه */
-export function finalScore(midterm: number | null, annual: number | null): number | null {
+/** نمرهٔ نهائی مضمون = نمرهٔ چهارو‌نیم‌ماهه + نمرهٔ سالانه (از ۱۰۰) — ساختار مکاتب افغانستان
+ *  (پیشتر میانگین سادهٔ دو دوره بود که با نظام ۴۰+۶۰ نمی‌خواند) */
+export function finalScore(
+  midterm: number | null,
+  annual: number | null,
+  periodMax: PeriodMax = DEFAULT_PERIOD_MAX,
+): number | null {
   if (midterm == null && annual == null) return null;
-  const values = [midterm, annual].filter((v): v is number => v != null);
-  return round2(values.reduce((a, b) => a + b, 0) / values.length);
+  const mid = normalizePeriodScore(midterm, periodMax.MIDTERM);
+  const ann = normalizePeriodScore(annual, periodMax.ANNUAL);
+  const values = [mid, ann].filter((v): v is number => v != null);
+  return round2(values.reduce((a, b) => a + b, 0));
 }
 
 /** مکتسبه (حرف) بر اساس نمرهٔ نهائی — مقیاس قابل تنظیم توسط مدیر */
@@ -116,21 +160,45 @@ export const RESULT_PROMOTED = 'ارتقا صنف';
 export const RESULT_REPEAT = 'تکرار صنف';
 export const RESULT_INCOMPLETE = 'ناقص';
 
-/** نتیجهٔ کل شاگرد بر اساس نمرات نهائی همهٔ مضامین — حد قبولی از مقیاس گرفته می‌شود */
+export interface ResultLabels {
+  passMark: number; // حد نصاب کامیابی هر مضمون (پیش‌فرض ۴۰ از ۱۰۰)
+  passLabel: string; // کامیاب
+  failLabel: string; // ناکام
+}
+
+export const DEFAULT_RESULT_LABELS: ResultLabels = {
+  passMark: DEFAULT_PASS_MARK,
+  passLabel: 'کامیاب',
+  failLabel: 'ناکام',
+};
+
+/** نتیجهٔ یک مضمون — کامیاب یا ناکام بر اساس حد نصاب قابل‌تغییر از تنظیمات */
+export function subjectResult(
+  final: number | null,
+  labels: ResultLabels = DEFAULT_RESULT_LABELS,
+): string | null {
+  if (final == null) return null;
+  return final >= labels.passMark ? labels.passLabel : labels.failLabel;
+}
+
+/** نتیجهٔ کل شاگرد بر اساس نمرات نهائی همهٔ مضامین:
+ *  • بدون مضمون ناکام → کامیاب
+ *  • ناکامی در بیش از نصف مضامین → ناکام (تکرار صنف)
+ *  • ناکامی در نصف یا کمتر → کامیاب مشروط (لیاقت) — مطابق لایحهٔ مکاتب ثانوی */
 export function overallResult(
   finals: Array<number | null>,
   scale: GradeScaleEntry[] = DEFAULT_SCALE,
+  labels: ResultLabels = DEFAULT_RESULT_LABELS,
 ): {
   result: string;
   failed: number;
 } {
   const valid = finals.filter((f) => f != null) as number[];
   if (valid.length === 0) return { result: RESULT_INCOMPLETE, failed: 0 };
-  const sorted = [...scale].sort((a, b) => b.min - a.min);
-  const passMin = sorted.length > 1 ? sorted[sorted.length - 2].min : 50; // کمترین حد قبولی (بالای تکرار)
-  const failed = valid.filter((f) => f < passMin).length;
-  if (failed === 0) return { result: RESULT_PROMOTED, failed: 0 };
-  return { result: RESULT_REPEAT, failed };
+  const failed = valid.filter((f) => f < labels.passMark).length;
+  if (failed === 0) return { result: labels.passLabel, failed: 0 };
+  if (failed > valid.length / 2) return { result: labels.failLabel, failed };
+  return { result: `${labels.passLabel} مشروط (لیاقت)`, failed };
 }
 
 /** رتبه‌بندی شاگردان صنف بر اساس اوسط */

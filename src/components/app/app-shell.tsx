@@ -268,9 +268,23 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
     };
   }, []);
 
+  // نسخهٔ ۳.۱.۰ — هشدار آشکار اگر صف همگام‌سازی از سقف ظرفیت سرریز کرد (هیچ‌گاه بی‌صدا داده گم نمی‌شود)
+  useEffect(() => {
+    const onDrop = (e: Event) => {
+      const dropped = (e as CustomEvent<{ dropped?: number }>).detail?.dropped || 0;
+      toast({
+        title: 'صف همگام‌سازی پر است',
+        description: `${toPersianDigits(dropped)} ثبت قدیمی‌تر برای آزادشدن ظرفیت از صف حذف شد — با یک بار اتصال انترنت، ثبت‌ها را به سرور بفرستید.`,
+        variant: 'destructive',
+        duration: 9000,
+      });
+    };
+    window.addEventListener('noq:queue-drop', onDrop);
+    return () => window.removeEventListener('noq:queue-drop', onDrop);
+  }, [toast]);
+
   /** دکمهٔ «همگام‌سازی الان» — ابتدا ورود مجدد خودکار (اگر نشست مرده)، بعد تخلیهٔ صف */
-  const manualSync = async () => {
-    setSyncing(true);
+  const manualSync = async () => {    setSyncing(true);
     try {
       if (authNeeded) {
         const relog = await tryAutoRelogin();
@@ -426,7 +440,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
         <div className="flex items-center gap-2 px-3 md:px-5 h-16">
           {/* منوی موبایل */}
           <Sheet open={navOpen} onOpenChange={setNavOpen}>
-            <SheetTrigger asChild className="lg:hidden">
+            <SheetTrigger asChild className="md:hidden">
               <Button variant="outline" size="icon" aria-label="بازکردن منو" className="shrink-0">
                 <Menu className="h-5 w-5" />
               </Button>
@@ -689,8 +703,8 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
       )}
 
       <div className="flex flex-1">
-        {/* سایدبار دسکتاپ — ارتفاع = ناحیهٔ قابل‌مشاهده منهای هدر و پانویس تا صفحه اسکرول اضافی نگیرد */}
-        <aside className="hidden lg:block w-[270px] shrink-0 border-l bg-sidebar sticky top-16 h-[calc(100vh-7rem)]">
+        {/* سایدبار دسکتاپ — از نمایشگرهای متوسط (مثل لپ‌تاپ) همیشه دیده می‌شود؛ منوی همبرگری فقط موبایل */}
+        <aside className="hidden md:block w-[270px] shrink-0 border-l bg-sidebar sticky top-16 h-[calc(100vh-7rem)]">
           {navContent}
         </aside>
 

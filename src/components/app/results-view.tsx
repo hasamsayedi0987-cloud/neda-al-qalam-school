@@ -10,17 +10,27 @@ import { Badge } from '@/components/ui/badge';
 import { PageHeader, LoadingBlock, EmptyState, Field } from './ui-bits';
 import { apiGet } from '@/lib/client/api';
 import { toPersianDigits, isoToJalaliDisplay, isoToday } from '@/lib/jalali';
-import { letterGrade, letterColor, PERIOD_LABELS, RESULT_PROMOTED, RESULT_REPEAT } from '@/lib/grading';
+import { letterGrade, letterColor, PERIOD_LABELS } from '@/lib/grading';
 import { printDocument, exportWord, exportExcel, fileStamp } from '@/lib/client/exports';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, ClassInfo, ResultsRow } from '@/lib/types';
 import { cn, fullName } from '@/lib/utils';
 import { FileSpreadsheet, Printer, FileText, Award, Table2 } from 'lucide-react';
 
+interface Labels {
+  passMark: number;
+  passLabel: string;
+  failLabel: string;
+}
+
+const DEFAULT_LABELS: Labels = { passMark: 40, passLabel: 'کامیاب', failLabel: 'ناکام' };
+
 interface ClassResultData {
   classInfo: { id: string; name: string; grade: number };
   subjects: Array<{ id: string; name: string }>;
   rows: ResultsRow[];
+  periodMax?: { MIDTERM: number; ANNUAL: number };
+  labels?: Labels;
 }
 
 interface ReportCardData {
@@ -33,12 +43,22 @@ interface ReportCardData {
     subjectName: string; teacherName: string | null;
     midterm: { total: number; approved: boolean } | null;
     annual: { total: number; approved: boolean } | null;
-    final: number | null; letter: string;
+    final: number | null; letter: string; result?: string | null;
   }>;
   total: number | null;
   average: number | null;
   result: string;
   failed: number;
+  periodMax?: { MIDTERM: number; ANNUAL: number };
+  labels?: Labels;
+}
+
+/** رنگ نتیجه — کامیاب سبز، مشروط کهربایی، ناکام سرخ */
+function resultColor(result: string, labels: Labels): string {
+  if (result.includes(labels.failLabel)) return 'text-rose-700 dark:text-rose-300';
+  if (result.includes('مشروط') || result.includes('لیاقت')) return 'text-amber-700 dark:text-amber-300';
+  if (result.includes(labels.passLabel)) return 'text-emerald-700 dark:text-emerald-300';
+  return 'text-muted-foreground';
 }
 
 export function ResultsView({ user }: { user: SessionUser }) {
@@ -52,13 +72,22 @@ export function ResultsView({ user }: { user: SessionUser }) {
   const [rcOpen, setRcOpen] = useState(false);
 
   // مقیاس نمرات و یادداشت مقررات از تنظیمات مدیر — به‌جای متن ثابت
-  const [scaleNote, setScaleNote] = useState('مقیاس نمرات: الف ۹۰-۱۰۰ | ب ۸۰-۹۰ | ج ۷۰-۸۰ | د ۶۰-۷۰ | هـ ۵۰-۶۰ | زیر ۵۰ تکرار صنف');
-  const [resultNote, setResultNote] = useState('مقررات: هر شاگرد که در یک مضمون نمرهٔ کمتر از ۵۰ بگیرد، تکرار صنف می‌گردد. مکتسبه: الف ۹۰-۱۰۰ | ب ۸۰-۹۰ | ج ۷۰-۸۰ | د ۶۰-۷۰ | هـ ۵۰-۶۰.');
+  const [scaleNote, setScaleNote] = useState('مقیاس نمرات: الف ۹۰-۱۰۰ | ب ۸۰-۹۰ | ج ۷۰-۸۰ | د ۶۰-۷۰ | هـ ۵۰-۶۰');
+  const [resultNote, setResultNote] = useState('مقررات: نمرهٔ نهائی هر مضمون از ۱۰۰ (چهارو‌نیم‌ماهه از ۴۰ + سالانه از ۶۰) — حد نصاب کامیابی از تنظیمات مکتب.');
+  const [labels, setLabels] = useState<Labels>(DEFAULT_LABELS);
+  const [periodMax, setPeriodMax] = useState<{ MIDTERM: number; ANNUAL: number }>({ MIDTERM: 40, ANNUAL: 60 });
   useEffect(() => {
     apiGet<{ settings: Record<string, string> }>('/api/settings')
       .then((d) => {
         if (d.settings.gradeScale) setScaleNote(`مقیاس نمرات: ${d.settings.gradeScale}`);
         if (d.settings.resultNote) setResultNote(d.settings.resultNote);
+        const pm = Number(d.settings.passMark);
+        if (Number.isFinite(pm) && pm > 0 && pm <= 100) setLabels((l) => ({ ...l, passMark: pm }));
+        if (d.settings.passLabel) setLabels((l) => ({ ...l, passLabel: d.settings.passLabel }));
+        if (d.settings.failLabel) setLabels((l) => ({ ...l, failLabel: d.settings.failLabel }));
+        const mm = Number(d.settings.midtermMax);
+        const am = Number(d.settings.annualMax);
+        if (Number.isFinite(mm) && mm > 0 && Number.isFinite(am) && am > 0) setPeriodMax({ MIDTERM: mm, ANNUAL: am });
       })
       .catch(() => {});
   }, []);
@@ -76,6 +105,8 @@ export function ResultsView({ user }: { user: SessionUser }) {
     try {
       const d = await apiGet<ClassResultData>(`/api/results?mode=class&classId=${cid}`);
       setData(d);
+      if (d.labels) setLabels(d.labels);
+      if (d.periodMax) setPeriodMax(d.periodMax);
     } catch (e) {
       toast({ title: 'خطا', description: e instanceof Error ? e.message : 'بارگذاری ناموفق', variant: 'destructive' });
     }
@@ -106,6 +137,8 @@ export function ResultsView({ user }: { user: SessionUser }) {
 
   // ─── HTML ساخت جدول نتایج برای چاپ/ورد ───
   const buildResultsHtml = (d: ClassResultData) => {
+    const pm = d.periodMax || periodMax;
+    const lb = d.labels || labels;
     const head = d.subjects.map((s) => `<th>${s.name}</th>`).join('');
     const body = d.rows.map((r, i) => {
       const cells = d.subjects.map((s) => {
@@ -113,6 +146,7 @@ export function ResultsView({ user }: { user: SessionUser }) {
         return `<td>${v?.final != null ? toPersianDigits(v.final) : '—'} <small>(${v?.letter || '—'})</small></td>`;
       }).join('');
       const lineage = `ولد ${r.student.fatherName}${r.student.grandFather ? ` — ولدیت ${r.student.grandFather}` : ''}`;
+      const resCls = r.result.includes(lb.failLabel) ? 'fail' : 'pass';
       return `<tr>
         <td>${toPersianDigits(r.student.rollNo ?? i + 1)}</td>
         <td style="text-align:right">${fullName(r.student)} <small>(${lineage})</small></td>
@@ -120,7 +154,7 @@ export function ResultsView({ user }: { user: SessionUser }) {
         <td>${r.total != null ? toPersianDigits(r.total) : '—'}</td>
         <td><b>${r.average != null ? toPersianDigits(r.average) : '—'}</b></td>
         <td>${r.rank != null ? toPersianDigits(r.rank) : '—'}</td>
-        <td class="${r.result === RESULT_PROMOTED ? 'pass' : r.result === RESULT_REPEAT ? 'fail' : ''}">${r.result}</td>
+        <td class="${resCls}"><b>${r.result}</b>${r.failed > 0 ? ` <small>(${toPersianDigits(r.failed)} مضمون ناکام)</small>` : ''}</td>
       </tr>`;
     }).join('');
     return `
@@ -130,7 +164,7 @@ export function ResultsView({ user }: { user: SessionUser }) {
         <thead><tr><th>شماره</th><th>شهرت شاگرد</th>${head}<th>مجموع</th><th>اوسط</th><th>رتبه</th><th>نتیجه</th></tr></thead>
         <tbody>${body}</tbody>
       </table>
-      <p class="note">${scaleNote} — نمرهٔ نهائی هر مضمون = میانگین چهارو‌نیم‌ماهه و سالانه</p>
+      <p class="note">${scaleNote} — نمرهٔ نهائی هر مضمون از ${toPersianDigits(pm.MIDTERM + pm.ANNUAL)}: چهارو‌نیم‌ماهه از ${toPersianDigits(pm.MIDTERM)} + سالانه از ${toPersianDigits(pm.ANNUAL)} — حد نصاب ${lb.passLabel}: ${toPersianDigits(lb.passMark)}</p>
       <div class="doc-footer">
         <div class="sign-box"><div class="sign-line">امضاء معلم</div></div>
         <div class="sign-box"><div class="sign-line">امضاء سرمعلم</div></div>
@@ -160,16 +194,20 @@ export function ResultsView({ user }: { user: SessionUser }) {
 
   // ─── کارنامهٔ شاگرد برای چاپ ───
   const buildReportCardHtml = (rc: ReportCardData) => {
+    const pm = rc.periodMax || periodMax;
+    const lb = rc.labels || labels;
     const rows = rc.subjects.map((s, i) => `
       <tr>
         <td>${toPersianDigits(i + 1)}</td>
         <td style="text-align:right">${s.subjectName}</td>
         <td>${s.teacherName || '—'}</td>
-        <td>${s.midterm ? toPersianDigits(s.midterm.total) : '—'}</td>
-        <td>${s.annual ? toPersianDigits(s.annual.total) : '—'}</td>
-        <td><b>${s.final != null ? toPersianDigits(s.final) : '—'}</b></td>
+        <td>${s.midterm ? `${toPersianDigits(s.midterm.total)} <small>از ${toPersianDigits(pm.MIDTERM)}</small>` : '—'}</td>
+        <td>${s.annual ? `${toPersianDigits(s.annual.total)} <small>از ${toPersianDigits(pm.ANNUAL)}</small>` : '—'}</td>
+        <td><b>${s.final != null ? toPersianDigits(s.final) : '—'}</b> <small>از ${toPersianDigits(pm.MIDTERM + pm.ANNUAL)}</small></td>
         <td>${s.letter}</td>
+        <td>${s.result || '—'}</td>
       </tr>`).join('');
+    const resCls = rc.result.includes(lb.failLabel) ? 'fail' : rc.result.includes(lb.passLabel) ? 'pass' : '';
     return `
       <div style="text-align:center"><span class="doc-title">کارنامهٔ نتایج تعلیمی</span></div>
       <div class="doc-meta" style="justify-content:center; gap:24px">
@@ -181,13 +219,13 @@ export function ResultsView({ user }: { user: SessionUser }) {
         <span>تاریخ: ${isoToJalaliDisplay(isoToday())}</span>
       </div>
       <table>
-        <thead><tr><th>شماره</th><th>مضمون</th><th>معلم</th><th>چهارو‌نیم‌ماهه</th><th>سالانه</th><th>نمرهٔ نهائی</th><th>مکتسبه</th></tr></thead>
+        <thead><tr><th>شماره</th><th>مضمون</th><th>معلم</th><th>چهارو‌نیم‌ماهه</th><th>سالانه</th><th>نمرهٔ نهائی</th><th>مکتسبه</th><th>نتیجه</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       <div class="doc-meta" style="margin-top:12px">
         <span>مجموع نمرات: <b>${rc.total != null ? toPersianDigits(rc.total) : '—'}</b></span>
         <span>اوسط: <b>${rc.average != null ? toPersianDigits(rc.average) : '—'}</b></span>
-        <span>نتیجه: <b class="${rc.result === RESULT_PROMOTED ? 'pass' : 'fail'}">${rc.result}</b></span>
+        <span>نتیجهٔ نهایی: <b class="${resCls}">${rc.result}</b></span>
       </div>
       <p class="note">${resultNote}</p>
       <div class="doc-footer">
@@ -232,10 +270,11 @@ export function ResultsView({ user }: { user: SessionUser }) {
                 <TableRow>
                   <TableHead>مضمون</TableHead>
                   <TableHead>معلم</TableHead>
-                  <TableHead>چهارو‌نیم‌ماهه</TableHead>
-                  <TableHead>سالانه</TableHead>
-                  <TableHead>نمرهٔ نهائی</TableHead>
+                  <TableHead>چهارو‌نیم‌ماهه <span className="text-[10px] text-muted-foreground">(از {toPersianDigits(rc.periodMax?.MIDTERM ?? periodMax.MIDTERM)})</span></TableHead>
+                  <TableHead>سالانه <span className="text-[10px] text-muted-foreground">(از {toPersianDigits(rc.periodMax?.ANNUAL ?? periodMax.ANNUAL)})</span></TableHead>
+                  <TableHead>نمرهٔ نهائی <span className="text-[10px] text-muted-foreground">(از {toPersianDigits((rc.periodMax?.MIDTERM ?? periodMax.MIDTERM) + (rc.periodMax?.ANNUAL ?? periodMax.ANNUAL))})</span></TableHead>
                   <TableHead>مکتسبه</TableHead>
+                  <TableHead>نتیجه</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -247,6 +286,11 @@ export function ResultsView({ user }: { user: SessionUser }) {
                     <TableCell>{s.annual ? toPersianDigits(s.annual.total) : '—'}</TableCell>
                     <TableCell className="font-bold">{s.final != null ? toPersianDigits(s.final) : '—'}</TableCell>
                     <TableCell><span className={letterColor(s.final)}>{s.letter}</span></TableCell>
+                    <TableCell>
+                      {s.result && (
+                        <span className={cn('text-xs font-bold', resultColor(s.result, rc.labels || labels))}>{s.result}</span>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -262,10 +306,11 @@ export function ResultsView({ user }: { user: SessionUser }) {
             <p className="text-xs text-muted-foreground">اوسط</p>
             <p className="text-xl font-bold text-emerald-900 dark:text-emerald-200">{rc.average != null ? toPersianDigits(rc.average) : '—'}</p>
           </CardContent></Card>
-          <Card className={cn('border', rc.result === RESULT_PROMOTED ? 'border-emerald-300 dark:border-emerald-500/40 bg-emerald-50 dark:bg-emerald-500/10' : rc.result === RESULT_REPEAT ? 'border-rose-300 dark:border-rose-500/40 bg-rose-50 dark:bg-rose-500/10' : '')}>
+          <Card className={cn('border', rc.result.includes(rc.labels?.failLabel || labels.failLabel) ? 'border-rose-300 dark:border-rose-500/40 bg-rose-50 dark:bg-rose-500/10' : 'border-emerald-300 dark:border-emerald-500/40 bg-emerald-50 dark:bg-emerald-500/10')}>
             <CardContent className="p-4 text-center">
               <p className="text-xs text-muted-foreground">نتیجهٔ نهایی</p>
-              <p className={cn('text-lg font-bold', rc.result === RESULT_PROMOTED ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300')}>{rc.result}</p>
+              <p className={cn('text-lg font-bold', resultColor(rc.result, rc.labels || labels))}>{rc.result}</p>
+              {rc.failed > 0 && <p className="text-[11px] text-muted-foreground mt-0.5">{toPersianDigits(rc.failed)} مضمون زیر حد نصاب</p>}
             </CardContent>
           </Card>
         </div>
@@ -356,7 +401,7 @@ export function ResultsView({ user }: { user: SessionUser }) {
                         )}
                       </TableCell>
                       <TableCell className="text-center">
-                        <span className={cn('text-xs font-bold', r.result === RESULT_PROMOTED ? 'text-emerald-700 dark:text-emerald-300' : r.result === RESULT_REPEAT ? 'text-rose-700 dark:text-rose-300' : 'text-muted-foreground')}>
+                        <span className={cn('text-xs font-bold', resultColor(r.result, data.labels || labels))}>
                           {r.result}
                         </span>
                       </TableCell>
@@ -375,8 +420,8 @@ export function ResultsView({ user }: { user: SessionUser }) {
       )}
 
       <p className="text-[11px] text-muted-foreground mt-3 leading-5">
-        مقیاس نمرات: الف ۹۰-۱۰۰ | ب ۸۰-۹۰ | ج ۷۰-۸۰ | د ۶۰-۷۰ | هـ ۵۰-۶۰ | زیر ۵۰ = تکرار صنف.
-        نمرهٔ نهائی هر مضمون = میانگین نمرهٔ چهارو‌نیم‌ماهه و سالانه. اوسط و رتبه به‌صورت خودکار محاسبه می‌گردد.
+        ساختار نمره‌دهی مکاتب افغانستان: چهارو‌نیم‌ماهه از {toPersianDigits(periodMax.MIDTERM)} + سالانه از {toPersianDigits(periodMax.ANNUAL)} = مجموع از {toPersianDigits(periodMax.MIDTERM + periodMax.ANNUAL)} برای هر مضمون.
+        حد نصاب {labels.passLabel}: {toPersianDigits(labels.passMark)} — قابل تغییر از بخش تنظیمات. اوسط و رتبه به‌صورت خودکار محاسبه می‌گردد.
       </p>
 
       {/* دیالوگ کارنامه */}
@@ -397,11 +442,11 @@ export function ResultsView({ user }: { user: SessionUser }) {
                   onClick={() => {
                     if (!reportCard) return;
                     const rows = reportCard.subjects.map((s, i) =>
-                      `<tr><td>${i + 1}</td><td>${s.subjectName}</td><td>${s.midterm?.total ?? ''}</td><td>${s.annual?.total ?? ''}</td><td>${s.final ?? ''}</td><td>${s.letter}</td></tr>`,
+                      `<tr><td>${i + 1}</td><td>${s.subjectName}</td><td>${s.midterm?.total ?? ''}</td><td>${s.annual?.total ?? ''}</td><td>${s.final ?? ''}</td><td>${s.letter}</td><td>${s.result || ''}</td></tr>`,
                     ).join('');
                     exportExcel(
                       `کارنامهٔ ${reportCard.student.firstName} ${reportCard.student.lastName}`,
-                      `<table><thead><tr><th>شماره</th><th>مضمون</th><th>چهارو‌نیم‌ماهه</th><th>سالانه</th><th>نهائی</th><th>مکتسبه</th></tr></thead><tbody>${rows}</tbody></table>`,
+                      `<table><thead><tr><th>شماره</th><th>مضمون</th><th>چهارو‌نیم‌ماهه</th><th>سالانه</th><th>نهائی</th><th>مکتسبه</th><th>نتیجه</th></tr></thead><tbody>${rows}</tbody></table>`,
                       `کارنامه-${reportCard.student.firstName}-${fileStamp()}`,
                     );
                   }}

@@ -153,7 +153,16 @@ function readQueue(): QueuedRequest[] {
 }
 
 function writeQueue(q: QueuedRequest[]) {
-  writeLS(QUEUE_KEY, q.slice(-300));
+  // سقف صف — با هشدار آشکار به کاربر؛ هیچ‌گاه بی‌صدا داده گم نمی‌شود (نسخهٔ ۳.۱.۰)
+  const MAX_QUEUE = 600;
+  if (q.length > MAX_QUEUE) {
+    const dropped = q.length - MAX_QUEUE;
+    q = q.slice(-MAX_QUEUE);
+    try {
+      window.dispatchEvent(new CustomEvent('noq:queue-drop', { detail: { dropped } }));
+    } catch { /* ignore */ }
+  }
+  writeLS(QUEUE_KEY, q);
   pendingCount = q.length;
   notify();
 }
@@ -646,11 +655,33 @@ const SPECS: Record<string, { apply: (data: Row, e: OverlayEntry, url: string) =
   notifications: {
     apply(data, e) {
       const b = (e.body as Row) || {};
+      const list = Array.isArray(data.notifications) ? (data.notifications as Row[]) : null;
       if (e.method === 'PATCH' && b.all === true) {
-        if (Array.isArray(data.notifications)) {
-          for (const n of data.notifications as Row[]) n.read = true;
-        }
+        // خواندن همه
+        if (list) for (const n of list) n.read = true;
         data.unread = 0;
+      } else if (e.method === 'PATCH' && typeof b.id === 'string') {
+        // خواندن یک اعلان — آفلاین هم بلافاصله خوانده‌شده می‌شود و پس از اتصال روی سرور می‌رود
+        if (list) {
+          const n = list.find((x) => x.id === b.id);
+          if (n && !n.read) {
+            n.read = true;
+            data.unread = Math.max(0, Number(data.unread || 0) - 1);
+          }
+        }
+      } else if (e.method === 'DELETE') {
+        // حذف یک اعلان (؟id=) یا همهٔ اعلان‌ها — از کش محلی هم حذف می‌شود تا دوباره ظاهر نشود
+        if (list) {
+          const id = idFromUrl(e.url);
+          if (id) {
+            const n = list.find((x) => x.id === id);
+            if (n && !n.read) data.unread = Math.max(0, Number(data.unread || 0) - 1);
+            data.notifications = list.filter((x) => x.id !== id);
+          } else {
+            data.notifications = [];
+            data.unread = 0;
+          }
+        }
       }
       return data;
     },
@@ -956,22 +987,40 @@ function enqueue<T>(url: string, method: string, body: unknown, opts: { queueLab
 }
 
 /** درخواست ثبت‌کننده: در حالت آفلاین فوراً روی کش محلی اعمال و در صف قرار می‌گیرد */
+/**
+ * کلکسیون‌های حساس به ثبت تکراری — POST‌هایشان «توکن ایدمپوتنسی» می‌گیرد.
+ * همان توکن در replay صف هم استفاده می‌شود؛ سرور رکورد تکراری نمی‌سازد و
+ * شناسهٔ واقعی همان رکورد اول را برمی‌گرداند (ریشهٔ پیام/پرداخت/شاگرد تکراری آفلاین).
+ */
+const IDEMPOTENT_POSTS = ['/api/messages', '/api/fees', '/api/students', '/api/library'];
+
 export async function apiSend<T = unknown>(
   url: string,
   method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   body?: unknown,
   opts: { queueLabel?: string; allowQueue?: boolean } = {},
 ): Promise<ApiResult<T>> {
+  // توکن ایدمپوتنسی — قبل از ارسال یا صف‌شدن ساخته می‌شود تا هر دو مسیر یکی باشد
+  let sendBody = body;
+  if (
+    method === 'POST' && body && typeof body === 'object' && !Array.isArray(body) &&
+    IDEMPOTENT_POSTS.some((p) => url === p || url.startsWith(p + '?'))
+  ) {
+    const b = body as Row;
+    if (!b.clientToken) {
+      sendBody = { ...b, clientToken: `ct-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}` };
+    }
+  }
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     setOnlineState(false);
-    if (opts.allowQueue !== false) return enqueue<T>(url, method, body, opts);
+    if (opts.allowQueue !== false) return enqueue<T>(url, method, sendBody, opts);
     return { error: 'در حالت آفلاین این عملیات در دسترس نیست', network: true };
   }
   try {
     const res = await fetchTimeout(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: body ? JSON.stringify(body) : undefined,
+      body: sendBody ? JSON.stringify(sendBody) : undefined,
       cache: 'no-store',
     }, 8000);
     const json = await res.json().catch(() => ({}));
@@ -979,17 +1028,23 @@ export async function apiSend<T = unknown>(
       // سرور/شبکه در دسترس نیست — ثبت در صف آفلاین (داده گم نمی‌شود)
       if (res.status === 502 || res.status === 503 || res.status === 504 || res.status >= 500) {
         setOnlineState(false);
-        if (opts.allowQueue !== false) return enqueue<T>(url, method, body, opts);
+        if (opts.allowQueue !== false) return enqueue<T>(url, method, sendBody, opts);
         return { error: (json as Row).error ? String((json as Row).error) : 'سرور در دسترس نیست', network: true };
       }
       return { error: (json as Row).error ? String((json as Row).error) : 'عملیات ناموفق بود', status: res.status };
     }
     setOnlineState(true);
+    // پس از موفقیتِ ثبت مستقیم، کش محلی همان بخش تازه می‌شود تا
+    // رکورد حذف/تغییرکرده در آفلاین بعدی دوباره ظاهر نشود (نسخهٔ ۳.۱.۰)
+    try {
+      const col = collectionOf(url);
+      if (col) void refreshCollections(new Set([col]));
+    } catch { /* ignore */ }
     return { data: json as T };
   } catch {
     // navigator.onLine ممکن است دروغ گفته باشد (وای‌فای بدون انترنت)
     setOnlineState(false);
-    if (opts.allowQueue !== false) return enqueue<T>(url, method, body, opts);
+    if (opts.allowQueue !== false) return enqueue<T>(url, method, sendBody, opts);
     return { error: 'اتصال به سرور برقرار نشد', network: true };
   }
 }

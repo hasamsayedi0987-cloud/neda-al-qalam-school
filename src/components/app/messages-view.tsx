@@ -29,7 +29,7 @@ import { ROLE_LABELS } from '@/lib/grading';
 import { effectivePerms, parseCommPolicy, EDIT_WINDOW_MS, MAX_ATTACH_DATAURL, type CommPerms } from '@/lib/comm';
 import {
   Send, CheckCheck, Check, Clock, Paperclip, Pencil, Trash2, Search, AlertCircle,
-  MessagesSquare, ShieldCheck, ScrollText, SquarePen, Megaphone, ArrowRight, X, Loader2, Copy,
+  MessagesSquare, ShieldCheck, ScrollText, SquarePen, Megaphone, ArrowRight, X, Loader2, Copy, Download,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SessionUser } from '@/lib/types';
@@ -50,6 +50,7 @@ interface Msg {
   kind: string;
   priority: string;
   attachmentName: string | null;
+  attachmentType?: string | null; // نوع MIME پیوست — برای پیش‌نمایش عکس (نسخهٔ ۳.۱.۰)
   read?: boolean;
   readAt?: string | null;
   editedAt?: string | null;
@@ -270,6 +271,11 @@ export function MessagesView({ user }: { user: SessionUser }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
+  // پیش‌نمایش عکس‌های پیوست — محتوای تصویری فقط برای پیوست‌های تصویری واکشی می‌شود
+  const [attCache, setAttCache] = useState<Record<string, { name: string; type: string; data: string }>>({});
+  // نمایش بزرگ عکس (لایت‌باکس)
+  const [lightbox, setLightbox] = useState<{ name: string; data: string } | null>(null);
+
   // تیک ثانیه‌شمار — برای فعال‌شدن ویرایش پس از چند ثانیه و به‌روز ماندن زمان‌ها
   const [nowTick, setNowTick] = useState(() => Date.now());
   useEffect(() => {
@@ -288,7 +294,7 @@ export function MessagesView({ user }: { user: SessionUser }) {
   }, []);
   useEffect(() => clearPress, [clearPress]);
   const onPressStart = (m: Msg) => (e: React.PointerEvent) => {
-    if (e.pointerType === 'mouse' || m.deleted) return;
+    if (e.pointerType === 'mouse') return; // دسکتاپ: راست‌کلیک/کلیک روی آیکن‌ها
     clearPress();
     pressTimer.current = setTimeout(() => {
       try { navigator.vibrate?.(35); } catch { /* پشتیبانی نمی‌شود */ }
@@ -554,7 +560,7 @@ export function MessagesView({ user }: { user: SessionUser }) {
     }
   };
 
-  /* انتخاب و فشرده‌سازی پیوست */
+  /* انتخاب و فشرده‌سازی پیوست — نسخهٔ ۳.۱.۰: سقف ~۱.۵ مگابایت (عکس فشرده/سند واقعی) */
   const onPickFile = async (f: File | null) => {
     if (!f) return;
     setAttachLoading(true);
@@ -563,7 +569,7 @@ export function MessagesView({ user }: { user: SessionUser }) {
       if (f.type.startsWith('image/')) {
         dataUrl = await compressImage(f);
       } else {
-        if (f.size > 330_000) throw new Error('big');
+        if (f.size > 1_400_000) throw new Error('big');
         dataUrl = await new Promise<string>((resolve, reject) => {
           const r = new FileReader();
           r.onload = () => resolve(String(r.result));
@@ -574,22 +580,51 @@ export function MessagesView({ user }: { user: SessionUser }) {
       if (dataUrl.length > MAX_ATTACH_DATAURL) throw new Error('big');
       setThreadAttach({ name: f.name.slice(0, 120), type: f.type || 'application/octet-stream', data: dataUrl });
     } catch {
-      toast({ title: 'حجم فایل بیش از حد مجاز است — حداکثر حدود ۳۵۰ کیلوبایت', variant: 'destructive' });
+      toast({ title: 'حجم فایل بیش از حد مجاز است — حداکثر حدود ۱.۵ مگابایت', variant: 'destructive' });
     } finally {
       setAttachLoading(false);
       if (fileRef.current) fileRef.current.value = '';
     }
   };
 
+  /** باز کردن پیوست — عکس: نمایش بزرگ داخل اپ | فایل: دانلود (سازگار WebView اندروید) */
   const viewAttachment = async (m: Msg) => {
     try {
+      const cached = attCache[m.id];
+      if (cached) {
+        if (cached.type.startsWith('image/')) setLightbox({ name: cached.name, data: cached.data });
+        else downloadAttachment(cached.name, cached.data);
+        return;
+      }
       const d = await apiGet<{ attachment: { name: string; type: string; data: string } | null }>(`/api/messages?id=${m.id}`);
       if (!d.attachment) { toast({ title: 'پیوست یافت نشد', variant: 'destructive' }); return; }
-      downloadAttachment(d.attachment.name, d.attachment.data);
+      setAttCache((c) => ({ ...c, [m.id]: d.attachment as { name: string; type: string; data: string } }));
+      if (d.attachment.type.startsWith('image/')) setLightbox({ name: d.attachment.name, data: d.attachment.data });
+      else downloadAttachment(d.attachment.name, d.attachment.data);
     } catch {
       toast({ title: 'دریافت پیوست ناموفق بود — در حالت آفلاین پس از اتصال تلاش کنید', variant: 'destructive' });
     }
   };
+
+  // واکشی محتوای پیوست‌های تصویری گفتگوی فعال — برای پیش‌نمایش داخل حباب (نسخهٔ ۳.۱.۰)
+  useEffect(() => {
+    if (!activeConv) return;
+    let cancelled = false;
+    const imgs = thread.filter(
+      (m) => !m.deleted && m.attachmentName && (m.attachmentType || '').startsWith('image/') && !attCache[m.id],
+    );
+    if (!imgs.length) return;
+    (async () => {
+      for (const m of imgs.slice(0, 12)) {
+        try {
+          const d = await apiGet<{ attachment: { name: string; type: string; data: string } | null }>(`/api/messages?id=${m.id}`);
+          if (cancelled) return;
+          if (d.attachment) setAttCache((c) => ({ ...c, [m.id]: d.attachment as { name: string; type: string; data: string } }));
+        } catch { /* آفلاین — پس از اتصال پیش‌نمایش می‌آید */ }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [thread, activeConv, attCache]);
 
   /** ویرایش: چند ثانیهٔ اول غیرفعال، تا ۳۰ دقیقه و تا پیش از خوانده‌شدن */
   const EDIT_DELAY_MS = 5000;
@@ -606,17 +641,33 @@ export function MessagesView({ user }: { user: SessionUser }) {
   /** آیا این پیام از آنِ من است (برای منوی فشردن طولانی) */
   const isMine = (m: Msg): boolean => m.recipientIds !== undefined || pendingIds.has(m.id);
 
+  /**
+   * حذف پیام — سه حالت (نسخهٔ ۳.۱.۰):
+   *  • پیام خودم → حذف برای هر دو طرف (گیرنده «این پیام حذف شد» می‌بیند)
+   *  • پیام خودمِ قبلاً-حذف‌شده → حذف کامل برای همیشه از هر دو طرف
+   *  • پیام دیگران → حذف فقط برای من (حتی پیام سیستمی «این پیام حذف شد»)
+   */
   const deleteMsg = async (m: Msg, mine: boolean) => {
-    const hard = mine && perms.deleteOwn;
-    const confirmText = hard && (m.totalCount || 0) > 1
-      ? 'این پیام گروهی برای همهٔ گیرندگان حذف (فراخوانی) شود؟'
-      : hard
-        ? 'پیام برای هر دو طرف حذف شود؟ گیرنده به‌جای متن، «این پیام حذف شد» را می‌بیند.'
-        : 'این پیام فقط برای شما حذف شود؟';
+    const canHard = mine && perms.deleteOwn;
+    const confirmText = canHard && m.deleted
+      ? 'این پیام قبلاً حذف شده بود — حالا برای همیشه از هر دو طرف به‌طور کامل حذف شود؟'
+      : canHard && (m.totalCount || 0) > 1
+        ? 'این پیام گروهی برای همهٔ گیرندگان حذف (فراخوانی) شود؟'
+        : canHard
+          ? 'پیام برای هر دو طرف حذف شود؟ گیرنده به‌جای متن، «این پیام حذف شد» را می‌بیند.'
+          : 'این پیام فقط برای شما حذف شود؟';
     if (!window.confirm(confirmText)) return;
     const res = await apiSend(`/api/messages?id=${m.id}`, 'DELETE', undefined, { queueLabel: 'حذف پیام' });
     if (res.error) { toast({ title: res.error, variant: 'destructive' }); return; }
-    toast({ title: res.queued ? 'حذف ذخیره شد — پس از اتصال همگام می‌شود' : mine ? 'پیام برای همه حذف شد' : 'پیام حذف شد' });
+    toast({
+      title: res.queued
+        ? 'حذف ذخیره شد — پس از اتصال همگام می‌شود'
+        : canHard && m.deleted
+          ? 'پیام به‌طور کامل حذف شد'
+          : mine && canHard
+            ? 'پیام برای همه حذف شد'
+            : 'پیام حذف شد',
+    });
     if (!res.queued) void load(true);
   };
 
@@ -829,6 +880,8 @@ export function MessagesView({ user }: { user: SessionUser }) {
                   const pending = pendingIds.has(m.id);
                   const multi = (m.totalCount || 0) > 1;
                   const deleted = Boolean(m.deleted);
+                  const attImg = attCache[m.id]?.data || null; // پیش‌نمایش عکس (اگر واکشی شده باشد)
+                  const canHard = mine && perms.deleteOwn;
                   return (
                     <Fragment key={m.id}>
                       {day !== prevDay && (
@@ -850,7 +903,8 @@ export function MessagesView({ user }: { user: SessionUser }) {
                           onPointerUp={clearPress}
                           onPointerCancel={clearPress}
                           onPointerLeave={clearPress}
-                          onContextMenu={(e) => e.preventDefault()}
+                          // دسکتاپ: راست‌کلیک = منوی گزینه‌ها (مکمل فشردن طولانی در موبایل)
+                          onContextMenu={(e) => { e.preventDefault(); setActionMsg(m); }}
                         >
                           {deleted ? (
                             <p className="leading-6 text-[13px]">{mine ? 'شما این پیام را حذف کردید' : 'این پیام حذف شد'}</p>
@@ -859,17 +913,31 @@ export function MessagesView({ user }: { user: SessionUser }) {
                               {m.subject && <p className="font-bold text-[13px] mb-0.5 break-words">{m.subject}</p>}
                               <p className="whitespace-pre-wrap break-words leading-6">{m.body}</p>
                               {m.attachmentName && (
-                                <button
-                                  type="button"
-                                  onClick={() => void viewAttachment(m)}
-                                  className={cn(
-                                    'mt-1.5 flex items-center gap-1.5 rounded-lg px-2 py-1 text-[12px] transition-colors max-w-full',
-                                    mine ? 'bg-primary-foreground/15 hover:bg-primary-foreground/25' : 'bg-background/60 hover:bg-background',
+                                <div className="mt-1.5 space-y-1">
+                                  {attImg && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setLightbox({ name: m.attachmentName || 'تصویر', data: attImg })}
+                                      className="block max-w-full overflow-hidden rounded-lg border border-black/10 dark:border-white/20"
+                                      aria-label="نمایش بزرگ تصویر"
+                                    >
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img src={attImg} alt={m.attachmentName} className="max-h-60 w-auto max-w-full object-contain" loading="lazy" />
+                                    </button>
                                   )}
-                                >
-                                  <Paperclip className="h-3.5 w-3.5 shrink-0" />
-                                  <span className="truncate">{m.attachmentName}</span>
-                                </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void viewAttachment(m)}
+                                    className={cn(
+                                      'flex items-center gap-1.5 rounded-lg px-2 py-1 text-[12px] transition-colors max-w-full',
+                                      mine ? 'bg-primary-foreground/15 hover:bg-primary-foreground/25' : 'bg-background/60 hover:bg-background',
+                                    )}
+                                  >
+                                    <Paperclip className="h-3.5 w-3.5 shrink-0" />
+                                    <span className="truncate">{m.attachmentName}</span>
+                                    <Download className="h-3 w-3 shrink-0 opacity-70" />
+                                  </button>
+                                </div>
                               )}
                             </>
                           )}
@@ -890,11 +958,16 @@ export function MessagesView({ user }: { user: SessionUser }) {
                                 <Pencil className="h-3 w-3" />
                               </button>
                             )}
-                            {!deleted && (
-                              <button type="button" onClick={() => void deleteMsg(m, mine)} className="opacity-60 hover:opacity-100 transition-opacity" aria-label="حذف پیام" title={mine ? 'حذف برای هر دو طرف' : 'حذف برای من'}>
-                                <Trash2 className="h-3 w-3" />
-                              </button>
-                            )}
+                            {/* حذف — برای همهٔ پیام‌ها حتی «این پیام حذف شد» (نسخهٔ ۳.۱.۰) */}
+                            <button
+                              type="button"
+                              onClick={() => void deleteMsg(m, mine)}
+                              className="opacity-60 hover:opacity-100 transition-opacity"
+                              aria-label="حذف پیام"
+                              title={deleted ? (canHard ? 'حذف کامل برای همه' : 'حذف برای من') : mine && canHard ? 'حذف برای هر دو طرف' : 'حذف برای من'}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -1004,7 +1077,7 @@ export function MessagesView({ user }: { user: SessionUser }) {
               >
                 <Copy className="h-4 w-4 text-sky-600 dark:text-sky-400" /> کپی متن
               </button>
-              {isMine(actionMsg) && !actionMsg.deleted && (
+              {!actionMsg.deleted && (
                 <button
                   type="button"
                   disabled={!canEditMsg(actionMsg)}
@@ -1019,20 +1092,22 @@ export function MessagesView({ user }: { user: SessionUser }) {
                   <Pencil className="h-4 w-4 text-violet-600 dark:text-violet-400" /> ویرایش پیام
                 </button>
               )}
-              {!actionMsg.deleted && (
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm hover:bg-rose-500/10 transition-colors text-right text-rose-600 dark:text-rose-400"
-                  onClick={() => {
-                    const m = actionMsg;
-                    const mine = isMine(m);
-                    setActionMsg(null);
-                    void deleteMsg(m, mine);
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" /> {isMine(actionMsg) ? 'حذف برای هر دو طرف' : 'حذف برای من'}
-                </button>
-              )}
+              {/* حذف — حتی برای پیام سیستمی «این پیام حذف شد» (نسخهٔ ۳.۱.۰) */}
+              <button
+                type="button"
+                className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm hover:bg-rose-500/10 transition-colors text-right text-rose-600 dark:text-rose-400"
+                onClick={() => {
+                  const m = actionMsg;
+                  const mine = isMine(m);
+                  setActionMsg(null);
+                  void deleteMsg(m, mine);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+                {isMine(actionMsg) && perms.deleteOwn
+                  ? actionMsg.deleted ? 'حذف کامل برای همه' : 'حذف برای هر دو طرف'
+                  : 'حذف برای من'}
+              </button>
               <button
                 type="button"
                 className="w-full rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-accent transition-colors"
@@ -1040,6 +1115,27 @@ export function MessagesView({ user }: { user: SessionUser }) {
               >
                 انصراف
               </button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── نمایش بزرگ عکس پیوست (لایت‌باکس) ─── */}
+      <Dialog open={!!lightbox} onOpenChange={(v) => !v && setLightbox(null)}>
+        <DialogContent className="max-w-3xl p-3">
+          <DialogHeader className="sr-only">
+            <DialogTitle>{lightbox?.name || 'تصویر'}</DialogTitle>
+          </DialogHeader>
+          {lightbox && (
+            <div className="space-y-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={lightbox.data} alt={lightbox.name} className="max-h-[70vh] w-full rounded-lg object-contain bg-black/5" />
+              <div className="flex justify-between items-center gap-2">
+                <p className="text-xs text-muted-foreground truncate flex-1">{lightbox.name}</p>
+                <Button size="sm" variant="outline" className="gap-1.5 shrink-0" onClick={() => downloadAttachment(lightbox.name, lightbox.data)}>
+                  <Download className="h-3.5 w-3.5" /> دانلود
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>

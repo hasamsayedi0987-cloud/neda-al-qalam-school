@@ -3,10 +3,38 @@ import { db } from '@/lib/db';
 import { requireUser, requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
 import {
-  finalScore, letterGrade, overallResult, computeRanks, round2, componentTotal, parseScale,
+  finalScore, letterGrade, overallResult, subjectResult, computeRanks, round2, componentTotal,
+  parseScale, normalizePeriodScore, DEFAULT_PERIOD_MAX, DEFAULT_RESULT_LABELS,
 } from '@/lib/grading';
 import { teacherClassIds, studentInTeacherScope } from '@/lib/teacher-scope';
 import type { ResultsRow } from '@/lib/types';
+
+/** تنظیمات نمره‌دهی — سقف دوره‌ها و حد نصاب کامیابی، همه از تنظیمات مدیر (بدون تغییر کد) */
+async function getGradeConfig() {
+  const [scaleSetting, rows] = await Promise.all([
+    db.setting.findUnique({ where: { key: 'gradeScale' } }),
+    db.setting.findMany({
+      where: { key: { in: ['midtermMax', 'annualMax', 'passMark', 'passLabel', 'failLabel'] } },
+    }),
+  ]);
+  const map = new Map(rows.map((s) => [s.key, s.value]));
+  const pos = (k: string, d: number) => {
+    const v = Number(map.get(k));
+    return Number.isFinite(v) && v > 0 ? v : d;
+  };
+  return {
+    scale: parseScale(scaleSetting?.value),
+    periodMax: {
+      MIDTERM: pos('midtermMax', DEFAULT_PERIOD_MAX.MIDTERM),
+      ANNUAL: pos('annualMax', DEFAULT_PERIOD_MAX.ANNUAL),
+    } as { MIDTERM: number; ANNUAL: number },
+    labels: {
+      passMark: pos('passMark', DEFAULT_RESULT_LABELS.passMark),
+      passLabel: map.get('passLabel') || DEFAULT_RESULT_LABELS.passLabel,
+      failLabel: map.get('failLabel') || DEFAULT_RESULT_LABELS.failLabel,
+    },
+  };
+}
 
 /** جدول نتایج صنف و کارنامهٔ شاگرد — نمرات به‌صورت خودکار در جدول‌ها منعکس می‌شود */
 export async function GET(req: NextRequest) {
@@ -15,9 +43,10 @@ export async function GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams;
     const mode = sp.get('mode') || 'class';
 
-    // مقیاس نمرات قابل تنظیم توسط مدیر
-    const scaleSetting = await db.setting.findUnique({ where: { key: 'gradeScale' } });
-    const scale = parseScale(scaleSetting?.value);
+    // مقیاس نمرات + سقف دوره‌ها + حد نصاب — همه از تنظیمات
+    const cfg = await getGradeConfig();
+    const scale = cfg.scale;
+    const { periodMax, labels } = cfg;
 
     // ─── جدول نتایج صنف ───
     if (mode === 'class') {
@@ -70,20 +99,23 @@ export async function GET(req: NextRequest) {
         for (const cs of classSubjects) {
           const mid = sg.find((g) => g.classSubjectId === cs.id && g.period === 'MIDTERM');
           const ann = sg.find((g) => g.classSubjectId === cs.id && g.period === 'ANNUAL');
-          const fin = finalScore(mid ? mid.total : null, ann ? ann.total : null);
+          const midTotal = mid ? round2(mid.total) : null;
+          const annTotal = ann ? round2(ann.total) : null;
+          const fin = finalScore(midTotal, annTotal, periodMax);
           perSubject[cs.subjectId] = {
-            midterm: mid ? round2(mid.total) : null,
-            annual: ann ? round2(ann.total) : null,
+            midterm: midTotal == null ? null : normalizePeriodScore(midTotal, periodMax.MIDTERM),
+            annual: annTotal == null ? null : normalizePeriodScore(annTotal, periodMax.ANNUAL),
             final: fin,
             letter: letterGrade(fin, scale),
             approved: mid?.approved ?? ann?.approved ?? false,
+            result: subjectResult(fin, labels),
           };
         }
         const finals = classSubjects.map((cs) => perSubject[cs.subjectId]?.final ?? null);
         const valid = finals.filter((f) => f != null) as number[];
         const total = valid.length ? round2(valid.reduce((a, b) => a + b, 0)) : null;
         const average = valid.length ? round2(valid.reduce((a, b) => a + b, 0) / valid.length) : null;
-        const { result, failed } = overallResult(finals, scale);
+        const { result, failed } = overallResult(finals, scale, labels);
         return {
           student: s,
           perSubject,
@@ -103,6 +135,8 @@ export async function GET(req: NextRequest) {
         subjects: classSubjects.map((cs) => ({ id: cs.subjectId, name: cs.subject.name })),
         rows,
         scale,
+        periodMax,
+        labels,
       });
     }
 
@@ -144,25 +178,28 @@ export async function GET(req: NextRequest) {
       const cs = list[0].classSubject;
       const mid = list.find((g) => g.period === 'MIDTERM');
       const ann = list.find((g) => g.period === 'ANNUAL');
-      const fin = finalScore(mid ? mid.total : null, ann ? ann.total : null);
+      const midTotal = mid ? round2(mid.total) : null;
+      const annTotal = ann ? round2(ann.total) : null;
+      const fin = finalScore(midTotal, annTotal, periodMax);
       return {
         subjectName: cs.subject.name,
         teacherName: cs.teacher?.name || null,
         midterm: mid ? {
           written: mid.written, oral: mid.oral, homework: mid.homework, activity: mid.activity,
-          total: round2(mid.total), approved: mid.approved,
+          total: normalizePeriodScore(midTotal, periodMax.MIDTERM), approved: mid.approved,
           components: { written: componentTotal({ written: mid.written }), },
         } : null,
         annual: ann ? {
           written: ann.written, oral: ann.oral, homework: ann.homework, activity: ann.activity,
-          total: round2(ann.total), approved: ann.approved,
+          total: normalizePeriodScore(annTotal, periodMax.ANNUAL), approved: ann.approved,
         } : null,
         final: fin,
         letter: letterGrade(fin, scale),
+        result: subjectResult(fin, labels),
       };
     });
     const finals = subjects.map((s) => s.final);
-    const { result, failed } = overallResult(finals, scale);
+    const { result, failed } = overallResult(finals, scale, labels);
     const valid = finals.filter((f) => f != null) as number[];
     const average = valid.length ? round2(valid.reduce((a, b) => a + b, 0) / valid.length) : null;
     const total = valid.length ? round2(valid.reduce((a, b) => a + b, 0)) : null;
@@ -176,6 +213,8 @@ export async function GET(req: NextRequest) {
       result,
       failed,
       scale,
+      periodMax,
+      labels,
     });
   } catch (e) {
     return handleApiError(e);

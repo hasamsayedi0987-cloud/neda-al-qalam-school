@@ -33,6 +33,7 @@ const DEFAULTS: SettingsForm = {
   province: '', district: '', authority: '', academicYear: '',
   directorName: '', directorPhone: '', directorEmail: '',
   maxWritten: '40', maxOral: '20', maxHomework: '20', maxActivity: '20',
+  midtermMax: '40', annualMax: '60', passMark: '40', passLabel: 'کامیاب', failLabel: 'ناکام',
   resultNote: '',
   tagline: '',
   navLabels: '{}',
@@ -363,6 +364,40 @@ export function SettingsView({ user }: { user: SessionUser }) {
             <div className="sm:col-span-4">
               <Field label="متن مقررات نتیجه (در کارنامه چاپ می‌شود)">
                 <Input value={settings.resultNote || ''} onChange={(e) => set('resultNote', e.target.value)} />
+              </Field>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* نسخهٔ ۳.۱.۰ — ساختار نمره‌دهی مکاتب افغانستان: ۴۰ + ۶۰ = ۱۰۰ با حد نصاب قابل‌تغییر */}
+      {isAdmin && (
+        <Card className="border-emerald-100 dark:border-emerald-500/25">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-emerald-900 dark:text-emerald-200">ساختار نمره‌دهی افغانستان — سقف دوره‌ها و حد نصاب کامیابی</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground leading-5">
+              نمرهٔ چهارو‌نیم‌ماهه حداکثر از <b>{toPersianDigits(settings.midtermMax || '40')}</b> و نمرهٔ سالانه حداکثر از
+              <b> {toPersianDigits(settings.annualMax || '60')}</b> برای هر مضمون — مجموع از <b>{toPersianDigits(Number(settings.midtermMax || 40) + Number(settings.annualMax || 60))}</b> به‌صورت خودکار محاسبه می‌شود.
+              شاگردی که نمرهٔ نهائی مضمونی را زیر حد نصاب بگیرد «{settings.failLabel || 'ناکام'}» و در غیر آن «{settings.passLabel || 'کامیاب'}» شمرده می‌شود.
+              اجزای نمره (تحریری، تقریری…) به‌طور خودکار متناسب با سقف هر دوره تقسیم می‌شوند. این مقادیر در فایل پشتیبان هم ذخیره و بازیابی می‌شوند.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <Field label="سقف چهارو‌نیم‌ماهه">
+                <Input dir="ltr" type="number" min={1} max={100} className="text-left" value={settings.midtermMax || '40'} onChange={(e) => set('midtermMax', e.target.value)} />
+              </Field>
+              <Field label="سقف سالانه">
+                <Input dir="ltr" type="number" min={1} max={100} className="text-left" value={settings.annualMax || '60'} onChange={(e) => set('annualMax', e.target.value)} />
+              </Field>
+              <Field label="حد نصاب کامیابی (از ۱۰۰)">
+                <Input dir="ltr" type="number" min={1} max={100} className="text-left" value={settings.passMark || '40'} onChange={(e) => set('passMark', e.target.value)} />
+              </Field>
+              <Field label="برچسب قبولی">
+                <Input value={settings.passLabel || 'کامیاب'} onChange={(e) => set('passLabel', e.target.value)} />
+              </Field>
+              <Field label="برچسب مردودی">
+                <Input value={settings.failLabel || 'ناکام'} onChange={(e) => set('failLabel', e.target.value)} />
               </Field>
             </div>
           </CardContent>

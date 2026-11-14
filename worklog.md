@@ -657,3 +657,27 @@ Stage Summary:
 - هر ۵ خواسته واقعاً پیاده شد (نه ظاهری): اعلان بومی اندروید حتی با اپ بسته + پوش مرورگر، ایندکس و پاک‌سازی خودکار برای سرعت پایدار، سپر امنیتی و صفر حفره، طراحی مدرن بدون شکستن رگرسیون
 - لینک دانلود: https://github.com/hasamsayedi0987-cloud/neda-al-qalam-school/releases/download/v3.0.0/nedaalqalam-school.apk
 - یادآوری امنیتی: توکن‌های قبلی (ghp_nZDDsD6U… و ghp_L6PDBO6e…) همچنان باید Revoke شوند
+
+---
+Task ID: v310-release
+Agent: main (Z.ai)
+Task: نسخهٔ ۳.۱.۰ — هشت اصلاح جامع به‌درخواست مدیر مکتب (وب دسکتاپ، همگام‌سازی بدون تکرار، اعلان بیرون از اپ، عدم تکرار اعلان/پیام، حذف کامل پیام، پیوست فایل/تصویر، کتابخانهٔ PDF، نمرات افغانستان)
+
+Work Log:
+- مورد ۲ (همگام‌سازی بدون تکرار): توکن ایدمپوتنسی clientToken @unique روی Message/FeePayment/Student/Book در هر دو اسکیما + apiSend خودکار توکن می‌سازد و همان توکن در replay صف می‌ماند + سرور پیام/پرداخت/شاگرد/کتاب تکراری نمی‌سازد و همان id برمی‌گردد — ریشهٔ «دو بار «شما این پیام را حذف کردید»» و پرداخت دوبل حل شد؛ سقف صف ۳۰۰→۶۰۰ با هشدار noq:queue-drop (هیچ‌گاه بی‌صدا حذف نمی‌شود)؛ تازه‌سازی کش محلی بخش پس از هر ثبت/حذف موفق
+- مورد ۳ (اعلان بیرون از اپ): ریشهٔ باگ اعلان وب — کلاینت به /api/push/key (موجود نبود!) وصل می‌شد → فیکس به GET /api/push؛ poll سرور hasMore می‌دهد (take 21) و NotifyService صف‌به‌صف همهٔ عقب‌مانده‌ها را می‌گیرد (پیشتر فقط ۲۰ تای آخر و since می‌پرید)؛ آلارم دقیق setExactAndAllowWhileIdle + SCHEDULE_EXACT_ALARM/USE_EXACT_ALARM + مجوز و درخواست یک‌بارهٔ REQUEST_IGNORE_BATTERY_OPTIMIZATIONS در MainActivity
+- مورد ۴ (عدم تکرار اعلان/پیام): overlay اعلان‌ها در api.ts برای PATCH {id}/PATCH all/DELETE ?id/DELETE all — خواندن و حذف حتی آفلاین فوراً روی کش اعمال و پس از اتصال روی سرور می‌رود
+- مورد ۵ (حذف کامل پیام): فشار دوم حذف فرستنده روی پیام فراخوانی‌شده = حذف کامل (message.delete + پاک‌سازی اعلان‌ها)؛ دکمهٔ حذف و منوی فشردن طولانی/راست‌کلیک روی پیام‌های سیستمی هم فعال شد
+- مورد ۶ (پیوست): MAX_ATTACH_DATAURL ۵۰۰هزار→۲میلیون نویسه (~۱.۵MB فایل)؛ attachName/attachType جدا از محتوا — فهرست پیام‌ها بدون base64 (صرفه‌جویی چند مگابایت در هر بارگیری) + پس‌پر کردن متادیتای پیام‌های قدیمی (ensureAttachMetaBackfill)؛ پیش‌نمایش عکس در حباب (واکشی تنبل فقط تصویرها) + لایت‌باکس + دکمهٔ دانلود؛ متن خطای حجم دینامیک
+- مورد ۷ (کتابخانهٔ PDF): Book.fileData/fileName/fileType/fileSize + GET ?file=1 (فقط فایل) + POST pdfFile/removeFile (سقف ۸MB) + کامپوننت pdf-reader.tsx با pdfjs-dist 6.5 (worker در public/pdf.worker.min.mjs + cmaps/standard_fonts در public/pdfjs) — صفحه‌گردانی/شماره صفحه/زوم/دانلود؛ PDF در فهرست سبک منتقل نمی‌شود؛ آفلاین از کش سرویس‌ورکر خوانده می‌شود
+- مورد ۸ (نمرات افغانستان): grading.ts — DEFAULT_PERIOD_MAX {40,60} + componentCapsFor (تقسیم خودکار اجزا به سقف دوره: تحریری ۱۶/تقریری ۸/کارخانگی ۸/فعالیت ۸ برای چهارو‌نیم‌ماهه و ۲۴/۱۲/۱۲/۱۲ سالانه) + finalScore = مجموع دو دوره (نه میانگین) + normalizePeriodScore (بازگردانی متناسب دادهٔ قدیمی از-۱۰۰) + subjectResult/overallResult با passMark=۴۰ (لایحهٔ مکاتب ثانوی مادهٔ ۲۷) و برچسب‌های کامیاب/ناکام + «کامیاب مشروط (لیاقت)»؛ کلیدهای settings جدید midtermMax/annualMax/passMark/passLabel/failLabel در whitelist + کارت تنظیمات + جدول ثبت با سقف دوره‌ای + کارنامهٔ چاپ/Word/Excel با ستون‌های از ۴۰/از ۶۰/از ۱۰۰ + ستون نتیجه
+- مورد ۱ (وب دسکتاپ): سایدبار از md به بعد (پیشتر فقط lg) + همبرگری فقط موبایل + راست‌کلیک روی پیام = منوی گزینه‌ها
+- زیرساخت: pdfjs-dist در وابستگی‌ها؛ eslint ignores برای worker/فونت‌ها؛ صفر خطای lint
+- تست: scripts/test-grades-31.ts (یونیت ۲۲/۲۲) + scripts/test-v310.js (۸۷/۸۷: ایدمپوتنسی پیام/فیس/شاگرد/کتاب، حذف فراخوانی→حذف کامل، اعلان خواندن/حذف ماندگار، سقف ۴۰/۶۰ و نهائی=مجموع=۹۷ و کامیاب، تنظیمات، کتاب PDF، پشتیبان شامل حد نصاب، وب دسکتاپ بدون خطا) + scripts/test-pdf-reader.js (۵/۵: دکمهٔ مطالعه، رندر بوم غیرخالی، ۲ صفحه، صفحه‌گردانی) + رگرسیون کامل: v300 (۳۶ PASS + ۴ نشان نسخه)، v250 (۱۶+۱ نشان نسخه)، v241 (۵۲/۵۲)، v24 (۴۰/۴۰)، v23 (۶۲/۶۲)، v22 (۵۳/۵۳) — صفر شکست کارکردی
+- محیط: بازسازی Android SDK (build-tools r34→android-14 + platform-34-ext7) — بیلد موفق با ecj
+- انتشار: SW → v13 | versionCode 17 / versionName 3.1.0 | package.json 3.1.0 | APK ۲۳۸۸۲۷ بایت (SHA-256 068d348b…) با گواهی ثابت e4bafcbc…
+
+Stage Summary:
+- هر ۸ مورد واقعاً پیاده شد و با تست عملی ثابت شد (نه ظاهری)؛ رگرسیون کامل سبز — هیچ قابلیت قبلی خراب نشد
+- لینک دانلود: https://github.com/hasamsayedi0987-cloud/neda-al-qalam-school/releases/download/v3.1.0/nedaalqalam-school.apk
+- یادآوری امنیتی: توکن‌های قبلی (ghp_nZDDsD6U… و ghp_L6PDBO6e…) همچنان باید Revoke شوند

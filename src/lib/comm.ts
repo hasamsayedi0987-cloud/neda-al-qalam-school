@@ -54,7 +54,7 @@ export const COMM_CAPABILITIES: Array<{ key: keyof CommPerms; label: string; hin
   { key: 'announce', label: 'اطلاعیهٔ عمومی', hint: 'ایجاد اطلاعیه و اعلان رسمی' },
   { key: 'urgent', label: 'پیام فوری', hint: 'علامت‌گذاری پیام به‌عنوان فوری' },
   { key: 'reply', label: 'پاسخ به پیام‌ها' },
-  { key: 'attach', label: 'ارسال فایل و تصویر', hint: 'پیوست عکس/سند تا ۳۵۰ کیلوبایت' },
+  { key: 'attach', label: 'ارسال فایل و تصویر', hint: 'پیوست عکس/سند تا حدود ۱.۵ مگابایت' },
   { key: 'seeReadStatus', label: 'مشاهدهٔ وضعیت خوانده‌شدن', hint: 'رسید خواندن پیام‌های ارسالی خود' },
   { key: 'deleteOwn', label: 'حذف پیام‌های خود' },
   { key: 'editOwn', label: 'ویرایش پیام‌های خود', hint: 'تا ۳۰ دقیقه پس از ارسال و تا زمانی که خوانده نشده' },
@@ -124,8 +124,11 @@ export const DEFAULT_ROLE_PERMS: Record<string, CommPerms> = {
   },
 };
 
-/** سقف حجم پیوست (dataURL پس از base64) */
-export const MAX_ATTACH_DATAURL = 500_000;
+/**
+ * سقف حجم پیوست (dataURL پس از base64) — نسخهٔ ۳.۱.۰: از ۵۰۰ هزار نویسه به ۲ مگابایت ارتقا یافت
+ * تا عکس‌های واضح و اسناد واقعی قابل ارسال باشند (~۱.۵ مگابایت فایل باینری).
+ */
+export const MAX_ATTACH_DATAURL = 2_000_000;
 
 /** خواندن امن JSON سیاست از رشتهٔ ذخیره‌شده */
 export function parseCommPolicy(json: string | null | undefined): CommPolicy {

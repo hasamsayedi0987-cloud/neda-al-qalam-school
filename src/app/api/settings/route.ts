@@ -8,6 +8,8 @@ const EDITABLE_KEYS = [
   'directorName', 'directorPhone', 'directorEmail',
   'maxWritten', 'maxOral', 'maxHomework', 'maxActivity', 'resultNote',
   'gradeScale', 'aboutApp', 'aboutDev',
+  // نسخهٔ ۳.۱.۰ — ساختار نمره‌دهی افغانستان: سقف دوره‌ها و حد نصاب کامیابی (قابل تغییر بدون کد)
+  'midtermMax', 'annualMax', 'passMark', 'passLabel', 'failLabel',
   // مالی — ضرب‌الاجل فیس و جریمهٔ کتابخانه
   'feeDeadlineDay', 'finePerDay',
   // پشتیبان‌گیری — یادآوری خودکار

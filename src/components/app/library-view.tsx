@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,10 +16,23 @@ import { apiGet, apiSend } from '@/lib/client/api';
 import { isoToJalaliDisplay, isoToday, toPersianDigits } from '@/lib/jalali';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, BookInfo, LoanInfo, StudentInfo } from '@/lib/types';
-import { Plus, BookOpen, BookMarked, Undo2, Trash2, AlertTriangle, Search, IdCard, MessageSquare } from 'lucide-react';
+import { Plus, BookOpen, BookMarked, Undo2, Trash2, AlertTriangle, Search, IdCard, MessageSquare, FileText, X } from 'lucide-react';
 
-const EMPTY_BOOK = { id: '', title: '', author: '', category: '', copies: '1', shelfNo: '' };
+// خوانندهٔ PDF — بارگذاری تنبل (pdfjs فقط وقتی کتابی باز شود بار می‌گیرد)
+const PdfReader = dynamic(() => import('./pdf-reader').then((m) => m.PdfReader), {
+  ssr: false,
+  loading: () => <p className="text-sm text-muted-foreground animate-pulse py-10 text-center">در حال بارگذاری خوانندهٔ کتاب…</p>,
+});
+
+const EMPTY_BOOK = { id: '', title: '', author: '', category: '', copies: '1', shelfNo: '', fileName: '' };
 const EMPTY_LEND = { bookId: '', borrowerName: '', borrowerType: 'STUDENT', studentId: '', loanDate: isoToday(), dueDate: '', notes: '' };
+
+/** حجم خوانا — کیلوبایت/مگابایت با ارقام فارسی */
+function readableSize(bytes: number | null | undefined): string {
+  if (!bytes || bytes <= 0) return '';
+  if (bytes < 1024 * 1024) return `${toPersianDigits(Math.max(1, Math.round(bytes / 1024)))} کیلوبایت`;
+  return `${toPersianDigits(Math.round((bytes / (1024 * 1024)) * 10) / 10)} مگابایت`;
+}
 
 /** جریمهٔ پیش‌بینی‌شدهٔ یک امانت — روزهای تأخیر × نرخ روزانه */
 function finePreview(dueDate: string, finePerDay: number): { days: number; amount: number } {
@@ -46,6 +60,33 @@ export function LibraryView({ user }: { user: SessionUser }) {
   const [cardStudentId, setCardStudentId] = useState('');
   const cardStudent = students.find((s) => s.id === cardStudentId) || null;
 
+  // ─── کتاب دیجیتال (PDF) — نسخهٔ ۳.۱.۰ ───
+  const [readerBook, setReaderBook] = useState<BookInfo | null>(null);
+  const [pdfForm, setPdfForm] = useState<{ name: string; type: string; data: string } | null>(null);
+  const [removePdf, setRemovePdf] = useState(false);
+  const [pdfInputKey, setPdfInputKey] = useState(0);
+
+  /** انتخاب فایل PDF کتاب — تا حدود ۸ مگابایت */
+  const pickPdf = async (f: File | null) => {
+    if (!f) return;
+    try {
+      if (f.type !== 'application/pdf' && !f.name.toLowerCase().endsWith('.pdf')) throw new Error('type');
+      if (f.size > 8_500_000) throw new Error('big');
+      const data = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result));
+        r.onerror = () => reject(new Error('read'));
+        r.readAsDataURL(f);
+      });
+      setPdfForm({ name: f.name.slice(0, 160), type: 'application/pdf', data });
+      setRemovePdf(false);
+    } catch {
+      toast({ title: 'فایل نامعتبر است', description: 'فقط فایل PDF تا حدود ۸ مگابایت پذیرفته می‌شود', variant: 'destructive' });
+    } finally {
+      setPdfInputKey((k) => k + 1);
+    }
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -72,13 +113,33 @@ export function LibraryView({ user }: { user: SessionUser }) {
       toast({ title: 'خطا', description: 'عنوان کتاب ضروری است', variant: 'destructive' });
       return;
     }
-    const res = await apiSend('/api/library', 'POST', { action: 'save-book', ...bookForm, copies: Number(bookForm.copies) });
-    if (res.error) {
-      toast({ title: 'خطا', description: res.error, variant: 'destructive' });
+    const withFile = Boolean(pdfForm) || removePdf;
+    // فایل ۸ مگابایتی هرگز در صف آفلاین ذخیره نمی‌شود — بارگذاری فقط آنلاین
+    const res = await apiSend(
+      '/api/library',
+      'POST',
+      {
+        action: 'save-book',
+        ...bookForm,
+        fileName: undefined,
+        copies: Number(bookForm.copies),
+        ...(pdfForm ? { pdfFile: pdfForm } : {}),
+        ...(removePdf ? { removeFile: true } : {}),
+      },
+      withFile ? { queueLabel: 'ذخیرهٔ کتاب', allowQueue: false } : { queueLabel: 'ذخیرهٔ کتاب' },
+    );
+    if (res.error || res.network) {
+      toast({
+        title: 'خطا',
+        description: res.network ? 'برای بارگذاری فایل PDF اتصال انترنت لازم است' : res.error,
+        variant: 'destructive',
+      });
       return;
     }
-    toast({ title: 'کتاب ذخیره شد' });
+    toast({ title: 'کتاب ذخیره شد', description: pdfForm ? 'فایل PDF بارگذاری شد — همه می‌توانند داخل اپ بخوانند' : undefined });
     setBookDialog(false);
+    setPdfForm(null);
+    setRemovePdf(false);
     load();
   };
 
@@ -230,6 +291,7 @@ export function LibraryView({ user }: { user: SessionUser }) {
                         <TableHead>دسته</TableHead>
                         <TableHead>قفسه</TableHead>
                         <TableHead>موجود / مجموع</TableHead>
+                        <TableHead className="text-center">PDF</TableHead>
                         {canManage && <TableHead className="text-left">عملیات</TableHead>}
                       </TableRow>
                     </TableHeader>
@@ -245,6 +307,19 @@ export function LibraryView({ user }: { user: SessionUser }) {
                             <Badge className={b.available > 0 ? 'bg-emerald-600' : 'bg-rose-600'}>
                               {toPersianDigits(b.available)} / {toPersianDigits(b.copies)}
                             </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {b.fileName ? (
+                              <Button
+                                variant="outline" size="sm" className="h-7 text-xs gap-1 border-emerald-300 dark:border-emerald-500/40 text-emerald-800 dark:text-emerald-300"
+                                title={`${b.fileName}${readableSize(b.fileSize) ? ` — ${readableSize(b.fileSize)}` : ''}`}
+                                onClick={() => setReaderBook(b)}
+                              >
+                                <FileText className="h-3.5 w-3.5" /> مطالعه
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
                           </TableCell>
                           {canManage && (
                             <TableCell className="text-left">
@@ -262,8 +337,10 @@ export function LibraryView({ user }: { user: SessionUser }) {
                                   onClick={() => {
                                     setBookForm({
                                       id: b.id, title: b.title, author: b.author || '', category: b.category || '',
-                                      copies: String(b.copies), shelfNo: b.shelfNo || '',
+                                      copies: String(b.copies), shelfNo: b.shelfNo || '', fileName: b.fileName || '',
                                     });
+                                    setPdfForm(null);
+                                    setRemovePdf(false);
                                     setBookDialog(true);
                                   }}
                                   aria-label="ویرایش کتاب"
@@ -449,11 +526,50 @@ export function LibraryView({ user }: { user: SessionUser }) {
             <Field label="دسته"><Input value={bookForm.category} onChange={(e) => setBookForm({ ...bookForm, category: e.target.value })} /></Field>
             <Field label="شمارهٔ قفسه"><Input value={bookForm.shelfNo} onChange={(e) => setBookForm({ ...bookForm, shelfNo: e.target.value })} /></Field>
             <Field label="تعداد نسخه"><Input type="number" min={1} value={bookForm.copies} onChange={(e) => setBookForm({ ...bookForm, copies: e.target.value })} /></Field>
+            <div className="col-span-2 space-y-1.5">
+              <Field label="کتاب دیجیتال (PDF) — قابل مطالعه داخل اپ">
+                <Input type="file" accept="application/pdf,.pdf" key={pdfInputKey} onChange={(e) => void pickPdf(e.target.files?.[0] || null)} />
+              </Field>
+              {(pdfForm || (bookForm.fileName && !removePdf)) && (
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-2.5 py-1.5 text-xs">
+                  <FileText className="h-3.5 w-3.5 shrink-0 text-emerald-700 dark:text-emerald-300" />
+                  <span className="min-w-0 flex-1 truncate">{pdfForm ? pdfForm.name : bookForm.fileName}</span>
+                  {pdfForm ? (
+                    <button type="button" aria-label="انصراف از فایل جدید" className="text-muted-foreground hover:text-foreground" onClick={() => { setPdfForm(null); setPdfInputKey((k) => k + 1); }}>
+                      <X className="h-4 w-4" />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="text-rose-600 dark:text-rose-400 hover:underline shrink-0"
+                      onClick={() => { if (confirm('فایل PDF این کتاب حذف شود؟ (خود کتاب حذف نمی‌شود)')) setRemovePdf(true); }}
+                    >
+                      حذف فایل
+                    </button>
+                  )}
+                </div>
+              )}
+              <p className="text-[11px] text-muted-foreground leading-5">
+                تا حدود ۸ مگابایت — پس از ذخیره، همهٔ کاربران دکمهٔ «مطالعه» را می‌بینند و کتاب مستقیماً داخل اپ خوانده می‌شود (بدون برنامهٔ خارجی).
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBookDialog(false)}>انصراف</Button>
-            <Button onClick={saveBook}>ذخیره</Button>
+            <Button onClick={saveBook}>{pdfForm ? 'ذخیره و بارگذاری' : 'ذخیره'}</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── خوانندهٔ PDF — مطالعهٔ کتاب داخل اپ ─── */}
+      <Dialog open={!!readerBook} onOpenChange={(v) => !v && setReaderBook(null)}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-1.5">
+              <FileText className="h-4 w-4 text-emerald-700 dark:text-emerald-300" /> مطالعهٔ کتاب — {readerBook?.title}
+            </DialogTitle>
+          </DialogHeader>
+          {readerBook && <PdfReader bookId={readerBook.id} title={readerBook.title} />}
         </DialogContent>
       </Dialog>
 

@@ -386,6 +386,43 @@ export async function ensureMessagesMigrated(): Promise<void> {
   }
 }
 
+/**
+ * پس‌پر کردن متادیتای پیوست (attachName/attachType) برای پیام‌های قدیمی — یک‌بار (نسخهٔ ۳.۱.۰).
+ * از این پس فهرست پیام‌ها بدون محتوای base64 پیوست‌ها منتقل می‌شود (سرعت بارگیری چت‌خانه).
+ */
+export async function ensureAttachMetaBackfill(): Promise<void> {
+  try {
+    const flag = await db.setting.findUnique({ where: { key: 'attachMetaBackfill_v1' } });
+    if (flag?.value === '1') return;
+    const rows = await db.message.findMany({
+      where: { attachment: { not: null }, attachName: null },
+      select: { id: true, attachment: true },
+      take: 200,
+    });
+    for (const r of rows) {
+      try {
+        const a = JSON.parse(r.attachment || '{}') as { name?: string; type?: string };
+        await db.message.update({
+          where: { id: r.id },
+          data: {
+            attachName: String(a.name || 'پیوست').slice(0, 120),
+            attachType: String(a.type || '').slice(0, 80) || null,
+          },
+        });
+      } catch { /* پیوست خراب — بدون متادیتا رها می‌شود */ }
+    }
+    if (rows.length < 200) {
+      await db.setting.upsert({
+        where: { key: 'attachMetaBackfill_v1' },
+        update: { value: '1' },
+        create: { key: 'attachMetaBackfill_v1', value: '1' },
+      });
+    }
+  } catch {
+    /* پس‌پر کردن نباید خواندن پیام‌ها را بشکند — دفعهٔ بعد تلاش می‌شود */
+  }
+}
+
 /* ─────────────── نگهبان‌های مشترک ─────────────── */
 
 export function assertTargetShape(t: unknown): MsgTarget {

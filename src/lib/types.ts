@@ -123,6 +123,10 @@ export interface BookInfo {
   copies: number;
   available: number;
   shelfNo?: string | null;
+  // کتاب دیجیتال (PDF) — نسخهٔ ۳.۱.۰
+  fileName?: string | null;
+  fileType?: string | null;
+  fileSize?: number | null;
   loans?: LoanInfo[];
 }
 
@@ -164,6 +168,12 @@ export interface AppSettings {
   maxOral: string;
   maxHomework: string;
   maxActivity: string;
+  // نسخهٔ ۳.۱.۰ — ساختار نمره‌دهی افغانستان (قابل تغییر از تنظیمات)
+  midtermMax?: string; // سقف چهارو‌نیم‌ماهه — پیش‌فرض ۴۰
+  annualMax?: string; // سقف سالانه — پیش‌فرض ۶۰
+  passMark?: string; // حد نصاب کامیابی از ۱۰۰ — پیش‌فرض ۴۰
+  passLabel?: string; // کامیاب
+  failLabel?: string; // ناکام
   resultNote?: string;
   gradeScale?: string; // JSON: [{label,min}] — مکتسبه‌های قابل تنظیم
   aboutApp?: string; // JSON: متن دربارهٔ اپ + عکس
@@ -179,7 +189,7 @@ export interface ResultsRow {
   student: StudentInfo;
   perSubject: Record<
     string,
-    { midterm: number | null; annual: number | null; final: number | null; letter: string; approved: boolean }
+    { midterm: number | null; annual: number | null; final: number | null; letter: string; approved: boolean; result?: string | null }
   >;
   total: number | null;
   average: number | null;

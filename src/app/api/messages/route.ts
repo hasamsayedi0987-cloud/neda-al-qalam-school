@@ -8,6 +8,7 @@ import { teacherClassIds } from '@/lib/teacher-scope';
 import {
   type MsgTarget, type ResolvedRecipient,
   assertTargetShape, assertKindAllowed, assertClassScope, canMessageUser, ensureMessagesMigrated,
+  ensureAttachMetaBackfill,
   guardianChildClassIds, guardianUserIdsOfClassIds, permsFor, resolveRecipients,
   studentUserIdsOfClassIds, teacherScopeClassIds, teacherUserIdsOfClassIds, logAudit,
 } from '@/lib/comm-server';
@@ -36,7 +37,9 @@ function parseAttachment(raw: unknown): AttachJson | null {
     if (data.length > MAX_ATTACH_DATAURL) throw new Error('size');
     return { name: name || 'پیوست', type, data };
   } catch (e) {
-    if (e instanceof Error && e.message === 'size') throw new ApiError('حجم پیوست بیش از حد مجاز است (حداکثر ۳۵۰ کیلوبایت)');
+    if (e instanceof Error && e.message === 'size') {
+      throw new ApiError(`حجم پیوست بیش از حد مجاز است (حداکثر ${(MAX_ATTACH_DATAURL / 1_000_000).toLocaleString('fa-AF', { maximumFractionDigits: 1 })} مگابایت)`);
+    }
     throw new ApiError('پیوست نامعتبر است');
   }
 }
@@ -211,6 +214,7 @@ export async function GET(req: NextRequest) {
     const me = await requireUser();
     if (!sectionAllowed(me, 'messages')) throw new ApiError('دسترسی پیام‌ها برای شما توسط مدیر غیرفعال شده است', 403);
     await ensureMessagesMigrated();
+    await ensureAttachMetaBackfill();
 
     // ── یک پیام مشخص (برای مشاهدهٔ کامل و دانلود پیوست) ──
     const singleId = new NextRequest(req.url).nextUrl.searchParams.get('id');
@@ -262,13 +266,29 @@ export async function GET(req: NextRequest) {
     const [inboxRows, sentRows, contacts, classList] = await Promise.all([
       db.messageRecipient.findMany({
         where: { userId: me.id, deleted: false },
-        include: { message: { include: { fromUser: { select: { id: true, name: true, role: true } } } } },
+        include: {
+          message: {
+            // محتوای پیوست (base64) هرگز در فهرست منتقل نمی‌شود — فقط متادیتا (سرعت)
+            select: {
+              id: true, subject: true, body: true, category: true, kind: true, priority: true,
+              toUserId: true, toRole: true, toClassId: true,
+              editedAt: true, deletedForAll: true, attachName: true, attachType: true, createdAt: true,
+              fromUser: { select: { id: true, name: true, role: true } },
+            },
+          },
+        },
         orderBy: { createdAt: 'desc' },
         take: 300,
       }),
       db.message.findMany({
         where: { fromUserId: me.id },
-        include: { recipients: { include: { user: { select: { name: true } } } } },
+        select: {
+          id: true, subject: true, body: true, category: true, kind: true, priority: true,
+          toUserId: true, toRole: true, toClassId: true,
+          editedAt: true, deletedForAll: true, attachName: true, attachType: true, createdAt: true,
+          deletedFor: true,
+          recipients: { select: { userId: true, read: true, user: { select: { name: true } } } },
+        },
         orderBy: { createdAt: 'desc' },
         take: 200,
       }),
@@ -300,7 +320,8 @@ export async function GET(req: NextRequest) {
       category: r.message.category,
       kind: r.message.kind,
       priority: r.message.priority,
-      attachmentName: r.message.deletedForAll || !r.message.attachment ? null : ((JSON.parse(r.message.attachment) as AttachJson).name ?? null),
+      attachmentName: r.message.attachName,
+      attachmentType: r.message.attachType,
       read: r.read,
       readAt: r.readAt,
       editedAt: r.message.editedAt,
@@ -339,7 +360,8 @@ export async function GET(req: NextRequest) {
         category: m.category,
         kind: m.kind,
         priority: m.priority,
-        attachmentName: m.deletedForAll || !m.attachment ? null : ((JSON.parse(m.attachment) as AttachJson).name ?? null),
+        attachmentName: m.attachName,
+        attachmentType: m.attachType,
         readCount,
         totalCount: m.recipients.length,
         createdAt: m.createdAt,
@@ -395,6 +417,21 @@ export async function POST(req: NextRequest) {
     const me = await requireUser();
     if (!sectionAllowed(me, 'messages')) throw new ApiError('دسترسی پیام‌ها برای شما توسط مدیر غیرفعال شده است', 403);
     const body = await req.json();
+
+    // ── ایدمپوتنسی صف آفلاین (نسخهٔ ۳.۱.۰) ──
+    // هر ارسال یک clientToken دارد؛ اگر همین پیام قبلاً ثبت شده باشد (replay صف بعد از قطعی)،
+    // همان پیام اصلی برگردانده می‌شود — پیام تکراری و اعلان تکراری ساخته نمی‌شود.
+    const clientToken = str(body.clientToken).slice(0, 64);
+    if (clientToken) {
+      const dup = await db.message.findUnique({ where: { clientToken }, select: { id: true, kind: true } });
+      if (dup) {
+        return NextResponse.json({
+          id: dup.id, duplicate: true, recipientCount: 0,
+          kindLabel: dup.kind === 'DIRECT' ? 'خصوصی' : dup.kind === 'GROUP' ? 'گروهی' : 'همگانی',
+        });
+      }
+    }
+
     const text = str(body.body);
     if (!text) throw new ApiError('متن پیام لازم است');
     if (text.length > 8000) throw new ApiError('متن پیام بیش از حد طولانی است');
@@ -449,6 +486,9 @@ export async function POST(req: NextRequest) {
           subject, body: text, category,
           kind, priority: urgent ? 'URGENT' : 'NORMAL',
           attachment: attach ? JSON.stringify(attach) : null,
+          attachName: attach?.name || null,
+          attachType: attach?.type || null,
+          clientToken: clientToken || null,
         },
       });
       await tx.messageRecipient.createMany({
@@ -573,11 +613,14 @@ export async function DELETE(req: NextRequest) {
     if (msg.fromUserId === me.id) {
       if (!perms.deleteOwn) throw new ApiError('حذف پیام برای شما غیرفعال است', 403);
       if (msg.deletedForAll) {
-        return NextResponse.json({ ok: true, hard: false, recalled: true });
+        // فشار دوم حذف روی پیامِ فراخوانی‌شده = حذف کامل برای همیشه از هر دو طرف (نسخهٔ ۳.۱.۰)
+        await db.message.delete({ where: { id } });
+        await db.notification.deleteMany({ where: { messageId: id } });
+        return NextResponse.json({ ok: true, hard: true });
       }
       await db.message.update({
         where: { id },
-        data: { deletedForAll: true, attachment: null },
+        data: { deletedForAll: true, attachment: null, attachName: null, attachType: null },
       });
       // اعلان‌های پیام فراخوانی‌شده از صندوق همهٔ گیرندگان پاک می‌شود
       await db.notification.deleteMany({ where: { messageId: id } });

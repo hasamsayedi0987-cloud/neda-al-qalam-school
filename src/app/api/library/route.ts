@@ -3,9 +3,36 @@ import { db } from '@/lib/db';
 import { requireUser, requireRole, requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, optNum, str } from '@/lib/api-helpers';
 
-export async function GET() {
+/** سقف حجم کتاب PDF — dataURL پس از base64 (≈ ۸.۵ مگابایت فایل باینری) */
+export const MAX_BOOK_DATAURL = 12_000_000;
+
+export async function GET(req: NextRequest) {
   try {
     await requireSection('library');
+    const sp = new NextRequest(req.url).nextUrl.searchParams;
+
+    // ── دریافت محتوای PDF یک کتاب برای مطالعهٔ داخل اپ (نسخهٔ ۳.۱.۰) ──
+    if (sp.get('file') === '1') {
+      const id = sp.get('id') || '';
+      if (!id) throw new ApiError('شناسهٔ کتاب لازم است');
+      const book = await db.book.findUnique({
+        where: { id },
+        select: { id: true, title: true, fileName: true, fileType: true, fileSize: true, fileData: true },
+      });
+      if (!book) throw new ApiError('کتاب یافت نشد');
+      if (!book.fileData) throw new ApiError('این کتاب فایل PDF ندارد');
+      let file: { name: string; type: string; data: string } | null = null;
+      try { file = JSON.parse(book.fileData) as { name: string; type: string; data: string }; } catch { file = null; }
+      if (!file?.data?.startsWith('data:')) throw new ApiError('فایل کتاب نامعتبر است');
+      return NextResponse.json({
+        id: book.id, title: book.title,
+        fileName: book.fileName || file.name || 'book.pdf',
+        fileType: book.fileType || file.type || 'application/pdf',
+        fileSize: book.fileSize || file.data.length,
+        data: file.data,
+      });
+    }
+
     const books = await db.book.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
@@ -21,7 +48,8 @@ export async function GET() {
       include: { book: { select: { title: true } } },
     });
     return NextResponse.json({
-      books: books.map((b) => ({
+      // محتوای PDF هرگز در فهرست منتقل نمی‌شود — فقط متادیتا (سرعت)
+      books: books.map(({ fileData: _drop, ...b }) => ({
         ...b,
         lentCount: b.loans.length,
         loans: b.loans,
@@ -49,6 +77,31 @@ export async function POST(req: NextRequest) {
       const title = str(body.title);
       if (!title) throw new ApiError('عنوان کتاب لازم است');
       const copies = Math.max(1, optNum(body.copies) ?? 1);
+      // ایدمپوتنسی صف آفلاین — replay ثبت کتاب پس از قطعی، کتاب تکراری نمی‌سازد
+      const clientToken = str(body.clientToken).slice(0, 64);
+      if (clientToken && !str(body.id)) {
+        const dup = await db.book.findUnique({ where: { clientToken }, select: { id: true } });
+        if (dup) return NextResponse.json({ id: dup.id, duplicate: true });
+      }
+      // ─── فایل PDF کتاب (اختیاری) — بارگذاری/جایگزینی در همان فرم کتاب ───
+      let file: { fileData: string; fileName: string; fileType: string; fileSize: number } | null = null;
+      const rawFile = body.pdfFile;
+      if (rawFile && typeof rawFile === 'object') {
+        const name = str((rawFile as Record<string, unknown>).name).slice(0, 160) || 'book.pdf';
+        const type = str((rawFile as Record<string, unknown>).type).slice(0, 80) || 'application/pdf';
+        const data = str((rawFile as Record<string, unknown>).data);
+        if (data) {
+          if (!data.startsWith('data:application/pdf')) throw new ApiError('فقط فایل PDF پذیرفته می‌شود');
+          if (data.length > MAX_BOOK_DATAURL) throw new ApiError('حجم فایل PDF بیش از حد مجاز است (حداکثر حدود ۸ مگابایت)');
+          const b64 = data.split(',')[1] || '';
+          file = {
+            fileData: JSON.stringify({ name, type, data }),
+            fileName: name,
+            fileType: type,
+            fileSize: Math.round((b64.length * 3) / 4),
+          };
+        }
+      }
       const data = {
         title,
         author: str(body.author) || null,
@@ -61,12 +114,38 @@ export async function POST(req: NextRequest) {
         if (!book) throw new ApiError('کتاب یافت نشد');
         await db.book.update({
           where: { id: book.id },
-          data: { ...data, available: Math.max(0, copies - book.loans.length) },
+          // بدون فایل جدید در درخواست، فایل قبلی حفظ می‌شود؛ removeFile=true حذف می‌کند
+          data: {
+            ...data,
+            available: Math.max(0, copies - book.loans.length),
+            ...(body.removeFile === true ? { fileData: null, fileName: null, fileType: null, fileSize: null } : {}),
+            ...(file || {}),
+          },
         });
         return NextResponse.json({ id: book.id });
       }
-      const book = await db.book.create({ data: { ...data, available: copies } });
+      const book = await db.book.create({
+        data: {
+          ...data,
+          available: copies,
+          ...(file || {}),
+          clientToken: clientToken || null,
+        },
+      });
       return NextResponse.json({ id: book.id });
+    }
+
+    // ─── حذف فایل PDF از کتاب (بدون حذف خود کتاب) ───
+    if (action === 'delete-file') {
+      const bookId = str(body.bookId);
+      if (!bookId) throw new ApiError('شناسهٔ کتاب لازم است');
+      const book = await db.book.findUnique({ where: { id: bookId }, select: { id: true } });
+      if (!book) throw new ApiError('کتاب یافت نشد');
+      await db.book.update({
+        where: { id: bookId },
+        data: { fileData: null, fileName: null, fileType: null, fileSize: null },
+      });
+      return NextResponse.json({ ok: true });
     }
 
     // ─── امانت دادن ───

@@ -175,7 +175,30 @@ public class MainActivity extends Activity {
         String openUrl = resolveOpenUrl(getIntent());
         webView.loadUrl(openUrl != null ? openUrl : serverUrl);
         requestNotificationPermission();
+        requestIgnoreBatteryOptimization();
         startNotifyService();
+    }
+
+    /**
+     * نسخهٔ ۳.۱.۰ — استثنای بهینه‌سازی باتری: ریشهٔ «اعلان بعد از مدتی نمی‌آید».
+     * برخی گوشی‌ها سرویس پیش‌زمینه را می‌کشند یا آلارم را به تأخیر می‌اندازند؛
+     * با یک بار پرسیدن کاربر، اعلان‌های مکتب همیشه به‌موقع می‌رسند.
+     */
+    private void requestIgnoreBatteryOptimization() {
+        try {
+            SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
+            if (p.getBoolean("batt_opt_asked", false)) return;
+            android.os.PowerManager pm = (android.os.PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (pm == null || pm.isIgnoringBatteryOptimizations(getPackageName())) {
+                p.edit().putBoolean("batt_opt_asked", true).apply();
+                return;
+            }
+            p.edit().putBoolean("batt_opt_asked", true).apply();
+            @SuppressWarnings("BatteryLife")
+            Intent i = new Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:" + getPackageName()));
+            startActivity(i);
+        } catch (Exception ignored) { }
     }
 
     /** اگر فعالیت از اعلان بومی باز شده، مستقیم به همان بخش می‌رویم */
