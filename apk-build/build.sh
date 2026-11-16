@@ -13,7 +13,7 @@ cd "$(dirname "$0")"
 SDK=/home/z/android-sdk
 BT="$SDK/android-14"
 PLATFORM="$SDK/android-34/android.jar"
-OUT="build"
+OUT="$(pwd)/build"
 KEYSTORE="$OUT/noq.keystore"
 PKG="af/nedaalqalam/school"
 

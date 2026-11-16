@@ -182,6 +182,7 @@ export function ResultsView({ user }: { user: SessionUser }) {
       grandFather: r.student.grandFather || null,
       rollNo: r.student.rollNo ?? null,
       idNumber: r.student.idNumber ?? null,
+      eligible: r.eligible ?? null,
     })),
     marks: Object.fromEntries(d.rows.map((r) => [
       r.student.id,

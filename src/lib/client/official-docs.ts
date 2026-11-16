@@ -14,7 +14,7 @@
  * از Node هم قابل استفاده (آزمایش) و در مرورگر چاپ/Excel می‌شوند.
  */
 
-import { toPersianDigits } from '@/lib/jalali';
+import { toPersianDigits, isoToday, isoToJalaliDisplay } from '@/lib/jalali';
 import { OFFICIAL_CSS, officialHeaderHtml, printRawHtml, exportExcel, fileStamp, type ExportBrand } from './exports';
 
 /* ─────────────── انواع دادهٔ ورودی ─────────────── */
@@ -37,6 +37,8 @@ export interface OfficialStudent {
   grandFather?: string | null;
   rollNo?: number | null;
   idNumber?: string | null;
+  /** محرومیت از امتحان (حاضری زیر حد نصاب) — مطابق مقررهٔ رسمی وزارت معارف */
+  eligible?: string | null;
 }
 
 /** نمرهٔ یک مضمون برای یک شاگرد — همان ساختار perSubject نتایج */
@@ -65,6 +67,8 @@ export interface OfficialClassInput {
   /** نوبت/شعبه برای ورق نشریه */
   nubt?: string;
   branch?: string;
+  /** تاریخ سند (شمسی) — خالی = امروز */
+  date?: string;
 }
 
 /* ─────────────── کمک‌سازها ─────────────── */
@@ -190,6 +194,14 @@ export function buildGradeSheetHtml(d: OfficialClassInput, origin = ''): string 
         <span>تعداد شاگردان: ${fa(d.students.length)}</span>
       </div>
       <table class="gs-table">${headRows}${subjectRows}${summaryRows}</table>
+      <div class="sheet-foot">
+        <table class="att-legend"><tbody>
+          <tr><th colspan="4">کد حاضری</th></tr>
+          <tr><td>حاضره</td><td>غیرحاضره</td><td>مریض</td><td>رخصت</td></tr>
+          <tr><td><b>۱</b></td><td><b>۲</b></td><td><b>۳</b></td><td><b>۴</b></td></tr>
+        </tbody></table>
+        <p class="sheet-note">مقررات: نمرهٔ نهائی هر مضمون از ۱۰۰ — جوارثی ماهی از ${fa(pm.MIDTERM)} (تحریری + تقریری) و سالانه از ${fa(pm.ANNUAL)} (تحریری + تقریری)؛ حد نصاب کامیابی هر مضمون ${fa(d.passMark ?? 40)} و اوسط ارتقا ${fa(50)}٪ به‌علاوهٔ حاضری حداقل ${fa(75)}٪ به‌اساس مقررهٔ وزارت معارف.</p>
+      </div>
       <div class="mo-sign-row">
         <div class="mo-sign"><div class="line">امتحان‌نگران صنف</div></div>
         <div class="mo-sign"><div class="line">سرمعلم</div></div>
@@ -199,7 +211,11 @@ export function buildGradeSheetHtml(d: OfficialClassInput, origin = ''): string 
     </div>`;
   }).join('');
 
-  return docShell(`ورق نشریهٔ نمرات — ${d.className}`, 'landscape', pages, pageCss);
+  return docShell(`ورق نشریهٔ نمرات — ${d.className}`, 'landscape', pages, pageCss + `
+    .sheet-foot { display: flex; gap: 10px; align-items: flex-start; margin-top: 6px; }
+    .att-legend { width: 34%; font-size: 10px; }
+    .att-legend td, .att-legend th { padding: 1px 4px; }
+    .sheet-note { flex: 1; font-size: 9.5px; line-height: 1.8; text-align: justify; border: 1.2px solid #000; padding: 4px 8px; }`);
 }
 
 /** مکتسبهٔ ساده برای خلاصهٔ ورق نشریه (اوسط درصد کل) */
@@ -220,9 +236,10 @@ export function buildOfficialResultsHtml(d: OfficialClassInput, origin = ''): st
   const pm = d.periodMax || { MIDTERM: 40, ANNUAL: 60 };
   const maxTot = d.subjects.length * (pm.MIDTERM + pm.ANNUAL);
 
-  // خلاصهٔ آماری هر دوره (چارک/جوارثی ماهی و سالانه) برای جدول‌های بالای فرم
+  // خلاصهٔ آماری هر دوره (جوارثی ماهی و سالانه) — هشت سطر رسمی جدول‌های بالای فرم
   const stats = (period: 'MIDTERM' | 'ANNUAL') => {
-    let count = 0, pass = 0, fail = 0, sum = 0, n = 0;
+    let count = 0, pass = 0, fail = 0, cond = 0, depr = 0;
+    const percents: number[] = [];
     for (const s of d.students) {
       const ms = d.marks[s.id] || {};
       let tot = 0, has = false;
@@ -232,23 +249,41 @@ export function buildOfficialResultsHtml(d: OfficialClassInput, origin = ''): st
       }
       if (!has) continue;
       count++;
-      const pct = maxTot > 0 ? (tot / maxTot) * 100 : 0;
-      sum += pct; n++;
+      const pct = maxTot > 0 ? Math.round((tot / maxTot) * 10000) / 100 : 0;
+      percents.push(pct);
       // کامیاب دوره: اوسط نمرات دوره در سقف دوره ≥ حد نصاب
       const avgScore = pct / 100 * (period === 'MIDTERM' ? pm.MIDTERM : pm.ANNUAL);
       if (avgScore >= (d.passMark ?? 40)) pass++; else fail++;
+      // وضعیت نهایی شاگرد (مشروط/محروم) فقط در جدول سالانه
+      if (period === 'ANNUAL') {
+        if (resultOfStudent(d, s.id, pct) === 'مشروط') cond++;
+        if (s.eligible && s.eligible.includes('محروم')) depr++;
+      }
     }
-    return { count, pass, fail, avg: n ? Math.round((sum / n) * 100) / 100 : null };
+    return {
+      count, pass, fail, cond, depr,
+      avg: percents.length ? Math.round((percents.reduce((a, b) => a + b, 0) / percents.length) * 100) / 100 : null,
+      max: percents.length ? Math.max(...percents) : null,
+      min: percents.length ? Math.min(...percents) : null,
+    };
   };
   const mid = stats('MIDTERM');
   const ann = stats('ANNUAL');
 
-  const statBox = (title: string, st: { count: number; pass: number; fail: number; avg: number | null }) => `
+  const statBox = (
+    title: string,
+    st: { count: number; pass: number; fail: number; cond: number; depr: number; avg: number | null; max: number | null; min: number | null },
+    annual: boolean,
+  ) => `
     <table class="stat-box"><thead><tr><th colspan="2">${esc(title)}</th></tr></thead><tbody>
       <tr><td class="lbl">تعداد داخله</td><td class="val">${fa(st.count)}</td></tr>
       <tr><td class="lbl">کامیاب</td><td class="val">${fa(st.pass)}</td></tr>
       <tr><td class="lbl">ناکام</td><td class="val">${fa(st.fail)}</td></tr>
+      ${annual ? `<tr><td class="lbl">مشروط</td><td class="val">${fa(st.cond)}</td></tr>
+      <tr><td class="lbl">محروم</td><td class="val">${fa(st.depr)}</td></tr>` : ''}
       <tr><td class="lbl">متوسط درصد</td><td class="val">${st.avg != null ? fa(st.avg) : '—'}</td></tr>
+      <tr><td class="lbl">بالاترین درصد</td><td class="val">${st.max != null ? fa(st.max) : '—'}</td></tr>
+      <tr><td class="lbl">پایین‌ترین درصد</td><td class="val">${st.min != null ? fa(st.min) : '—'}</td></tr>
     </tbody></table>`;
 
   // سطرهای جدول اصلی با تقسیم ۲۵ سطر در هر صفحه و تکرار سرستون
@@ -296,9 +331,16 @@ export function buildOfficialResultsHtml(d: OfficialClassInput, origin = ''): st
     <div class="res-top">
       ${officialHeaderHtml(origin, schoolOverrides(d))}
     </div>
+    <div class="res-info-row">
+      <span>صنف: ${esc(d.className)}</span>
+      <span>نوبت امتحان: ${esc(d.nubt || 'نوبت اول')}</span>
+      <span>سال تعلیمی: ${esc(d.academicYear || '—')}</span>
+      <span>تعداد شاگردان: ${fa(d.students.length)}</span>
+      <span>تاریخ: ${esc(d.date || isoToJalaliDisplay(isoToday()) || '—')}</span>
+    </div>
     <div class="res-stat-row">
-      ${statBox('جدول نتایج جوارثی ماهی', mid)}
-      ${statBox('جدول نتایج سالانه', ann)}
+      ${statBox('جدول نتایج جوارثی ماهی', mid, false)}
+      ${statBox('جدول نتایج سالانه', ann, true)}
     </div>
     ${pages}
     <div class="mo-sign-row">
@@ -310,15 +352,19 @@ export function buildOfficialResultsHtml(d: OfficialClassInput, origin = ''): st
       <div class="mo-sign"><div class="line">ناظر معارف مربوطه</div></div>
       <div class="mo-sign"><div class="line">تأیید آمریت حوزه تعلیمی</div></div>
       <div class="mo-sign"><div class="line">تأیید ریاست معارف ولایت</div></div>
-    </div>`;
+    </div>
+    <p class="res-note">نتیجهٔ نهائی هر شاگرد به‌اساس اوسط مجموع نمرات و مقررات وزارت معارف تعیین گردیده — مشروط: ناکامی در ۱ الی ۳ مضمون با اوسط کافی؛ محروم: حاضری کمتر از ${fa(75)}٪.</p>`;
 
   const pageCss = `
+    .res-info-row { display: flex; gap: 6px; margin: 6px 0; font-size: 11px; }
+    .res-info-row span { border: 1.2px solid #000; padding: 2px 8px; font-weight: 700; }
     .res-stat-row { display: flex; gap: 10px; justify-content: flex-start; margin: 6px 0 8px; }
-    .stat-box { width: 46%; font-size: 11px; }
+    .stat-box { width: 38%; font-size: 11px; }
     .stat-box .lbl { width: 55%; text-align: right; padding-inline-start: 6px; }
     .stat-box .val { width: 45%; }
     .res-page { page-break-after: always; }
     .res-page:last-child { page-break-after: auto; }
+    .res-note { font-size: 9.5px; margin-top: 6px; color: #111; }
   `;
   return docShell(`جدول نتایج — ${d.className}`, 'landscape', body, pageCss);
 }
@@ -420,6 +466,12 @@ export function buildOfficialNoticeHtml(d: OfficialClassInput, origin = '', only
             <tr><td style="text-align:right;font-weight:700">مشی سالانه</td><td>${esc(d.academicYear || '')}</td></tr>
             <tr><td style="text-align:right;font-weight:700">مشی جوارثی ماهی</td><td>${esc(d.nubt || '')}</td></tr>
           </tbody></table>
+          <div class="rules-note">
+            <b>مقررات نمره‌دهی وزارت معارف:</b>
+            نمرهٔ نهائی هر مضمون از ۱۰۰ — جوارثی ماهی از ${fa(d.periodMax?.MIDTERM ?? 40)} (تحریری + تقریری) و سالانه از ${fa(d.periodMax?.ANNUAL ?? 60)} (تحریری + تقریری)؛
+            حد نصاب کامیابی هر مضمون ${fa(d.passMark ?? 40)}؛ اوسط ارتقا به صنف بالاتر ${fa(50)}٪؛
+            ناکامی در ۱ الی ۳ مضمون با اوسط کافی = مشروط؛ حاضری کمتر از ${fa(75)}٪ = محروم از امتحان.
+          </div>
         </div>
       </div>
       <div class="mo-sign-row">
@@ -447,6 +499,7 @@ export function buildOfficialNoticeHtml(d: OfficialClassInput, origin = '', only
     .band-table { font-size: 10px; width: 100%; }
     .band-table th, .band-table td { padding: 2px 4px; }
     .mashy { font-size: 10.5px; margin-top: 8px; }
+    .rules-note { border: 1.2px solid #000; padding: 5px 7px; font-size: 9.5px; line-height: 1.85; text-align: justify; margin-top: 8px; }
     .notice-note { font-size: 9.5px; margin-top: 8px; text-align: center; color: #111; }
     .sub-table tfoot td { font-size: 11px; }
   `;

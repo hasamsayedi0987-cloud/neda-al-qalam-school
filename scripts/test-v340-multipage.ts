@@ -46,12 +46,12 @@ writeFileSync('/tmp/doc-test/mp-notice.html', nt);
 
 const checks: Array<[string, boolean]> = [
   ['خلیجدول: همهٔ ۳۰ شاگرد (۳۰ سطر شماره‌دار)', rs.split('صفحهٔ').length === 1 && (rs.match(/<tr>/g) || []).length >= 30],
-  ['خلیجدول: ۲ صفحه (۱+۲۵ و ۵)', (rs.match(/res-page/g) || []).length === 2],
+  ['خلیجدول: ۲ صفحه (۱+۲۵ و ۵)', (rs.match(/class="res-page/g) || []).length === 2],
   ['خلیجدول: سرستون در هر صفحه تکرار می‌شود', (rs.match(/نمبر تذکره<\/th>/g) || []).length === 2],
-  ['ورق نشریه: ۱۰ صفحه (۳ شاگرد در هر صفحه)', (gs.match(/sheet-page/g) || []).length === 10],
-  ['ورق نشریه: سربرگ رسمی در هر صفحه تکرار می‌شود', (gs.match(/mo-head-center/g) || []).length === 10],
-  ['اطلاع‌نامه: ۳۰ صفحه جدا (page-break)', (nt.match(/notice-page/g) || []).length === 30],
-  ['اطلاع‌نامه: سربرگ رسمی در هر صفحه', (nt.match(/mo-head-center/g) || []).length === 30],
+  ['ورق نشریه: ۱۰ صفحه (۳ شاگرد در هر صفحه)', (gs.match(/class="sheet-page/g) || []).length === 10],
+  ['ورق نشریه: سربرگ رسمی در هر صفحه تکرار می‌شود', (gs.match(/class="mo-head-center/g) || []).length === 10],
+  ['اطلاع‌نامه: ۳۰ صفحه جدا (page-break)', (nt.match(/class="notice-page/g) || []).length === 30],
+  ['اطلاع‌نامه: سربرگ رسمی در هر صفحه', (nt.match(/class="mo-head-center/g) || []).length === 30],
 ];
 let ok = 0;
 for (const [name, pass] of checks) {
