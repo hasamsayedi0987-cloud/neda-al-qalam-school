@@ -123,6 +123,7 @@ model Teacher {
   attendances      StaffAttendance[]
   tasks            StaffTask[]    @relation("assignedTo")
   assignedTasks    StaffTask[]    @relation("assignedBy")
+  salaryPayments   SalaryPayment[]
 }
 
 model Student {
@@ -138,6 +139,10 @@ model Student {
   guardianPhone String?
   address       String?
   photo         String? // عکس شاگرد (dataURL فشرده)
+  // ─── کارت سوانح و فورم ثبت‌نام وزارت معارف — نسخهٔ ۳.۳.۰ ───
+  idPlace       String? // محل صدور تذکره هویت
+  fatherTongue  String? // زبان پدری
+  motherTongue  String? // زبان مادری
   classId       String?
   rollNo        Int? // شماره در جدول
   status        String   @default("ACTIVE") // ACTIVE | LEFT | GRADUATED
@@ -157,6 +162,9 @@ model Student {
   feePayments FeePayment[]
   users      User[] @relation("StudentUsers")
   guardianLinks GuardianLink[]
+  transportEnrollments TransportEnrollment[]
+  storeSales   StoreSale[]
+  smsMessages  SmsOutbox[]
 }
 
 // ═══════════════ حاضری ═══════════════
@@ -488,4 +496,202 @@ model CertificateTemplate {
   config    String   @default("{}") // JSON: طراحی کامل
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ═══════════════════════════════════════════════════════════════
+// نسخهٔ ۳.۳.۰ — مطابقت کامل با وزارت معارف افغانستان و مقررهٔ مؤسسات تعلیمی خصوصی
+// ═══════════════════════════════════════════════════════════════
+
+// ─── ترانسپورت متعلمین ───
+model TransportEnrollment {
+  id         String   @id @default(cuid())
+  studentId  String
+  route      String? // مسیر/ناحیه
+  vehicleNo  String? // نمبر موتر
+  monthlyFee Float    @default(0) // فیس ماهانهٔ ترانسپورت
+  active     Boolean  @default(true)
+  clientToken String?  @unique // ایدمپوتنسی صف آفلاین
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  student  Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  payments TransportPayment[]
+
+  @@index([studentId])
+}
+
+model TransportPayment {
+  id           String   @id @default(cuid())
+  enrollmentId String
+  month        String // ماه شمسی «1405-10»
+  amount       Float
+  paidAt       String // تاریخ پرداخت ISO yyyy-mm-dd
+  note         String?
+  clientToken  String?  @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  enrollment TransportEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@index([enrollmentId, month])
+  @@index([month])
+}
+
+model TransportExpense {
+  id          String   @id @default(cuid())
+  month       String // ماه شمسی
+  amount      Float
+  note        String?
+  clientToken String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([month])
+}
+
+// ─── فروشات کتاب‌ها و یونیفورم به متعلمین ───
+model StoreItem {
+  id        String  @id @default(cuid())
+  name      String
+  kind      String  @default("BOOK") // BOOK (کتاب درسی) | UNIFORM (یونیفورم)
+  size      String? // سایز یونیفورم
+  buyPrice  Float   @default(0) // قیمت خریداری — هزینهٔ واحد
+  sellPrice Float   @default(0) // قیمت فروش
+  stock     Int     @default(0)
+  clientToken String? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchases StorePurchase[]
+  sales     StoreSale[]
+
+  @@index([kind])
+}
+
+model StorePurchase {
+  id       String  @id @default(cuid())
+  itemId   String
+  qty      Int
+  unitCost Float
+  date     String // تاریخ ISO
+  note     String?
+  clientToken String? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  item StoreItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
+  @@index([date])
+}
+
+model StoreSale {
+  id        String  @id @default(cuid())
+  itemId    String
+  studentId String?
+  qty       Int
+  unitPrice Float
+  discount  Float   @default(0)
+  date      String // تاریخ ISO
+  clientToken String? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  item    StoreItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  student Student?  @relation(fields: [studentId], references: [id])
+
+  @@index([itemId])
+  @@index([studentId])
+  @@index([date])
+}
+
+// ─── مصارفات با کتگوری ───
+model ExpenseCategory {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  expenses Expense[]
+}
+
+model Expense {
+  id         String  @id @default(cuid())
+  categoryId String
+  amount     Float
+  date       String // تاریخ ISO
+  note       String?
+  clientToken String? @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  category ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([categoryId])
+  @@index([date])
+}
+
+// ─── معاشات کارمندان ───
+model SalaryPayment {
+  id       String  @id @default(cuid())
+  teacherId String
+  month    String // ماه شمسی
+  amount   Float
+  status   String  @default("PAID") // PAID | PENDING
+  paidAt   String?
+  clientToken String? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@index([teacherId, month])
+  @@index([month])
+}
+
+// ─── خزانه و تسلیمی پول فیس به صاحب مکتب با رسید ───
+model MoneyHandover {
+  id        String  @id @default(cuid())
+  amount    Float
+  date      String // تاریخ ISO
+  receiptNo String? // نمبر رسید
+  note      String?
+  clientToken String? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+}
+
+model TreasuryTransaction {
+  id        String  @id @default(cuid())
+  type      String // DAKHIL (دخل) | TAKHRIJ (تجری)
+  source    String? // FEE | STORE | TRANSPORT | EXPENSE | SALARY | HANDOVER | PURCHASE | OTHER
+  amount    Float
+  date      String // تاریخ ISO
+  note      String?
+  refId     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([date])
+}
+
+// ─── پیام‌های SMS به شماره‌های والدین ───
+model SmsOutbox {
+  id        String   @id @default(cuid())
+  to        String // شمارهٔ موبایل
+  studentId String?
+  category  String   @default("NOTICE") // ATTENDANCE | FEE | EXAM | NOTICE | CUSTOM
+  body      String
+  status    String   @default("PENDING") // PENDING | SENT | FAILED
+  error     String?
+  sentAt    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student Student? @relation(fields: [studentId], references: [id])
+
+  @@index([status])
+  @@index([category])
 }
