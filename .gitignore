@@ -1,0 +1,46 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# next.js
+.next/
+out/
+build/
+
+# databases — هر مکتب دیتابیس خودش را دارد
+db/*.db
+db/*.db-journal
+*.sqlite
+
+# env
+.env
+.env.local
+.env.production
+
+# logs
+dev.log
+server.log
+*.log
+
+# misc
+.DS_Store
+*.pem
+.vercel
+*.tsbuildinfo
+.zscripts/
+agent-ctx/
+tests/
+examples/
+skills/
+upload/
+download/
+scripts/shot-*.png
+apk-build/ecj.jar
+apk-build/build/
+scripts/*.png
+.nextprod/
+.nextapk/
+tool-results/
+.next-prod/
+apk-build/assets/

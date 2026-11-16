@@ -1,0 +1,271 @@
+/**
+ * منطق نمرات و نتایج — مکتب خصوصی نداالقلم
+ * مقیاس: ۹۰-۱۰۰ = الف | ۸۰-۹۰ = ب | ۷۰-۸۰ = ج | ۶۰-۷۰ = د | ۵۰-۶۰ = هـ | زیر ۵۰ = تکرار صنف
+ */
+
+export interface GradeWeights {
+  maxWritten: number;
+  maxOral: number;
+  maxHomework: number;
+  maxActivity: number;
+}
+
+export const DEFAULT_WEIGHTS: GradeWeights = {
+  maxWritten: 40,
+  maxOral: 20,
+  maxHomework: 20,
+  maxActivity: 20,
+};
+
+export const PERIODS = { MIDTERM: 'MIDTERM', ANNUAL: 'ANNUAL' } as const;
+export type Period = (typeof PERIODS)[keyof typeof PERIODS];
+
+export const PERIOD_LABELS: Record<string, string> = {
+  MIDTERM: 'چهارو‌نیم‌ماهه',
+  ANNUAL: 'سالانه',
+  FINAL: 'نمرهٔ نهائی',
+};
+
+/* ───────── نسخهٔ ۳.۱.۰ — ساختار نمره‌دهی مکاتب افغانستان ─────────
+ * نمرهٔ چهارو‌نیم‌ماهه: حداکثر ۴۰ | نمرهٔ سالانه: حداکثر ۶۰ | مجموع: ۱۰۰
+ * حد نصاب کامیابی: ۴۰ از ۱۰۰ (لایحهٔ مکاتب ثانوی، مادهٔ ۲۷)
+ * همهٔ این سقف‌ها از تنظیمات قابل تغییر است (midtermMax / annualMax / passMark). */
+
+export interface PeriodMax {
+  MIDTERM: number;
+  ANNUAL: number;
+}
+
+export const DEFAULT_PERIOD_MAX: PeriodMax = { MIDTERM: 40, ANNUAL: 60 };
+export const DEFAULT_PASS_MARK = 40;
+
+/** سقف اجزای یک دوره — نسبت هر جزء (از تنظیمات، جمعاً از ۱۰۰) × سقف دورهٔ همان امتحان
+ *  مثال پیش‌فرض: چهارو‌نیم‌ماهه ۴۰ → تحریری ۱۶، تقریری ۸، کارخانگی ۸، فعالیت ۸ */
+export function componentCapsFor(periodMax: number, weights: GradeWeights): GradeWeights {
+  const sum = Math.max(
+    1,
+    (weights.maxWritten || 0) + (weights.maxOral || 0) + (weights.maxHomework || 0) + (weights.maxActivity || 0),
+  );
+  const scale = (v: number) => Math.round(((periodMax * v) / sum) * 100) / 100;
+  return {
+    maxWritten: scale(weights.maxWritten || 0),
+    maxOral: scale(weights.maxOral || 0),
+    maxHomework: scale(weights.maxHomework || 0),
+    maxActivity: scale(weights.maxActivity || 0),
+  };
+}
+
+/** هم‌ترازسازی نمرهٔ یک دوره با سقف آن — داده‌های قدیمی (از ۱۰۰) به‌صورت متناسب تبدیل می‌شوند */
+export function normalizePeriodScore(total: number | null | undefined, periodMax: number): number | null {
+  if (total == null || !Number.isFinite(Number(total))) return null;
+  const t = Number(total);
+  if (t <= periodMax) return round2(t);
+  return round2((t * periodMax) / 100);
+}
+
+export function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+export function componentTotal(g: {
+  written?: number | null;
+  oral?: number | null;
+  homework?: number | null;
+  activity?: number | null;
+}): number {
+  return round2(
+    (g.written || 0) + (g.oral || 0) + (g.homework || 0) + (g.activity || 0),
+  );
+}
+
+/** نمرهٔ نهائی مضمون = نمرهٔ چهارو‌نیم‌ماهه + نمرهٔ سالانه (از ۱۰۰) — ساختار مکاتب افغانستان
+ *  (پیشتر میانگین سادهٔ دو دوره بود که با نظام ۴۰+۶۰ نمی‌خواند) */
+export function finalScore(
+  midterm: number | null,
+  annual: number | null,
+  periodMax: PeriodMax = DEFAULT_PERIOD_MAX,
+): number | null {
+  if (midterm == null && annual == null) return null;
+  const mid = normalizePeriodScore(midterm, periodMax.MIDTERM);
+  const ann = normalizePeriodScore(annual, periodMax.ANNUAL);
+  const values = [mid, ann].filter((v): v is number => v != null);
+  return round2(values.reduce((a, b) => a + b, 0));
+}
+
+/** مکتسبه (حرف) بر اساس نمرهٔ نهائی — مقیاس قابل تنظیم توسط مدیر */
+export interface GradeScaleEntry {
+  label: string;
+  min: number; // حداقل درصد برای این مکتسبه (نزولی مرتب می‌شود)
+}
+
+export const DEFAULT_SCALE: GradeScaleEntry[] = [
+  { label: 'الف', min: 90 },
+  { label: 'ب', min: 80 },
+  { label: 'ج', min: 70 },
+  { label: 'د', min: 60 },
+  { label: 'هـ', min: 50 },
+  { label: 'تکرار', min: 0 },
+];
+
+/** خواندن و اعتبارسنجی مقیاس از تنظیمات */
+export function parseScale(json: string | null | undefined): GradeScaleEntry[] {
+  if (!json) return DEFAULT_SCALE;
+  try {
+    const arr = JSON.parse(json) as GradeScaleEntry[];
+    if (!Array.isArray(arr) || arr.length < 2) return DEFAULT_SCALE;
+    const clean = arr
+      .filter((e) => e && typeof e.label === 'string' && Number.isFinite(Number(e.min)))
+      .map((e) => ({ label: e.label, min: Math.max(0, Math.min(100, Number(e.min))) }))
+      .sort((a, b) => b.min - a.min);
+    return clean.length >= 2 ? clean : DEFAULT_SCALE;
+  } catch {
+    return DEFAULT_SCALE;
+  }
+}
+
+export function letterGrade(score: number | null, scale: GradeScaleEntry[] = DEFAULT_SCALE): string {
+  if (score == null) return '—';
+  const sorted = [...scale].sort((a, b) => b.min - a.min);
+  for (const e of sorted) {
+    if (score >= e.min) return e.label;
+  }
+  return sorted[sorted.length - 1]?.label || 'تکرار';
+}
+
+/** برچسب بازهٔ مقیاس برای نمایش (مثال: الف ۸۵-۱۰۰) */
+export function scaleRangesText(scale: GradeScaleEntry[] = DEFAULT_SCALE): string {
+  const sorted = [...scale].sort((a, b) => b.min - a.min);
+  return sorted.map((e, i) => {
+    const top = i === 0 ? 100 : sorted[i - 1].min - 1;
+    return `${e.label}: ${toPersianDigitsSafe(e.min)}-${toPersianDigitsSafe(top)}`;
+  }).join(' | ');
+}
+
+function toPersianDigitsSafe(n: number): string {
+  return String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
+}
+
+/** رنگ پیشنهادی برای مکتسبه */
+export function letterColor(score: number | null): string {
+  if (score == null) return 'text-muted-foreground';
+  if (score >= 90) return 'text-emerald-700 dark:text-emerald-300 font-bold';
+  if (score >= 80) return 'text-green-700 dark:text-green-300 font-bold';
+  if (score >= 70) return 'text-teal-700 dark:text-teal-300 font-bold';
+  if (score >= 60) return 'text-amber-700 dark:text-amber-300 font-bold';
+  if (score >= 50) return 'text-orange-700 dark:text-orange-300 font-bold';
+  return 'text-red-700 dark:text-red-300 font-bold';
+}
+
+export const RESULT_PROMOTED = 'ارتقا صنف';
+export const RESULT_REPEAT = 'تکرار صنف';
+export const RESULT_INCOMPLETE = 'ناقص';
+
+export interface ResultLabels {
+  passMark: number; // حد نصاب کامیابی هر مضمون (پیش‌فرض ۴۰ از ۱۰۰)
+  passLabel: string; // کامیاب
+  failLabel: string; // ناکام
+}
+
+export const DEFAULT_RESULT_LABELS: ResultLabels = {
+  passMark: DEFAULT_PASS_MARK,
+  passLabel: 'کامیاب',
+  failLabel: 'ناکام',
+};
+
+/** نتیجهٔ یک مضمون — کامیاب یا ناکام بر اساس حد نصاب قابل‌تغییر از تنظیمات */
+export function subjectResult(
+  final: number | null,
+  labels: ResultLabels = DEFAULT_RESULT_LABELS,
+): string | null {
+  if (final == null) return null;
+  return final >= labels.passMark ? labels.passLabel : labels.failLabel;
+}
+
+/** نتیجهٔ کل شاگرد بر اساس نمرات نهائی همهٔ مضامین:
+ *  • بدون مضمون ناکام → کامیاب
+ *  • ناکامی در بیش از نصف مضامین → ناکام (تکرار صنف)
+ *  • ناکامی در نصف یا کمتر → کامیاب مشروط (لیاقت) — مطابق لایحهٔ مکاتب ثانوی */
+export function overallResult(
+  finals: Array<number | null>,
+  scale: GradeScaleEntry[] = DEFAULT_SCALE,
+  labels: ResultLabels = DEFAULT_RESULT_LABELS,
+): {
+  result: string;
+  failed: number;
+} {
+  const valid = finals.filter((f) => f != null) as number[];
+  if (valid.length === 0) return { result: RESULT_INCOMPLETE, failed: 0 };
+  const failed = valid.filter((f) => f < labels.passMark).length;
+  if (failed === 0) return { result: labels.passLabel, failed: 0 };
+  if (failed > valid.length / 2) return { result: labels.failLabel, failed };
+  return { result: `${labels.passLabel} مشروط (لیاقت)`, failed };
+}
+
+/** رتبه‌بندی شاگردان صنف بر اساس اوسط */
+export function computeRanks(
+  rows: Array<{ studentId: string; average: number | null }>,
+): Map<string, number> {
+  const ranks = new Map<string, number>();
+  const sorted = rows
+    .filter((r) => r.average != null)
+    .sort((a, b) => (b.average as number) - (a.average as number));
+  let lastAvg: number | null = null;
+  let lastRank = 0;
+  sorted.forEach((row, i) => {
+    const avg = round2(row.average as number);
+    const rank = avg === lastAvg ? lastRank : i + 1;
+    ranks.set(row.studentId, rank);
+    lastAvg = avg;
+    lastRank = rank;
+  });
+  return ranks;
+}
+
+/** اعتبارسنجی نمرهٔ هر جزء در برابر سقف مجاز */
+export function clampComponent(
+  value: number | null | undefined,
+  max: number,
+): number | null {
+  if (value == null || Number.isNaN(value)) return null;
+  const v = Math.max(0, Math.min(max, Number(value)));
+  return round2(v);
+}
+
+export const ATTENDANCE_LABELS: Record<string, string> = {
+  PRESENT: 'حاضر',
+  ABSENT: 'غایب',
+  SICK: 'مریض',
+  LEAVE: 'رخصت',
+};
+
+export const ATTENDANCE_COLORS: Record<string, string> = {
+  PRESENT: 'bg-emerald-600 text-white',
+  ABSENT: 'bg-red-600 text-white',
+  SICK: 'bg-amber-500 text-white',
+  LEAVE: 'bg-sky-600 text-white',
+};
+
+export const ACTIVITY_TYPE_LABELS: Record<string, string> = {
+  HOMEWORK: 'کارخانگی',
+  BEHAVIOR: 'رفتار',
+  PARTICIPATION: 'شرکت در درس',
+  OTHER: 'دیگر',
+};
+
+export const ROLE_LABELS: Record<string, string> = {
+  ADMIN: 'مدیر',
+  HEADTEACHER: 'سرمعلم',
+  TEACHER: 'معلم',
+  STUDENT: 'شاگرد',
+  GUARDIAN: 'سرپرست/والد',
+  STAFF: 'ملازم/کارمند',
+  LIBRARIAN: 'کتابخانه',
+};
+
+export function gradeName(grade: number): string {
+  const names = [
+    'اول', 'دوم', 'سوم', 'چهارم', 'پنجم', 'ششم',
+    'هفتم', 'هشتم', 'نهم', 'دهم', 'یازدهم', 'دوازدهم',
+  ];
+  return `صنف ${names[grade - 1] || grade}`;
+}

@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#10b981"/>
+      <stop offset="1" stop-color="#047857"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbbf24"/>
+      <stop offset="1" stop-color="#d97706"/>
+    </linearGradient>
+  </defs>
+  <!-- outer ring -->
+  <circle cx="256" cy="256" r="248" fill="url(#bgGrad)"/>
+  <circle cx="256" cy="256" r="228" fill="none" stroke="url(#goldGrad)" stroke-width="10"/>
+  <circle cx="256" cy="256" r="214" fill="none" stroke="#ffffff" stroke-width="3" stroke-dasharray="2 10" stroke-linecap="round" opacity="0.85"/>
+  <!-- open book -->
+  <g>
+    <path d="M116 318 C 160 292, 208 292, 252 314 L 252 358 C 208 336, 160 336, 116 358 Z" fill="#ffffff" opacity="0.97"/>
+    <path d="M396 318 C 352 292, 304 292, 260 314 L 260 358 C 304 336, 352 336, 396 358 Z" fill="#ecfdf5" opacity="0.97"/>
+    <path d="M252 314 L 256 314 L 260 314 L 260 358 L 256 360 L 252 358 Z" fill="url(#goldGrad)"/>
+    <path d="M132 322 C 168 304, 204 306, 238 320" stroke="#047857" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.55"/>
+    <path d="M380 322 C 344 304, 308 306, 274 320" stroke="#047857" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.55"/>
+    <path d="M132 340 C 168 322, 204 324, 238 338" stroke="#047857" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.35"/>
+    <path d="M380 340 C 344 322, 308 324, 274 338" stroke="#047857" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.35"/>
+  </g>
+  <!-- quill pen -->
+  <g transform="rotate(-38 256 176)">
+    <path d="M236 60 C 224 130, 224 200, 248 258 L 264 258 C 288 200, 288 130, 276 60 C 262 46, 250 46, 236 60 Z" fill="#ffffff" opacity="0.97"/>
+    <path d="M256 56 L 256 258" stroke="#d97706" stroke-width="7" stroke-linecap="round"/>
+    <path d="M256 96 L 236 116 M256 96 L 276 116 M256 136 L 236 156 M256 136 L 276 156 M256 176 L 238 194 M256 176 L 274 194" stroke="#047857" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+    <path d="M248 258 L 256 300 L 264 258 Z" fill="url(#goldGrad)"/>
+  </g>
+  <!-- star -->
+  <path d="M256 118 l9 22 24 2 -18 16 5 23 -20 -12 -20 12 5 -23 -18 -16 24 -2 Z" fill="url(#goldGrad)"/>
+  <!-- school name -->
+  <text x="256" y="412" text-anchor="middle" font-family="Vazirmatn, Tahoma, sans-serif" font-size="58" font-weight="700" fill="#ffffff">نداالقلم</text>
+  <text x="256" y="456" text-anchor="middle" font-family="Vazirmatn, Tahoma, sans-serif" font-size="30" font-weight="500" fill="#fbbf24">مکتب خصوصی</text>
+</svg>
