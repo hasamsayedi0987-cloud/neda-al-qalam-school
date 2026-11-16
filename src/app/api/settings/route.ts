@@ -24,10 +24,31 @@ const EDITABLE_KEYS = [
   'tagline', 'navLabels',
   // مجوزهای معلمان — قابل کنترل توسط مدیر
   'permTeacherGrades', 'permTeacherGradeDelete', 'permTeacherStudents',
+  // نسخهٔ ۳.۴.۰ — لوگوهای قابل‌تغییر و خطوط سربرگ اسناد رسمی وزارت معارف
+  'schoolLogo', // dataURL لوگوی مکتب — در همهٔ سندها و سربرگ‌ها نمایش داده می‌شود
+  'emblemLogo', // dataURL نشان وزارت معارف — سمت راست سربرگ اسناد رسمی
+  'govHeader', // خط اول سربرگ رسمی (اسلامی امارت افغانستان)
+  'directorateLine', // خط سوم سربرگ (ریاست معارف …)
+  'adminOffice', // خط چهارم سربرگ (امریت حوزه تعلیمی …)
 ];
 
-export async function GET() {
+/** کلیدهای عمومی — صفحهٔ ورود و boot بدون احراز هویت می‌خواند (آفلاین هم نام/لوگوی واقعی مکتب را ببیند) */
+const PUBLIC_KEYS = ['schoolName', 'tagline', 'language', 'schoolLogo', 'emblemLogo'];
+
+/** سقف حجم هر لوگو (dataURL) — تصویر فشردهٔ ~۱۰۰KB کافی است */
+const LOGO_KEYS = ['schoolLogo', 'emblemLogo'];
+const LOGO_MAX_CHARS = 500_000;
+
+export async function GET(req: NextRequest) {
   try {
+    const sp = new URL(req.url).searchParams;
+    // حالت عمومی — فقط کلیدهای بی‌خطر نمایشی؛ بدون requireUser تا صفحهٔ ورود آفلاین هم کار کند
+    if (sp.get('public') === '1') {
+      const rows = await db.setting.findMany({ where: { key: { in: PUBLIC_KEYS } } });
+      const map: Record<string, string> = {};
+      for (const s of rows) map[s.key] = s.value;
+      return NextResponse.json({ settings: map }, { headers: { 'Cache-Control': 'public, max-age=60' } });
+    }
     await requireUser();
     const settings = await db.setting.findMany({
       where: { key: { in: EDITABLE_KEYS } },
@@ -68,6 +89,11 @@ export async function PUT(req: NextRequest) {
           }
         }
         value = JSON.stringify(parsed);
+      }
+      // لوگوها — فقط dataURL تصویر با سقف حجم؛ مقدار خالی یعنی بازگشت به پیش‌فرض
+      if (LOGO_KEYS.includes(key) && value) {
+        if (!value.startsWith('data:image/')) throw new Error('invalid-logo');
+        if (value.length > LOGO_MAX_CHARS) throw new Error('logo-too-large');
       }
       await db.setting.upsert({
         where: { key },

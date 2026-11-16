@@ -194,6 +194,12 @@ export interface AppSettings {
   permTeacherStudents?: string; // '1' | '0' — مجوز ثبت/ویرایش شاگردان صنف خود
   tagline?: string; // شعار زیر نام مکتب
   navLabels?: string; // JSON: برچسب‌های قابل‌تغییر منو {dashboard: 'خانه', ...}
+  // نسخهٔ ۳.۴.۰ — لوگوهای قابل‌تغییر و خطوط سربرگ اسناد رسمی وزارت معارف
+  schoolLogo?: string; // dataURL لوگوی مکتب — در همهٔ سندها و خروجی‌ها
+  emblemLogo?: string; // dataURL نشان وزارت معارف — سمت راست سربرگ رسمی
+  govHeader?: string; // خط اول سربرگ (اسلامی امارت افغانستان)
+  directorateLine?: string; // خط سوم سربرگ (ریاست معارف …)
+  adminOffice?: string; // خط چهارم سربرگ (امریت حوزه تعلیمی …)
 }
 
 export interface ResultsRow {

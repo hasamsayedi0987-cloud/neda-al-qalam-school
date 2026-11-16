@@ -41,7 +41,37 @@ const DEFAULTS: SettingsForm = {
   navLabels: '{}',
   permTeacherGrades: '1', permTeacherGradeDelete: '1', permTeacherStudents: '1',
   feeDeadlineDay: '', finePerDay: '5', backupReminderDays: '30',
+  schoolLogo: '', emblemLogo: '', govHeader: '', directorateLine: '', adminOffice: '',
 };
+
+/** فشرده‌سازی لوگوی انتخابی به dataURL حداکثر ۲۵۶px — مناسب ذخیره در تنظیمات و چاپ در سندها */
+async function compressLogoFile(file: File): Promise<string> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error('خواندن فایل ناموفق بود'));
+    reader.readAsDataURL(file);
+  });
+  try {
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('فایل تصویر معتبر نیست'));
+      img.src = dataUrl;
+    });
+    const MAX = 256;
+    const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return dataUrl;
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/png');
+  } catch {
+    return dataUrl; // اگر مرورگر canvas را پشتیبانی نکرد — همان فایل اصلی تا سقف سرور
+  }
+}
 
 export function SettingsView({ user }: { user: SessionUser }) {
   const { toast } = useToast();
@@ -307,6 +337,58 @@ export function SettingsView({ user }: { user: SessionUser }) {
             <CardTitle className="text-base text-emerald-900 dark:text-emerald-200">معلومات مکتب</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* لوگوهای قابل‌تغییر — در همهٔ سندها، جدول‌ها و خروجی‌ها اعمال می‌شوند (نسخهٔ ۳.۴.۰) */}
+            <div className="sm:col-span-2 rounded-lg border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-500/10 p-3">
+              <p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 mb-2">لوگوها — در سربرگ همهٔ اسناد و جدول‌های خروجی نمایش داده می‌شوند</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {([
+                  { key: 'schoolLogo' as const, label: 'لوگوی مکتب', hint: 'وسط سربرگ اسناد، تقدیرنامه‌ها و خروجی‌ها' },
+                  { key: 'emblemLogo' as const, label: 'نشان وزارت معارف', hint: 'سمت راست سربرگ اسناد رسمی' },
+                ]).map((lg) => (
+                  <div key={lg.key} className="flex items-center gap-3 rounded-md border bg-background p-2.5">
+                    <div className="h-16 w-16 shrink-0 rounded-md border bg-white flex items-center justify-center overflow-hidden">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={settings[lg.key] || '/logo.png'} alt={lg.label} className="max-h-14 max-w-14 object-contain" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium leading-tight">{lg.label}</p>
+                      <p className="text-[11px] text-muted-foreground mb-1.5">{lg.hint}</p>
+                      <div className="flex gap-1.5">
+                        <label className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs cursor-pointer hover:bg-muted">
+                          <Upload className="h-3.5 w-3.5" /> بارگذاری
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const f = e.target.files?.[0];
+                              e.target.value = '';
+                              if (!f) return;
+                              if (!f.type.startsWith('image/')) {
+                                toast({ title: 'خطا', description: 'فقط فایل تصویر (PNG/JPG) پذیرفته می‌شود', variant: 'destructive' });
+                                return;
+                              }
+                              try {
+                                const dataUrl = await compressLogoFile(f);
+                                set(lg.key, dataUrl);
+                                toast({ title: 'لوگو آماده شد', description: 'برای اعمال، تنظیمات را ذخیره کنید.' });
+                              } catch (err) {
+                                toast({ title: 'خطا', description: err instanceof Error ? err.message : 'بارگذاری ناموفق', variant: 'destructive' });
+                              }
+                            }}
+                          />
+                        </label>
+                        {settings[lg.key] && (
+                          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => set(lg.key, '')}>
+                            <Eraser className="h-3.5 w-3.5" /> بازگشت به پیش‌فرض
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
             <Field label="نام مکتب"><Input value={settings.schoolName} onChange={(e) => set('schoolName', e.target.value)} /></Field>
             <Field label="سال تعلیمی (شمسی)"><Input dir="ltr" className="text-left" value={settings.academicYear} onChange={(e) => set('academicYear', e.target.value)} /></Field>
             <Field label="ولایت"><Input value={settings.province} onChange={(e) => set('province', e.target.value)} /></Field>
@@ -317,6 +399,16 @@ export function SettingsView({ user }: { user: SessionUser }) {
             <Field label="ایمیل مدیر"><Input dir="ltr" className="text-left" value={settings.directorEmail} onChange={(e) => set('directorEmail', e.target.value)} /></Field>
             <Field label="نمبر جواز فعالیت" hint="مقررهٔ مؤسسات تعلیمی خصوصی — سربرگ اسناد رسمی">
               <Input value={settings.licenseNo || ''} onChange={(e) => set('licenseNo', e.target.value)} />
+            </Field>
+            {/* خطوط سربرگ اسناد رسمی وزارت معارف — نسخهٔ ۳.۴.۰ */}
+            <Field label="خط اول سربرگ رسمی" hint="پیش‌فرض: اسلامی امارت افغانستان">
+              <Input value={settings.govHeader || ''} onChange={(e) => set('govHeader', e.target.value)} placeholder="اسلامی امارت افغانستان" />
+            </Field>
+            <Field label="ریاست معارف (سربرگ)" hint="پیش‌فرض: ریاست معارف + ولایت">
+              <Input value={settings.directorateLine || ''} onChange={(e) => set('directorateLine', e.target.value)} placeholder="ریاست معارف شهر کابل" />
+            </Field>
+            <Field label="امریت حوزه تعلیمی (سربرگ)" hint="خط چهارم سربرگ اسناد رسمی">
+              <Input value={settings.adminOffice || ''} onChange={(e) => set('adminOffice', e.target.value)} placeholder="امریت حوزه (پانزدهم تعلیمی)" />
             </Field>
             <Field label="تماس مکتب" hint="برای سربرگ کارت سوانح و اطلاعنامه">
               <Input dir="ltr" className="text-left" value={settings.schoolPhone || ''} onChange={(e) => set('schoolPhone', e.target.value)} />

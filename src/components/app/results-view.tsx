@@ -11,7 +11,12 @@ import { PageHeader, LoadingBlock, EmptyState, Field } from './ui-bits';
 import { apiGet } from '@/lib/client/api';
 import { toPersianDigits, isoToJalaliDisplay, isoToday } from '@/lib/jalali';
 import { letterGrade, letterColor, PERIOD_LABELS } from '@/lib/grading';
-import { printDocument, exportWord, exportExcel, fileStamp } from '@/lib/client/exports';
+import { printDocument, exportWord, exportExcel, fileStamp, exportBrand } from '@/lib/client/exports';
+import {
+  printGradeSheet, printOfficialResults, printOfficialNotices,
+  excelGradeSheet, excelOfficialResults, excelOfficialNotices,
+  type OfficialClassInput,
+} from '@/lib/client/official-docs';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionUser, ClassInfo, ResultsRow } from '@/lib/types';
 import { cn, fullName } from '@/lib/utils';
@@ -35,6 +40,7 @@ interface ClassResultData {
 
 interface ReportCardData {
   student: {
+    id: string;
     firstName: string; lastName: string; fatherName: string; grandFather?: string | null;
     idNumber?: string | null; rollNo?: number | null; gender: string;
   };
@@ -76,8 +82,11 @@ export function ResultsView({ user }: { user: SessionUser }) {
   // مقیاس نمرات و یادداشت مقررات از تنظیمات مدیر — به‌جای متن ثابت
   const [scaleNote, setScaleNote] = useState('مکتسبه‌ها به اساس اوسط مجموع نمرات (نظام وزارت معارف): الف ≥۹۰٪ | ب ≥۷۵٪ | ج ≥۶۰٪ | د ≥۵۰٪ | هـ <۵۰٪');
   const [resultNote, setResultNote] = useState('مقررات: نمرهٔ نهائی هر مضمون از ۱۰۰ (چهارو‌نیم‌ماهه از ۴۰ + سالانه از ۶۰) — حد نصاب کامیابی از تنظیمات مکتب.');
-  // سربرگ رسمی اسناد — از تنظیمات مکتب (نسخهٔ ۳.۳.۰)
-  const [schoolInfo, setSchoolInfo] = useState({ schoolName: '', licenseNo: '', province: '', authority: '', academicYear: '' });
+  // سربرگ رسمی اسناد — از تنظیمات مکتب (نسخهٔ ۳.۳.۰؛ لوگوها و خطوط رسمی — نسخهٔ ۳.۴.۰)
+  const [schoolInfo, setSchoolInfo] = useState({
+    schoolName: '', licenseNo: '', province: '', authority: '', academicYear: '',
+    schoolLogo: '', emblemLogo: '', govHeader: '', directorateLine: '', adminOffice: '',
+  });
   const [labels, setLabels] = useState<Labels>(DEFAULT_LABELS);
   const [periodMax, setPeriodMax] = useState<{ MIDTERM: number; ANNUAL: number }>({ MIDTERM: 40, ANNUAL: 60 });
   useEffect(() => {
@@ -91,6 +100,11 @@ export function ResultsView({ user }: { user: SessionUser }) {
           province: d.settings.province || '',
           authority: d.settings.authority || '',
           academicYear: d.settings.academicYear || '',
+          schoolLogo: d.settings.schoolLogo || '',
+          emblemLogo: d.settings.emblemLogo || '',
+          govHeader: d.settings.govHeader || '',
+          directorateLine: d.settings.directorateLine || '',
+          adminOffice: d.settings.adminOffice || '',
         });
         const pm = Number(d.settings.passMark);
         if (Number.isFinite(pm) && pm > 0 && pm <= 100) setLabels((l) => ({ ...l, passMark: pm }));
@@ -145,6 +159,48 @@ export function ResultsView({ user }: { user: SessionUser }) {
       toast({ title: 'خطا', description: e instanceof Error ? e.message : 'بارگذاری ناموفق', variant: 'destructive' });
     }
   };
+
+  // ─── ورودی اسناد رسمی وزارت معارف — از همان دادهٔ جدول نتایج (نسخهٔ ۳.۴.۰) ───
+  const buildOfficialInput = (d: ClassResultData): OfficialClassInput => ({
+    school: {
+      name: schoolInfo.schoolName || exportBrand().schoolName,
+      logo: schoolInfo.schoolLogo || undefined,
+      emblem: schoolInfo.emblemLogo || undefined,
+      govHeader: schoolInfo.govHeader || undefined,
+      directorateLine: schoolInfo.directorateLine || undefined,
+      adminOffice: schoolInfo.adminOffice || undefined,
+      licenseNo: schoolInfo.licenseNo || undefined,
+      province: schoolInfo.province || undefined,
+    },
+    className: d.classInfo.name,
+    academicYear: schoolInfo.academicYear || undefined,
+    subjects: d.subjects.map((s) => ({ id: s.id, name: s.name })),
+    students: d.rows.map((r) => ({
+      id: r.student.id,
+      name: fullName(r.student),
+      father: r.student.fatherName || '',
+      grandFather: r.student.grandFather || null,
+      rollNo: r.student.rollNo ?? null,
+      idNumber: r.student.idNumber ?? null,
+    })),
+    marks: Object.fromEntries(d.rows.map((r) => [
+      r.student.id,
+      Object.fromEntries(d.subjects.map((s) => {
+        const v = r.perSubject[s.id];
+        return [s.id, {
+          midterm: v?.midterm ?? null,
+          annual: v?.annual ?? null,
+          final: v?.final ?? null,
+          letter: v?.letter || '',
+          result: v?.result || null,
+        }];
+      })),
+    ])),
+    passMark: (d.labels || labels).passMark,
+    passLabel: (d.labels || labels).passLabel,
+    failLabel: (d.labels || labels).failLabel,
+    periodMax: d.periodMax || periodMax,
+  });
 
   // ─── HTML ساخت جدول نتایج برای چاپ/ورد ───
   const buildResultsHtml = (d: ClassResultData) => {
@@ -221,8 +277,8 @@ export function ResultsView({ user }: { user: SessionUser }) {
     const resCls = rc.result.includes(lb.failLabel) ? 'fail' : rc.result.includes(lb.passLabel) ? 'pass' : '';
     return `
       <div style="text-align:center; border:2px solid #1f2937; padding:8px 12px; margin-bottom:10px">
-        <p style="margin:0;font-size:12px">جمهوری اسلامی افغانستان — وزارت معارف</p>
-        <p style="margin:0;font-size:12px">${schoolInfo.province ? schoolInfo.province + ' — ' : ''}${schoolInfo.authority || 'ریاست معارف'}</p>
+        <p style="margin:0;font-size:12px">${schoolInfo.govHeader || 'اسلامی امارت افغانستان'} — وزارت معارف</p>
+        <p style="margin:0;font-size:12px">${schoolInfo.directorateLine || (schoolInfo.province ? `ریاست معارف ${schoolInfo.province}` : '') || schoolInfo.authority || 'ریاست معارف'}</p>
         <h2 style="margin:4px 0;font-size:20px">${schoolInfo.schoolName || ''}</h2>
         <p style="margin:0;font-size:11px">${schoolInfo.licenseNo ? `جواز فعالیت: ${schoolInfo.licenseNo} — ` : ''}${schoolInfo.academicYear ? `سال تعلیمی: ${schoolInfo.academicYear}` : ''}</p>
         <h3 style="margin:6px 0 2px;font-size:16px">اطلاعنامهٔ نتایج تعلیمی</h3>
@@ -360,6 +416,37 @@ export function ResultsView({ user }: { user: SessionUser }) {
         )}
       />
 
+      {/* اسناد رسمی وزارت معارف — دقیقاً مطابق فرم‌های کاغذی رسمی (نسخهٔ ۳.۴.۰) */}
+      {data && data.rows.length > 0 && (
+        <Card className="border-amber-200 dark:border-amber-500/30 bg-amber-50/40 dark:bg-amber-500/5 mb-4">
+          <CardContent className="p-3">
+            <p className="text-xs font-bold text-amber-800 dark:text-amber-300 mb-2">
+              اسناد رسمی وزارت معارف — با سربرگ، لوگو و نام مکتب از تنظیمات (PDF و Excel)
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={() => printGradeSheet(buildOfficialInput(data))} className="gap-1">
+                <Printer className="h-4 w-4" /> ورق نشریهٔ نمرات
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => excelGradeSheet(buildOfficialInput(data))} className="gap-1">
+                <Table2 className="h-4 w-4" /> ورق نشریه — Excel
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => printOfficialResults(buildOfficialInput(data))} className="gap-1">
+                <Printer className="h-4 w-4" /> جدول نتایج رسمی (خلیجدول)
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => excelOfficialResults(buildOfficialInput(data))} className="gap-1">
+                <Table2 className="h-4 w-4" /> جدول نتایج — Excel
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => printOfficialNotices(buildOfficialInput(data))} className="gap-1">
+                <Printer className="h-4 w-4" /> اطلاع‌نامه‌های رسمی صنف
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => excelOfficialNotices(buildOfficialInput(data))} className="gap-1">
+                <Table2 className="h-4 w-4" /> اطلاع‌نامه‌ها — Excel
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex flex-wrap items-end gap-2 mb-4">
         <Field label="صنف">
           <Select value={classId} onValueChange={setClassId}>
@@ -455,6 +542,16 @@ export function ResultsView({ user }: { user: SessionUser }) {
               </div>
               <div className="flex gap-2 justify-end no-print">
                 <Button onClick={printReportCard} className="gap-1"><Printer className="h-4 w-4" /> چاپ / PDF</Button>
+                {data && (
+                  <Button
+                    variant="outline"
+                    onClick={() => printOfficialNotices(buildOfficialInput(data), reportCard!.student.id)}
+                    className="gap-1"
+                    title="اطلاع‌نامهٔ رسمی وزارت معارف برای همین شاگرد"
+                  >
+                    <Printer className="h-4 w-4" /> اطلاع‌نامهٔ رسمی
+                  </Button>
+                )}
                 <Button variant="outline" onClick={wordReportCard} className="gap-1"><FileText className="h-4 w-4" /> Word</Button>
                 <Button
                   variant="outline"

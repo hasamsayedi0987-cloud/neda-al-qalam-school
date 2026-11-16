@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { apiGet, apiSend } from '@/lib/client/api';
-import { exportExcel, fileStamp } from '@/lib/client/exports';
+import { exportExcel, fileStamp, exportBrand } from '@/lib/client/exports';
 import { afghanMonths, gregorianToJalali, isoToday, toPersianDigits } from '@/lib/jalali';
 import { Wallet, Phone, History, Download, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -187,7 +187,7 @@ export function FeesView({ user }: { user: SessionUser }) {
     const paid = paidByStudent.get(s.id) || 0;
     const fee = s.monthlyFee || 0;
     const remain = Math.max(0, fee - paid);
-    const text = `والد محترم ${s.guardianName || s.name} — فیس ماه ${monthDisplay} شاگرد ${s.name} به مبلغ ${toPersianDigits(remain)} افغانی باقی است. لطفاً به مکتب خصوصی نداالقلم پرداخت نمایید. با احترام`;
+    const text = `والد محترم ${s.guardianName || s.name} — فیس ماه ${monthDisplay} شاگرد ${s.name} به مبلغ ${toPersianDigits(remain)} افغانی باقی است. لطفاً به ${exportBrand().schoolName} پرداخت نمایید. با احترام`;
     const phone = (s.guardianPhone || '').replace(/\s+/g, '');
     if (!phone) return null;
     return `sms:${phone}?body=${encodeURIComponent(text)}`;
@@ -202,7 +202,7 @@ export function FeesView({ user }: { user: SessionUser }) {
     });
     const table = `<table><thead><tr><th>شماره</th><th>شاگرد</th><th>ولد</th><th>صنف</th><th>فیس ماهانه</th><th>پرداختی ${monthDisplay}</th><th>وضعیت</th></tr></thead><tbody>${rows.join('')}</tbody>
     <tfoot><tr><td colspan="5">مجموع ماه</td><td>${toPersianDigits(stats.collected)}</td><td>از ${toPersianDigits(stats.expected)}</td></tr></tfoot></table>`;
-    exportExcel(`فیس ${monthDisplay} — مکتب خصوصی نداالقلم`, table, `فیس-${monthKey}-${fileStamp()}`);
+    exportExcel(`فیس ${monthDisplay} — ${exportBrand().schoolName}`, table, `فیس-${monthKey}-${fileStamp()}`);
   };
 
   const histPayments = useMemo(() => {

@@ -37,17 +37,37 @@ export function LoginView({
   const [titles, setTitles] = useState({
     schoolName: 'مکتب خصوصی نداالقلم',
     tagline: 'سیستم مدیریت تعلیمی — نمرات، حاضری، کتابخانه',
+    schoolLogo: '' as string, // dataURL لوگوی تنظیمی — خالی = لوگوی پیش‌فرض
   });
 
   useEffect(() => {
-    if (!navigator.onLine) return; // آفلاین: مقدار پیش‌فرض/کش قبلی
-    apiGet<{ settings: Record<string, string> }>('/api/settings')
+    // نسخهٔ ۳.۴.۰ — کلیدهای عمومی بی‌نیاز از ورود؛ کش محلی تا صفحهٔ ورود آفلاین هم
+    // نام و لوگوی واقعی مکتب را نشان دهد (نه مقدار هاردکد پیش‌فرض)
+    const PUB_KEY = 'noq_public_settings_v1';
+    try {
+      const cached = localStorage.getItem(PUB_KEY);
+      if (cached) {
+        const s = JSON.parse(cached) as Record<string, string>;
+        if (s.schoolName || s.schoolLogo) {
+          setTitles((t) => ({
+            ...t,
+            schoolName: s.schoolName || t.schoolName,
+            tagline: s.tagline ? `${s.tagline} — نمرات، حاضری، کتابخانه` : t.tagline,
+            schoolLogo: s.schoolLogo || '',
+          }));
+          if (s.schoolName) document.title = `${s.schoolName} | سیستم مدیریت مکتب`;
+        }
+      }
+    } catch { /* ignore */ }
+    apiGet<{ settings: Record<string, string> }>('/api/settings?public=1')
       .then((d) => {
+        try { localStorage.setItem(PUB_KEY, JSON.stringify(d.settings || {})); } catch { /* quota */ }
         setTitles({
           schoolName: d.settings.schoolName || 'مکتب خصوصی نداالقلم',
           tagline: d.settings.tagline
             ? `${d.settings.tagline} — نمرات، حاضری، کتابخانه`
             : 'سیستم مدیریت تعلیمی — نمرات، حاضری، کتابخانه',
+          schoolLogo: d.settings.schoolLogo || '',
         });
         if (d.settings.schoolName) document.title = `${d.settings.schoolName} | سیستم مدیریت مکتب`;
       })
@@ -105,8 +125,13 @@ export function LoginView({
 
   const branding = (
     <div className="flex flex-col items-center text-center">
-      <div className="relative h-24 w-24 mb-3 drop-shadow-lg animate-scale-in">
-        <Image src="/logo.png" alt={`لوگوی ${titles.schoolName}`} fill priority className="object-contain" />
+      <div className="relative h-24 w-24 mb-3 drop-shadow-lg animate-scale-in flex items-center justify-center">
+        {titles.schoolLogo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={titles.schoolLogo} alt={`لوگوی ${titles.schoolName}`} className="h-24 w-24 object-contain" />
+        ) : (
+          <Image src="/logo.png" alt={`لوگوی ${titles.schoolName}`} fill priority className="object-contain" />
+        )}
       </div>
       <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-l from-emerald-800 to-emerald-600 dark:from-emerald-300 dark:to-emerald-500 bg-clip-text text-transparent">
         {titles.schoolName}

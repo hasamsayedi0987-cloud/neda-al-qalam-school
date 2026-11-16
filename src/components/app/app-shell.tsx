@@ -227,7 +227,20 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
   useEffect(() => {
     apiGet<{ settings: Record<string, string> }>('/api/settings')
       .then((d) => {
-        configureExports({ schoolName: d.settings.schoolName || undefined });
+        // برندینگ کامل اسناد — نام و لوگو و خطوط سربرگ از تنظیمات مکتب (نسخهٔ ۳.۴.۰)
+        configureExports({
+          schoolName: d.settings.schoolName || undefined,
+          schoolLogo: d.settings.schoolLogo || undefined,
+          emblemLogo: d.settings.emblemLogo || undefined,
+          govHeader: d.settings.govHeader || undefined,
+          directorateLine: d.settings.directorateLine || undefined,
+          adminOffice: d.settings.adminOffice || undefined,
+          licenseNo: d.settings.licenseNo || undefined,
+          province: d.settings.province || undefined,
+          authority: d.settings.authority || undefined,
+          academicYear: d.settings.academicYear || undefined,
+          directorName: d.settings.directorName || undefined,
+        });
         let nav: Record<string, string> = {};
         try { nav = JSON.parse(d.settings.navLabels || '{}') as Record<string, string>; } catch { /* پیش‌فرض */ }
         setTitles({

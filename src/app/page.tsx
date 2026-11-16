@@ -62,7 +62,19 @@ export default function Page() {
     // ثبت Service Worker برای حالت آفلاین — همیشه در production
     // (updateViaCache none — خود sw.js همیشه از شبکه چک می‌شود تا به‌روزرسانی هرگز گم نشود)
     if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
-      navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(() => {});
+      navigator.serviceWorker
+        .register('./sw.js', { updateViaCache: 'none' })
+        .then((reg) => {
+          // تشخیص «پوستهٔ آفلاین آماده نیست» — نصب در جریان است یا شکست خورده؛
+          // با اولین اتصال کامل، install دوباره اجرا می‌شود
+          if (!reg.active && !navigator.serviceWorker.controller) {
+            console.info('[noq] پوستهٔ آفلاین در حال آماده‌سازی است — تا کامل شدن، در قطعی اینترنت صفحهٔ آفلاین دیده می‌شود');
+          }
+        })
+        .catch((err) => {
+          // شکست ثبت دیگر بی‌صدا نیست — ردیابی (مثلاً iOS قدیمی یا محدودیت مرورگر)
+          console.warn('[noq] ثبت Service Worker ناموفق — حالت آفلاین فعال نشد:', err);
+        });
     }
     requestPersistentStorage();
 

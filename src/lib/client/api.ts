@@ -873,15 +873,26 @@ function readGetCache(): Record<string, CacheItem> {
 }
 
 function writeGetCache(cache: Record<string, CacheItem>) {
+  const keys = Object.keys(cache);
+  if (keys.length > 500) {
+    keys.sort((a, b) => (cache[a].t || 0) - (cache[b].t || 0));
+    for (const k of keys.slice(0, keys.length - 500)) delete cache[k];
+  }
   try {
-    const keys = Object.keys(cache);
-    if (keys.length > 500) {
-      keys.sort((a, b) => (cache[a].t || 0) - (cache[b].t || 0));
-      for (const k of keys.slice(0, keys.length - 500)) delete cache[k];
-    }
     localStorage.setItem(GET_CACHE_KEY, JSON.stringify(cache));
   } catch {
-    /* quota */
+    // نسخهٔ ۳.۴.۰ — پر شدن quota دیگر بی‌صدا داده را نمی‌اندازد:
+    // ۲۵٪ قدیمی‌ترین کلیدها حذف و یک بار دیگر تلاش می‌شود (کش آفلاین سالم می‌ماند)
+    try {
+      const survivors = Object.keys(cache)
+        .sort((a, b) => (cache[a].t || 0) - (cache[b].t || 0))
+        .slice(Math.floor(keys.length * 0.25));
+      const trimmed: Record<string, CacheItem> = {};
+      for (const k of survivors) trimmed[k] = cache[k];
+      localStorage.setItem(GET_CACHE_KEY, JSON.stringify(trimmed));
+    } catch {
+      /* نهایتاً مرورگر اجازه نمی‌دهد — کش قبلی سرِ جایش می‌ماند */
+    }
   }
 }
 
@@ -990,6 +1001,9 @@ const PREFETCH_URLS = [
   '/api/settings', '/api/classes', '/api/subjects', '/api/teachers', '/api/students',
   '/api/library', '/api/schedule', '/api/custom-sections', '/api/certificates',
   '/api/fees', '/api/attendance?mode=staff&mine=1', '/api/users',
+  // نسخهٔ ۳.۴.۰ — بخش‌های ۳.۳.۰ هم برای آفلاین پیش‌بارگیری می‌شوند (۴۰۳/۴۰۰ نقش‌های بی‌دسترسی بی‌صدا رد می‌شود)
+  '/api/results?mode=student', '/api/sms', '/api/expenses', '/api/transport',
+  '/api/treasury', '/api/store?kind=book', '/api/store?kind=uniform', '/api/curriculum',
 ];
 
 let lastPrefetchMs = 0;
