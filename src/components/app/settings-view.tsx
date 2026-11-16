@@ -32,8 +32,10 @@ const DEFAULTS: SettingsForm = {
   schoolName: 'مکتب خصوصی نداالقلم',
   province: '', district: '', authority: '', academicYear: '',
   directorName: '', directorPhone: '', directorEmail: '',
+  licenseNo: '', schoolPhone: '', schoolEmail: '', language: 'dr',
   maxWritten: '40', maxOral: '20', maxHomework: '20', maxActivity: '20',
   midtermMax: '40', annualMax: '60', passMark: '40', passLabel: 'کامیاب', failLabel: 'ناکام',
+  minAverage: '50', attendanceMin: '75',
   resultNote: '',
   tagline: '',
   navLabels: '{}',
@@ -313,6 +315,31 @@ export function SettingsView({ user }: { user: SessionUser }) {
             <Field label="نام مدیر"><Input value={settings.directorName} onChange={(e) => set('directorName', e.target.value)} /></Field>
             <Field label="تماس مدیر"><Input dir="ltr" className="text-left" value={settings.directorPhone} onChange={(e) => set('directorPhone', e.target.value)} /></Field>
             <Field label="ایمیل مدیر"><Input dir="ltr" className="text-left" value={settings.directorEmail} onChange={(e) => set('directorEmail', e.target.value)} /></Field>
+            <Field label="نمبر جواز فعالیت" hint="مقررهٔ مؤسسات تعلیمی خصوصی — سربرگ اسناد رسمی">
+              <Input value={settings.licenseNo || ''} onChange={(e) => set('licenseNo', e.target.value)} />
+            </Field>
+            <Field label="تماس مکتب" hint="برای سربرگ کارت سوانح و اطلاعنامه">
+              <Input dir="ltr" className="text-left" value={settings.schoolPhone || ''} onChange={(e) => set('schoolPhone', e.target.value)} />
+            </Field>
+            <Field label="ایمیل مکتب">
+              <Input dir="ltr" className="text-left" value={settings.schoolEmail || ''} onChange={(e) => set('schoolEmail', e.target.value)} />
+            </Field>
+            <Field label="زبان رابط (دری، پشتو، انگلیسی)" hint="پس از ذخیره، فوراً اعمال می‌شود">
+              <Select
+                value={settings.language || 'dr'}
+                onValueChange={(v) => {
+                  set('language', v);
+                  try { window.dispatchEvent(new CustomEvent('noq-language', { detail: v })); } catch { /* ignore */ }
+                }}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="dr">دری</SelectItem>
+                  <SelectItem value="ps">پشتو</SelectItem>
+                  <SelectItem value="en">English</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
           </CardContent>
         </Card>
       )}
@@ -399,7 +426,16 @@ export function SettingsView({ user }: { user: SessionUser }) {
               <Field label="برچسب مردودی">
                 <Input value={settings.failLabel || 'ناکام'} onChange={(e) => set('failLabel', e.target.value)} />
               </Field>
+              <Field label="حداقل اوسط ارتقا (٪)" hint="مادهٔ ۵۹ — پیش‌فرض ۵۰٪">
+                <Input dir="ltr" type="number" min={1} max={100} className="text-left" value={settings.minAverage || '50'} onChange={(e) => set('minAverage', e.target.value)} />
+              </Field>
+              <Field label="حد نصاب حاضری امتحان (٪)" hint="کمتر از این → محروم — پیش‌فرض ۷۵٪">
+                <Input dir="ltr" type="number" min={1} max={100} className="text-left" value={settings.attendanceMin || '75'} onChange={(e) => set('attendanceMin', e.target.value)} />
+              </Field>
             </div>
+            <p className="text-xs text-muted-foreground leading-5">
+              قوانین رسمی وزارت معارف: ارتقا با اوسط ≥ حد نصاب اوسط و همهٔ مضامین ≥ حد نصاب کامیابی؛ اوسط کافی اما ۱ تا ۳ مضمون ناکام → <b>مشروط</b>؛ حاضری سالانه زیر حد نصاب → <b>محروم</b> از امتحان. مکتسبه‌ها: الف ≥۹۰٪ | ب ≥۷۵٪ | ج ≥۶۰٪ | د ≥۵۰٪ | هـ &lt;۵۰٪ (قابل تنظیم در مقیاس مکتسبه‌ها).
+            </p>
           </CardContent>
         </Card>
       )}

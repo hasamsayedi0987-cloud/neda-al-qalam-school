@@ -31,11 +31,16 @@ const check = (n, ok, d = '') => { if (ok) { pass++; console.log(`  ✔ ${n}`); 
   check('app-shell پس از ورود/اتصال/همگام‌سازی پیش‌بارگیری می‌کند', shell.includes('prefetchSections') && shell.includes("window.addEventListener('online', onOnline)"));
   check('برگشت اتصال → ویوی فعال خودکار دوباره بارگیری می‌شود', shell.includes('prevOnlineRef') && shell.includes('setSyncTick((t) => t + 1);') && shell.includes('prefetchSections(60_000)'));
   const sw = fs.readFileSync(path.join(ROOT, 'public/sw.js'), 'utf8');
-  check('سرویس‌ورکر v14', sw.includes("const VERSION = 'v14'"));
+  // نسخه-مستقل: از نسخهٔ ۳.۳.۰ به بعد سرویس‌ورکر با هر انتشار جلو می‌رود — الگوی صحیح چک می‌شود
+  const swVer = (sw.match(/const VERSION = '(v\d+)'/) || [])[1];
+  check('سرویس‌ورکر نسخه‌دار (جلوتر از v14)', !!swVer && parseInt(swVer.slice(1), 10) >= 15, swVer);
   const ver = fs.readFileSync(path.join(ROOT, 'src/lib/version.ts'), 'utf8');
-  check('نسخهٔ ۳.۲.۰', ver.includes("'3.2.0'"));
+  const appVer = (ver.match(/APP_VERSION = '(\d+\.\d+\.\d+)'/) || [])[1];
+  const appVerParts = (appVer || '').split('.').map(Number);
+  check('نسخهٔ جاری ≥ ۳.۲.۰ (منبع واحد حقیقت)', appVerParts[0] > 3 || (appVerParts[0] === 3 && appVerParts[1] >= 2), appVer);
   const manifest = fs.readFileSync(path.join(ROOT, 'apk-build/AndroidManifest.xml'), 'utf8');
-  check('مانیفست versionCode 18 / versionName 3.2.0', manifest.includes('android:versionCode="18"') && manifest.includes('android:versionName="3.2.0"'));
+  const vc = Number((manifest.match(/android:versionCode="(\d+)"/) || [])[1]);
+  check('مانیفست versionCode هم‌گام با نسخهٔ ۳.۲.۰+ (versionCode ≥ 18)', vc >= 18, String(vc));
 
   /* ═══ فاز ۲ — سناریوی واقعی مرورگر ═══ */
   console.log('═ فاز ۲: آنلاین → پیش‌بارگیری → آفلاین → بخش بازدیدنشده ═');

@@ -50,6 +50,9 @@ export interface StudentInfo {
   gender: string;
   birthDate?: string | null;
   idNumber?: string | null;
+  idPlace?: string | null;
+  fatherTongue?: string | null;
+  motherTongue?: string | null;
   guardianName?: string | null;
   guardianPhone?: string | null;
   address?: string | null;
@@ -174,6 +177,14 @@ export interface AppSettings {
   passMark?: string; // حد نصاب کامیابی از ۱۰۰ — پیش‌فرض ۴۰
   passLabel?: string; // کامیاب
   failLabel?: string; // ناکام
+  // نسخهٔ ۳.۳.۰ — قوانین رسمی وزارت معارف + اطلاعات سربرگ اسناد + زبان رابط
+  minAverage?: string; // حداقل اوسط ارتقا — پیش‌فرض ۵۰٪ (مادهٔ ۵۹)
+  attendanceMin?: string; // حد نصاب حاضری امتحان — پیش‌فرض ۷۵٪
+  periodComponents?: string; // JSON ترکیب اجزای امتحان (تحریری/تقریری هر دوره)
+  licenseNo?: string; // نمبر جواز فعالیت — مقررهٔ مکاتب خصوصی
+  schoolPhone?: string; // تماس مکتب
+  schoolEmail?: string; // ایمیل مکتب
+  language?: string; // زبان رابط: dr | ps | en
   resultNote?: string;
   gradeScale?: string; // JSON: [{label,min}] — مکتسبه‌های قابل تنظیم
   aboutApp?: string; // JSON: متن دربارهٔ اپ + عکس
@@ -196,4 +207,6 @@ export interface ResultsRow {
   rank: number | null;
   result: string;
   failed: number;
+  attendanceRate?: number | null; // حاضری سالانه (٪) — نسخهٔ ۳.۳.۰
+  eligible?: string | null; // محروم از امتحان وقتی حاضری زیر حد نصاب است
 }

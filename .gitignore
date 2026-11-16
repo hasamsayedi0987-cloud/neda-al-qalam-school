@@ -44,3 +44,6 @@ scripts/*.png
 tool-results/
 .next-prod/
 apk-build/assets/
+
+# پوشهٔ بررسی موقت فایل زیپ کاربر
+zip-work/

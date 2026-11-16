@@ -97,6 +97,9 @@ export async function POST(req: NextRequest) {
         guardianPhone: str(body.guardianPhone) || null,
         address: str(body.address) || null,
         photo: str(body.photo) || null,
+        idPlace: str(body.idPlace) || null,
+        fatherTongue: str(body.fatherTongue) || null,
+        motherTongue: str(body.motherTongue) || null,
         classId,
         rollNo,
         enrolledYear: str(body.enrolledYear) || null,
@@ -127,7 +130,7 @@ export async function PATCH(req: NextRequest) {
       }
     }
     const data: Record<string, unknown> = {};
-    for (const key of ['firstName', 'lastName', 'fatherName', 'grandFather', 'birthDate', 'idNumber', 'guardianName', 'guardianPhone', 'address', 'enrolledYear']) {
+    for (const key of ['firstName', 'lastName', 'fatherName', 'grandFather', 'birthDate', 'idNumber', 'guardianName', 'guardianPhone', 'address', 'enrolledYear', 'idPlace', 'fatherTongue', 'motherTongue']) {
       if (body[key] !== undefined) data[key] = str(body[key]) || null;
     }
     if (body.gender !== undefined) data.gender = str(body.gender) === 'F' ? 'F' : 'M';

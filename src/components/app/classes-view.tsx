@@ -201,6 +201,18 @@ export function ClassesView({ user }: { user: SessionUser }) {
     load();
   };
 
+  // ─── درج مضامین رسمی نصاب ملی وزارت معارف (نسخهٔ ۳.۳.۰) ───
+  const applyNational = async (c: { id: string; name: string }) => {
+    if (!window.confirm(`فهرست مضامین رسمی نصاب ملی وزارت معارف به «${c.name}» درج شود؟ مضامین موجود دست نمی‌خورند.`)) return;
+    const res = await apiSend<{ message?: string }>('/api/curriculum', 'POST', { action: 'apply-national', classId: c.id });
+    if (res.error) {
+      toast({ title: res.error, variant: 'destructive' });
+      return;
+    }
+    toast({ title: res.queued ? 'در حافظهٔ گوشی — پس از اتصال همگام می‌شود' : res.data?.message || 'مضامین ملی درج شد' });
+    load();
+  };
+
   if (loading) return <LoadingBlock rows={5} />;
 
   return (
@@ -245,6 +257,14 @@ export function ClassesView({ user }: { user: SessionUser }) {
                   </div>
                   {canEdit && (
                     <div className="flex gap-1">
+                      <Button
+                        variant="ghost" size="icon" className="h-8 w-8"
+                        onClick={() => applyNational(c)}
+                        aria-label="درج مضامین ملی معارف"
+                        title="درج مضامین رسمی نصاب ملی وزارت معارف برای این صنف"
+                      >
+                        <BookOpen className="h-4 w-4 text-sky-600" />
+                      </Button>
                       <Button
                         variant="ghost" size="icon" className="h-8 w-8"
                         onClick={() => {

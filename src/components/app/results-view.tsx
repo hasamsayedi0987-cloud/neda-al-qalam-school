@@ -49,6 +49,8 @@ interface ReportCardData {
   average: number | null;
   result: string;
   failed: number;
+  attendanceRate?: number | null;
+  eligible?: string | null;
   periodMax?: { MIDTERM: number; ANNUAL: number };
   labels?: Labels;
 }
@@ -72,8 +74,10 @@ export function ResultsView({ user }: { user: SessionUser }) {
   const [rcOpen, setRcOpen] = useState(false);
 
   // مقیاس نمرات و یادداشت مقررات از تنظیمات مدیر — به‌جای متن ثابت
-  const [scaleNote, setScaleNote] = useState('مقیاس نمرات: الف ۹۰-۱۰۰ | ب ۸۰-۹۰ | ج ۷۰-۸۰ | د ۶۰-۷۰ | هـ ۵۰-۶۰');
+  const [scaleNote, setScaleNote] = useState('مکتسبه‌ها به اساس اوسط مجموع نمرات (نظام وزارت معارف): الف ≥۹۰٪ | ب ≥۷۵٪ | ج ≥۶۰٪ | د ≥۵۰٪ | هـ <۵۰٪');
   const [resultNote, setResultNote] = useState('مقررات: نمرهٔ نهائی هر مضمون از ۱۰۰ (چهارو‌نیم‌ماهه از ۴۰ + سالانه از ۶۰) — حد نصاب کامیابی از تنظیمات مکتب.');
+  // سربرگ رسمی اسناد — از تنظیمات مکتب (نسخهٔ ۳.۳.۰)
+  const [schoolInfo, setSchoolInfo] = useState({ schoolName: '', licenseNo: '', province: '', authority: '', academicYear: '' });
   const [labels, setLabels] = useState<Labels>(DEFAULT_LABELS);
   const [periodMax, setPeriodMax] = useState<{ MIDTERM: number; ANNUAL: number }>({ MIDTERM: 40, ANNUAL: 60 });
   useEffect(() => {
@@ -81,6 +85,13 @@ export function ResultsView({ user }: { user: SessionUser }) {
       .then((d) => {
         if (d.settings.gradeScale) setScaleNote(`مقیاس نمرات: ${d.settings.gradeScale}`);
         if (d.settings.resultNote) setResultNote(d.settings.resultNote);
+        setSchoolInfo({
+          schoolName: d.settings.schoolName || '',
+          licenseNo: d.settings.licenseNo || '',
+          province: d.settings.province || '',
+          authority: d.settings.authority || '',
+          academicYear: d.settings.academicYear || '',
+        });
         const pm = Number(d.settings.passMark);
         if (Number.isFinite(pm) && pm > 0 && pm <= 100) setLabels((l) => ({ ...l, passMark: pm }));
         if (d.settings.passLabel) setLabels((l) => ({ ...l, passLabel: d.settings.passLabel }));
@@ -209,7 +220,14 @@ export function ResultsView({ user }: { user: SessionUser }) {
       </tr>`).join('');
     const resCls = rc.result.includes(lb.failLabel) ? 'fail' : rc.result.includes(lb.passLabel) ? 'pass' : '';
     return `
-      <div style="text-align:center"><span class="doc-title">کارنامهٔ نتایج تعلیمی</span></div>
+      <div style="text-align:center; border:2px solid #1f2937; padding:8px 12px; margin-bottom:10px">
+        <p style="margin:0;font-size:12px">جمهوری اسلامی افغانستان — وزارت معارف</p>
+        <p style="margin:0;font-size:12px">${schoolInfo.province ? schoolInfo.province + ' — ' : ''}${schoolInfo.authority || 'ریاست معارف'}</p>
+        <h2 style="margin:4px 0;font-size:20px">${schoolInfo.schoolName || ''}</h2>
+        <p style="margin:0;font-size:11px">${schoolInfo.licenseNo ? `جواز فعالیت: ${schoolInfo.licenseNo} — ` : ''}${schoolInfo.academicYear ? `سال تعلیمی: ${schoolInfo.academicYear}` : ''}</p>
+        <h3 style="margin:6px 0 2px;font-size:16px">اطلاعنامهٔ نتایج تعلیمی</h3>
+      </div>
+      <div style="text-align:center"><span class="doc-title">اطلاعنامهٔ شاگرد</span></div>
       <div class="doc-meta" style="justify-content:center; gap:24px">
         <span>شاگرد: <b>${rc.student.firstName} ${rc.student.lastName}</b></span>
         <span>ولد: ${rc.student.fatherName}</span>
@@ -225,8 +243,10 @@ export function ResultsView({ user }: { user: SessionUser }) {
       <div class="doc-meta" style="margin-top:12px">
         <span>مجموع نمرات: <b>${rc.total != null ? toPersianDigits(rc.total) : '—'}</b></span>
         <span>اوسط: <b>${rc.average != null ? toPersianDigits(rc.average) : '—'}</b></span>
-        <span>نتیجهٔ نهایی: <b class="${resCls}">${rc.result}</b></span>
+        ${rc.attendanceRate != null ? `<span>حاضری سالانه: <b>${toPersianDigits(rc.attendanceRate)}٪</b></span>` : ''}
+        <span>نتیجهٔ نهایی: <b class="${resCls}">${rc.eligible || rc.result}</b></span>
       </div>
+      <p class="note">درجه‌بندی شاگردان به اساس اوسط مجموع نمرات — الف ≥۹۰٪ | ب ≥۷۵٪ | ج ≥۶۰٪ | د ≥۵۰٪ | هـ <۵۰٪ — ارتقا: اوسط کافی + همهٔ مضامین ≥ حد نصاب؛ ۱ تا ۳ مضمون ناکام → مشروط؛ حاضری زیر حد نصاب → محروم.</p>
       <p class="note">${resultNote}</p>
       <div class="doc-footer">
         <div class="sign-box"><div class="sign-line">امضاء نگران صنف</div></div>

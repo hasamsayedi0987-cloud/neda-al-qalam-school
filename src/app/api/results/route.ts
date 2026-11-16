@@ -4,17 +4,17 @@ import { requireUser, requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
 import {
   finalScore, letterGrade, overallResult, subjectResult, computeRanks, round2, componentTotal,
-  parseScale, normalizePeriodScore, DEFAULT_PERIOD_MAX, DEFAULT_RESULT_LABELS,
+  parseScale, normalizePeriodScore, DEFAULT_PERIOD_MAX, DEFAULT_RESULT_LABELS, examEligibility,
 } from '@/lib/grading';
 import { teacherClassIds, studentInTeacherScope } from '@/lib/teacher-scope';
 import type { ResultsRow } from '@/lib/types';
 
-/** تنظیمات نمره‌دهی — سقف دوره‌ها و حد نصاب کامیابی، همه از تنظیمات مدیر (بدون تغییر کد) */
+/** تنظیمات نمره‌دهی — سقف دوره‌ها، حد نصاب کامیابی، اوسط ارتقا و حد نصاب حاضری؛ همه از تنظیمات مدیر */
 async function getGradeConfig() {
   const [scaleSetting, rows] = await Promise.all([
     db.setting.findUnique({ where: { key: 'gradeScale' } }),
     db.setting.findMany({
-      where: { key: { in: ['midtermMax', 'annualMax', 'passMark', 'passLabel', 'failLabel'] } },
+      where: { key: { in: ['midtermMax', 'annualMax', 'passMark', 'passLabel', 'failLabel', 'minAverage', 'attendanceMin'] } },
     }),
   ]);
   const map = new Map(rows.map((s) => [s.key, s.value]));
@@ -30,10 +30,34 @@ async function getGradeConfig() {
     } as { MIDTERM: number; ANNUAL: number },
     labels: {
       passMark: pos('passMark', DEFAULT_RESULT_LABELS.passMark),
+      minAverage: pos('minAverage', DEFAULT_RESULT_LABELS.minAverage),
       passLabel: map.get('passLabel') || DEFAULT_RESULT_LABELS.passLabel,
       failLabel: map.get('failLabel') || DEFAULT_RESULT_LABELS.failLabel,
     },
+    attendanceMin: pos('attendanceMin', 75),
   };
+}
+
+/** حاضری سالانهٔ شاگردان — نسبت روزهای حاضر (شامل مریض/رخصت موجه) به کل روزهای ثبت‌شده */
+async function attendanceRates(studentIds: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (studentIds.length === 0) return out;
+  const agg = await db.attendanceRecord.groupBy({
+    by: ['studentId', 'status'],
+    where: { studentId: { in: studentIds } },
+    _count: { _all: true },
+  });
+  const byStudent = new Map<string, { present: number; total: number }>();
+  for (const row of agg) {
+    const cur = byStudent.get(row.studentId) || { present: 0, total: 0 };
+    cur.total += row._count._all;
+    if (row.status !== 'ABSENT') cur.present += row._count._all;
+    byStudent.set(row.studentId, cur);
+  }
+  for (const [id, { present, total }] of byStudent) {
+    out.set(id, total > 0 ? round2((present * 100) / total) : null as unknown as number);
+  }
+  return out;
 }
 
 /** جدول نتایج صنف و کارنامهٔ شاگرد — نمرات به‌صورت خودکار در جدول‌ها منعکس می‌شود */
@@ -43,10 +67,10 @@ export async function GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams;
     const mode = sp.get('mode') || 'class';
 
-    // مقیاس نمرات + سقف دوره‌ها + حد نصاب — همه از تنظیمات
+    // مقیاس نمرات + سقف دوره‌ها + حد نصاب‌ها — همه از تنظیمات
     const cfg = await getGradeConfig();
     const scale = cfg.scale;
-    const { periodMax, labels } = cfg;
+    const { periodMax, labels, attendanceMin } = cfg;
 
     // ─── جدول نتایج صنف ───
     if (mode === 'class') {
@@ -130,6 +154,15 @@ export async function GET(req: NextRequest) {
       const ranks = computeRanks(rows.map((r) => ({ studentId: r.student.id, average: r.average })));
       for (const r of rows) r.rank = ranks.get(r.student.id) || null;
 
+      // حاضری سالانه + وضعیت واجدیت امتحان — محروم وقتی حاضری زیر حد نصاب (۷۵٪)
+      const rates = await attendanceRates(students.map((s) => s.id));
+      for (const r of rows) {
+        const rate = rates.get(r.student.id) ?? null;
+        r.attendanceRate = rate;
+        r.eligible = examEligibility(rate, attendanceMin);
+        if (r.eligible && r.result !== 'ناقص') r.result = r.eligible;
+      }
+
       return NextResponse.json({
         classInfo: cls,
         subjects: classSubjects.map((cs) => ({ id: cs.subjectId, name: cs.subject.name })),
@@ -137,6 +170,7 @@ export async function GET(req: NextRequest) {
         scale,
         periodMax,
         labels,
+        attendanceMin,
       });
     }
 
@@ -204,17 +238,26 @@ export async function GET(req: NextRequest) {
     const average = valid.length ? round2(valid.reduce((a, b) => a + b, 0) / valid.length) : null;
     const total = valid.length ? round2(valid.reduce((a, b) => a + b, 0)) : null;
 
+    // حاضری سالانه + محرومیت
+    const rates = await attendanceRates([student.id]);
+    const rate = rates.get(student.id) ?? null;
+    const eligible = examEligibility(rate, attendanceMin);
+    const finalResult = eligible && result !== 'ناقص' ? eligible : result;
+
     return NextResponse.json({
       student,
       className: student.class?.name || null,
       subjects,
       total,
       average,
-      result,
+      result: finalResult,
       failed,
+      attendanceRate: rate,
+      eligible,
       scale,
       periodMax,
       labels,
+      attendanceMin,
     });
   } catch (e) {
     return handleApiError(e);

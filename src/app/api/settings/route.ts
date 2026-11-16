@@ -10,6 +10,12 @@ const EDITABLE_KEYS = [
   'gradeScale', 'aboutApp', 'aboutDev',
   // نسخهٔ ۳.۱.۰ — ساختار نمره‌دهی افغانستان: سقف دوره‌ها و حد نصاب کامیابی (قابل تغییر بدون کد)
   'midtermMax', 'annualMax', 'passMark', 'passLabel', 'failLabel',
+  // نسخهٔ ۳.۳.۰ — قوانین رسمی وزارت معارف: اوسط ارتقا، حد نصاب حاضری، ترکیب اجزای امتحان
+  'minAverage', 'attendanceMin', 'periodComponents',
+  // نسخهٔ ۳.۳.۰ — اطلاعات مکتب برای سربرگ اسناد رسمی (جواز فعالیت — مقررهٔ مکاتب خصوصی)
+  'licenseNo', 'schoolPhone', 'schoolEmail',
+  // نسخهٔ ۳.۳.۰ — زبان رابط (dr دری | ps پشتو | en English) و پیام‌های SMS والدین
+  'language', 'smsProvider', 'smsTemplates',
   // مالی — ضرب‌الاجل فیس و جریمهٔ کتابخانه
   'feeDeadlineDay', 'finePerDay',
   // پشتیبان‌گیری — یادآوری خودکار

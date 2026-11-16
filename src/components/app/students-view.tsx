@@ -20,20 +20,23 @@ import type { SessionUser, StudentInfo, ClassInfo } from '@/lib/types';
 import {
   Plus, Pencil, Search, Trash2, Users, Phone, FilterX, BookOpen, UserRound,
   Upload, ArrowLeftRight, GraduationCap, IdCard, CalendarCheck, ClipboardCheck, FileUp,
-  FileDown, Printer,
+  FileDown, Printer, Files,
 } from 'lucide-react';
 
 const EMPTY_FORM = {
   id: '', firstName: '', lastName: '', fatherName: '', grandFather: '',
-  gender: 'M', birthDate: '', idNumber: '', guardianName: '', guardianPhone: '',
+  gender: 'M', birthDate: '', idNumber: '', idPlace: '', fatherTongue: '', motherTongue: '',
+  guardianName: '', guardianPhone: '',
   address: '', classId: '', rollNo: '', enrolledYear: '', status: 'ACTIVE', photo: '',
 };
 
 interface ProfileData {
   student: {
     id: string; firstName: string; lastName: string | null; fatherName: string;
-    photo: string | null; gender: string; status: string; rollNo: number | null;
+    grandFather: string | null; photo: string | null; gender: string; status: string; rollNo: number | null;
     className: string | null; guardianName: string | null; guardianPhone: string | null;
+    birthDate: string | null; idNumber: string | null; idPlace: string | null;
+    fatherTongue: string | null; motherTongue: string | null; address: string | null; enrolledYear: string | null;
   };
   attendance: { total: number; PRESENT: number; ABSENT: number; SICK: number; LEAVE: number; recent: Array<{ id: string; date: string; status: string }> };
   activities: Array<{ id: string; date: string; type: string; note: string; score: number | null }>;
@@ -144,6 +147,83 @@ export function StudentsView({ user }: { user: SessionUser }) {
     else printDocument(title, `<div class="doc-title">${title}</div>${table}`);
   };
 
+  // ─── کارت سوانح متعلم — مطابق مادهٔ ۸۳ لایحهٔ مکاتب ثانوی (نسخهٔ ۳.۳.۰) ───
+  const printSawanjCard = async (p: NonNullable<typeof profile>) => {
+    const school = await apiGet<{ settings: Record<string, string> }>('/api/settings').then((d) => d.settings).catch(() => ({}) as Record<string, string>);
+    const s = p.student;
+    const photoHtml = s.photo
+      ? `<img src="${s.photo}" style="width:96px;height:110px;object-fit:cover;border:1px solid #999" />`
+      : `<div style="width:96px;height:110px;border:1px dashed #999;display:flex;align-items:center;justify-content:center;font-size:11px;color:#888">فوتو</div>`;
+    const gradesRows = p.subjects.map((sub, i) => `<tr><td>${toPersianDigits(i + 1)}</td><td>${sub.name}</td><td>${sub.final != null ? toPersianDigits(sub.final) : '—'}</td><td>${sub.letter}</td></tr>`).join('');
+    const row = (k: string, v: string) => `<tr><td style="background:#f3f4f6;padding:3px 8px;font-size:12px">${k}</td><td style="padding:3px 8px;font-size:12px">${v || '………………'}</td></tr>`;
+    printDocument(`کارت سوانح — ${fullName(s)}`, `
+      <div style="text-align:center;border:2px solid #1f2937;padding:10px 14px;max-width:560px;margin:0 auto;font-family:inherit">
+        <p style="margin:0;font-size:12px">جمهوری اسلامی افغانستان — وزارت معارف</p>
+        <p style="margin:0;font-size:12px">${school.province || '............'} — ${school.authority || 'ریاست معارف خصوصی'}</p>
+        <h2 style="margin:4px 0">${school.schoolName || 'مکتب خصوصی نداالقلم'}</h2>
+        <p style="margin:0;font-size:11px">جواز فعالیت: ${school.licenseNo || '............'} — سال تعلیمی ${school.academicYear || '............'}</p>
+        <h3 style="border-top:1px solid #999;border-bottom:1px solid #999;padding:4px 0;margin:8px 0">کارت سوانح متعلم</h3>
+        <table style="width:100%;border-collapse:collapse">
+          <tr><td style="width:110px;text-align:center">${photoHtml}<p style="font-size:10px;margin:2px 0">فوتو متعلم</p></td>
+          <td><table style="width:100%;border-collapse:collapse">
+            ${row('اسم متعلم', s.firstName)}
+            ${row('شهرت', s.lastName || '')}
+            ${row('ولد', s.fatherName)}
+            ${row('ولدیت', s.grandFather || '')}
+            ${row('تاریخ ولادت', s.birthDate || '')}
+            ${row('جنسیت', s.gender === 'F' ? 'اناث' : 'ذکر')}
+          </table></td></tr>
+        </table>
+        <table style="width:100%;border-collapse:collapse;margin-top:6px">
+          ${row('نمبر و محل صدور تذکره', `${s.idNumber || ''} ${s.idPlace ? '— ' + s.idPlace : ''}`)}
+          ${row('زبان پدری / مادری', `${s.fatherTongue || '…'} / ${s.motherTongue || '…'}`)}
+          ${row('محل بودوباش دایمی', s.address || '')}
+          ${row('صنف / شماره در جدول', `${s.className || '…'} / ${s.rollNo != null ? toPersianDigits(s.rollNo) : '…'}`)}
+          ${row('سال شمولیت', s.enrolledYear || '')}
+          ${row('نام و تماس سرپرست/ولی', `${s.guardianName || '…'} — ${s.guardianPhone ? toPersianDigits(s.guardianPhone) : '…'}`)}
+        </table>
+        <h4 style="margin:8px 0 2px;text-align:right;font-size:12px">نمرات نهائی مضامین (مادهٔ ۸۳ — بدون تغییر درج می‌شود):</h4>
+        <table border="1" style="width:100%;border-collapse:collapse;font-size:12px">
+          <tr><th>شماره</th><th>مضمون</th><th>نمرهٔ نهائی</th><th>مکتسبه</th></tr>${gradesRows}
+        </table>
+        <p style="font-size:10px;margin:4px 0">درجه‌بندی به اساس اوسط مجموع نمرات: الف ≥۹۰٪ | ب ≥۷۵٪ | ج ≥۶۰٪ | د ≥۵۰٪ | هـ <۵۰٪</p>
+        <div style="display:flex;justify-content:space-between;margin-top:26px;font-size:12px">
+          <span>امضای نگران صنف: ………………</span>
+          <span>امضای مدیریت مکتب: ………………</span>
+        </div>
+      </div>
+    `);
+  };
+
+  // ─── فورم ثبت‌نام سه پارچه — فورم شمارهٔ ۲ وزارت معارف (نسخهٔ ۳.۳.۰) ───
+  const printSeParca = async (p: NonNullable<typeof profile>) => {
+    const school = await apiGet<{ settings: Record<string, string> }>('/api/settings').then((d) => d.settings).catch(() => ({}) as Record<string, string>);
+    const s = p.student;
+    const one = (n: number) => `
+      <div style="border:2px solid #1f2937;padding:10px 14px;max-width:560px;margin:0 auto 22px auto">
+        <p style="margin:0;font-size:11px">جمهوری اسلامی افغانستان — وزارت معارف — مقررهٔ مؤسسات تعلیمی خصوصی (مادهٔ ۲۵/۲ و ۲۶)</p>
+        <h3 style="margin:4px 0;text-align:center">فورم ثبت‌نام / تبدیلی متعلم — سه پارچه</h3>
+        <p style="margin:0;text-align:center;font-size:12px"><b>نمبر پارچهٔ ${toPersianDigits(n)}:</b> ${n === 1 ? 'بایگانی مکتب' : n === 2 ? 'ریاست معارف ولایت' : 'والدین/سرپرست'}</p>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px">
+          <tr><td style="background:#f3f4f6;padding:3px 8px;width:40%">اسم متعلم</td><td style="padding:3px 8px">${s.firstName} ${s.lastName || ''}</td></tr>
+          <tr><td style="background:#f3f4f6;padding:3px 8px">ولد / ولدیت</td><td style="padding:3px 8px">${s.fatherName} / ${s.grandFather || '………………'}</td></tr>
+          <tr><td style="background:#f3f4f6;padding:3px 8px">نمبر و محل صدور تذکره</td><td style="padding:3px 8px">${s.idNumber || '………………'} ${s.idPlace ? '— ' + s.idPlace : ''}</td></tr>
+          <tr><td style="background:#f3f4f6;padding:3px 8px">تاریخ ولادت / جنسیت</td><td style="padding:3px 8px">${s.birthDate || '………………'} — ${s.gender === 'F' ? 'اناث' : 'ذکر'}</td></tr>
+          <tr><td style="background:#f3f4f6;padding:3px 8px">محل بودوباش</td><td style="padding:3px 8px">${s.address || '………………'}</td></tr>
+          <tr><td style="background:#f3f4f6;padding:3px 8px">صنف و مکتب فعلی</td><td style="padding:3px 8px">${s.className || '………………'} — ${school.schoolName || 'مکتب خصوصی نداالقلم'}</td></tr>
+          <tr><td style="background:#f3f4f6;padding:3px 8px">سال شمولیت</td><td style="padding:3px 8px">${s.enrolledYear || '………………'}</td></tr>
+          <tr><td style="background:#f3f4f6;padding:3px 8px">نام و تماس سرپرست</td><td style="padding:3px 8px">${s.guardianName || '………………'} — ${s.guardianPhone ? toPersianDigits(s.guardianPhone) : '………………'}</td></tr>
+          <tr><td style="background:#f3f4f6;padding:3px 8px">ضمیمه</td><td style="padding:3px 8px">۳ قطعه فوتو — کاپی تذکرهٔ متعلم و سرپرست</td></tr>
+        </table>
+        <div style="display:flex;justify-content:space-between;margin-top:24px;font-size:12px">
+          <span>امضای نگران: ………………</span>
+          <span>امضای مدیریت مکتب: ………………</span>
+          <span>مهر ریاست معارف: ………………</span>
+        </div>
+      </div>`;
+    printDocument(`فورم سه پارچه — ${fullName(s)}`, one(1) + one(2) + one(3));
+  };
+
   const openNew = () => {
     setForm({ ...EMPTY_FORM });
     setDialogOpen(true);
@@ -153,7 +233,8 @@ export function StudentsView({ user }: { user: SessionUser }) {
     setForm({
       id: s.id, firstName: s.firstName, lastName: s.lastName || '', fatherName: s.fatherName,
       grandFather: s.grandFather || '', gender: s.gender, birthDate: s.birthDate || '',
-      idNumber: s.idNumber || '', guardianName: s.guardianName || '', guardianPhone: s.guardianPhone || '',
+      idNumber: s.idNumber || '', idPlace: s.idPlace || '', fatherTongue: s.fatherTongue || '', motherTongue: s.motherTongue || '',
+      guardianName: s.guardianName || '', guardianPhone: s.guardianPhone || '',
       address: s.address || '', classId: s.classId || '', rollNo: s.rollNo != null ? String(s.rollNo) : '',
       enrolledYear: s.enrolledYear || '', status: s.status, photo: s.photo || '',
     });
@@ -561,6 +642,15 @@ export function StudentsView({ user }: { user: SessionUser }) {
             <Field label="نمبر تذکره">
               <Input value={form.idNumber} onChange={(e) => setForm({ ...form, idNumber: e.target.value })} />
             </Field>
+            <Field label="محل صدور تذکره" hint="ولایت/ولسوالی — کارت سوانح">
+              <Input value={form.idPlace} onChange={(e) => setForm({ ...form, idPlace: e.target.value })} />
+            </Field>
+            <Field label="زبان پدری" hint="کارت سوانح">
+              <Input value={form.fatherTongue} onChange={(e) => setForm({ ...form, fatherTongue: e.target.value })} />
+            </Field>
+            <Field label="زبان مادری" hint="کارت سوانح">
+              <Input value={form.motherTongue} onChange={(e) => setForm({ ...form, motherTongue: e.target.value })} />
+            </Field>
             <Field label="تاریخ تولد (شمسی)" hint="مثال: 1392/4/16">
               <Input dir="ltr" className="text-left" value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} />
             </Field>
@@ -631,6 +721,16 @@ export function StudentsView({ user }: { user: SessionUser }) {
                     </p>
                   )}
                 </div>
+              </div>
+
+              {/* اسناد رسمی وزارت معارف — کارت سوانح و فورم سه پارچه */}
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" className="gap-1" onClick={() => printSawanjCard(profile)}>
+                  <IdCard className="h-4 w-4" /> چاپ کارت سوانح
+                </Button>
+                <Button size="sm" variant="outline" className="gap-1" onClick={() => printSeParca(profile)}>
+                  <Files className="h-4 w-4" /> فورم ثبت‌نام سه پارچه
+                </Button>
               </div>
 
               {/* خلاصهٔ حاضری */}

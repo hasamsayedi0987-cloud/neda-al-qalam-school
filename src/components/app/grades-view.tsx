@@ -57,6 +57,8 @@ export function GradesView({ user }: { user: SessionUser }) {
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [cells, setCells] = useState<Record<string, GradeCell>>({});
   const [weights, setWeights] = useState({ maxWritten: 40, maxOral: 20, maxHomework: 20, maxActivity: 20 });
+  // نسخهٔ ۳.۳.۰ — ترکیب رسمی اجزای امتحان از سرور (چهارو‌نیم‌ماهه: تحریری ۲۵ + تقریری ۱۵، سالانه: تحریری ۴۰ + تقریری ۲۰)
+  const [periodComponents, setPeriodComponents] = useState<Record<'MIDTERM' | 'ANNUAL', { maxWritten: number; maxOral: number; maxHomework: number; maxActivity: number }> | null>(null);
   // نسخهٔ ۳.۱.۰ — ساختار افغانستان: سقف هر دوره + حد نصاب کامیابی از تنظیمات
   const [periodMax, setPeriodMax] = useState<{ MIDTERM: number; ANNUAL: number }>({ MIDTERM: 40, ANNUAL: 60 });
   const [passMark, setPassMark] = useState(40);
@@ -120,9 +122,11 @@ export function GradesView({ user }: { user: SessionUser }) {
         grades: Array<{ studentId: string; period: string; written: number | null; oral: number | null; homework: number | null; activity: number | null; total: number; approved: boolean }>;
         weights: typeof weights;
         periodMax?: { MIDTERM: number; ANNUAL: number };
+        periodComponents?: { MIDTERM: { maxWritten: number; maxOral: number; maxHomework: number; maxActivity: number }; ANNUAL: { maxWritten: number; maxOral: number; maxHomework: number; maxActivity: number } };
       }>(`/api/grades?classSubjectId=${csId}`);
       setStudents(data.students);
       setWeights(data.weights);
+      if (data.periodComponents) setPeriodComponents(data.periodComponents);
       if (data.periodMax) setPeriodMax(data.periodMax);
       const c: Record<string, GradeCell> = {};
       let approved = 0;
@@ -146,10 +150,10 @@ export function GradesView({ user }: { user: SessionUser }) {
 
   useEffect(() => { queueMicrotask(loadGrades); }, [loadGrades]);
 
-  // سقف هر جزء در دورهٔ انتخاب‌شده — مثلاً چهارو‌نیم‌ماهه: تحریری از ۱۶، تقریری از ۸ … (مجموع از ۴۰)
+  // سقف هر جزء در دورهٔ انتخاب‌شده — ترکیب رسمی معارف: چهارو‌نیم‌ماهه تحریری ۲۵ + تقریری ۱۵، سالانه تحریری ۴۰ + تقریری ۲۰
   const caps = useMemo(
-    () => componentCapsFor(periodMax[period] || 100, weights),
-    [period, periodMax, weights],
+    () => periodComponents?.[period] ?? componentCapsFor(periodMax[period] || 100, weights),
+    [period, periodMax, weights, periodComponents],
   );
 
   const setCell = (studentId: string, key: keyof GradeCell, value: string) => {
@@ -387,8 +391,8 @@ export function GradesView({ user }: { user: SessionUser }) {
                       <TableHead className="min-w-[170px]">شهرت شاگرد</TableHead>
                       <TableHead className="min-w-[90px]">تحریری <span className="text-[10px] text-muted-foreground">(از {toPersianDigits(caps.maxWritten)})</span></TableHead>
                       <TableHead className="min-w-[90px]">تقریری/عملی <span className="text-[10px] text-muted-foreground">(از {toPersianDigits(caps.maxOral)})</span></TableHead>
-                      <TableHead className="min-w-[90px]">کارخانگی <span className="text-[10px] text-muted-foreground">(از {toPersianDigits(caps.maxHomework)})</span></TableHead>
-                      <TableHead className="min-w-[90px]">فعالیت صنفی <span className="text-[10px] text-muted-foreground">(از {toPersianDigits(caps.maxActivity)})</span></TableHead>
+                      {caps.maxHomework > 0 && <TableHead className="min-w-[90px]">کارخانگی <span className="text-[10px] text-muted-foreground">(از {toPersianDigits(caps.maxHomework)})</span></TableHead>}
+                      {caps.maxActivity > 0 && <TableHead className="min-w-[90px]">فعالیت صنفی <span className="text-[10px] text-muted-foreground">(از {toPersianDigits(caps.maxActivity)})</span></TableHead>}
                       <TableHead className="min-w-[80px]">مجموع <span className="text-[10px] text-muted-foreground">(از {toPersianDigits(periodMax[period])})</span></TableHead>
                       <TableHead className="min-w-[70px]">مکتسبه</TableHead>
                       {canDelete && <TableHead className="min-w-[60px] text-center">حذف</TableHead>}
@@ -412,18 +416,20 @@ export function GradesView({ user }: { user: SessionUser }) {
                               </span>
                             )}
                           </TableCell>
-                          {(['written', 'oral', 'homework', 'activity'] as const).map((k) => (
-                            <TableCell key={k}>
-                              <Input
-                                type="number" min={0} inputMode="decimal"
-                                className="h-9 w-20 text-center"
-                                disabled={!teacherEditable || user.role === 'TEACHER' && approved}
-                                value={cells[s.id]?.[k] ?? ''}
-                                onChange={(e) => setCell(s.id, k, e.target.value)}
-                                aria-label={`${PERIOD_LABELS[k] || k} — ${fullName(s)}`}
-                              />
-                            </TableCell>
-                          ))}
+                          {(['written', 'oral', 'homework', 'activity'] as const)
+                            .filter((k) => (k === 'written' ? caps.maxWritten : k === 'oral' ? caps.maxOral : k === 'homework' ? caps.maxHomework : caps.maxActivity) > 0)
+                            .map((k) => (
+                              <TableCell key={k}>
+                                <Input
+                                  type="number" min={0} inputMode="decimal"
+                                  className="h-9 w-20 text-center"
+                                  disabled={!teacherEditable || user.role === 'TEACHER' && approved}
+                                  value={cells[s.id]?.[k] ?? ''}
+                                  onChange={(e) => setCell(s.id, k, e.target.value)}
+                                  aria-label={`${PERIOD_LABELS[k] || k} — ${fullName(s)}`}
+                                />
+                              </TableCell>
+                            ))}
                           <TableCell className="font-bold text-emerald-800 dark:text-emerald-300">{total != null ? toPersianDigits(total) : '—'}</TableCell>
                           <TableCell>
                             <span className={cn('text-sm', letterColor(total))}>{letterGrade(total)}</span>

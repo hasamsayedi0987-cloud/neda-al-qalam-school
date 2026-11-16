@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { apiGet, apiSend, onSyncStateChange, pendingSyncCount, failedSyncItems, isOnline, isAuthRequired, flushQueue, tryAutoRelogin, discardQueueItem, discardAllFailedItems, forgetLastUser, prefetchSections } from '@/lib/client/api';
 import { configureExports } from '@/lib/client/exports';
 import { SECTIONS, sectionAllowed } from '@/lib/access';
+import { navLabel, localeOf, dirOfLocale, type AppLocale } from '@/lib/i18n-nav';
 import { isoToJalaliDisplay, toPersianDigits } from '@/lib/jalali';
 import { ROLE_LABELS } from '@/lib/grading';
 import { cn } from '@/lib/utils';
@@ -25,6 +26,7 @@ import {
   ShieldCheck, UserCog, Users, ClipboardCheck, BookMarked, Wifi, KeyRound,
   FileSpreadsheet, UserCheck, Award, LayoutGrid, AlertTriangle, Loader2,
   Sun, Moon, Monitor, Wallet, MessageSquare, X,
+  Bus, ShoppingCart, Landmark, ReceiptText, MessageCircleMore,
 } from 'lucide-react';
 
 /* ─── بارگذاری تنبل ویوها: هر بخش فقط هنگام باز شدن دانلود می‌شود (بستهٔ اولیه سبک‌تر) ─── */
@@ -58,6 +60,12 @@ const CustomSectionsView = dynamic(() => import('./custom-view').then((m) => m.C
 const CertificatesView = dynamic(() => import('./certificate-view').then((m) => m.CertificatesView), { loading: () => <ViewSkeleton /> });
 const FeesView = dynamic(() => import('./fees-view').then((m) => m.FeesView), { loading: () => <ViewSkeleton /> });
 const MessagesView = dynamic(() => import('./messages-view').then((m) => m.MessagesView), { loading: () => <ViewSkeleton /> });
+// نسخهٔ ۳.۳.۰ — ترانسپورت، فروشات، خزانه، مصارفات و SMS والدین
+const TransportView = dynamic(() => import('./transport-view').then((m) => m.TransportView), { loading: () => <ViewSkeleton /> });
+const StoreView = dynamic(() => import('./store-view').then((m) => m.StoreView), { loading: () => <ViewSkeleton /> });
+const TreasuryView = dynamic(() => import('./treasury-view').then((m) => m.TreasuryView), { loading: () => <ViewSkeleton /> });
+const ExpensesView = dynamic(() => import('./expenses-view').then((m) => m.ExpensesView), { loading: () => <ViewSkeleton /> });
+const SmsView = dynamic(() => import('./sms-view').then((m) => m.SmsView), { loading: () => <ViewSkeleton /> });
 
 export interface NavItem {
   key: string;
@@ -77,6 +85,11 @@ const SECTION_ICONS: Record<string, React.ComponentType<{ className?: string }>>
   activities: ClipboardCheck,
   grades: ClipboardList,
   finance: Wallet,
+  transport: Bus,
+  store: ShoppingCart,
+  treasury: Landmark,
+  expenses: ReceiptText,
+  sms: MessageCircleMore,
   messages: MessageSquare,
   results: FileSpreadsheet,
   certificates: Award,
@@ -178,13 +191,31 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
     tagline: 'سیستم مدیریت تعلیمی',
     nav: {} as Record<string, string>,
   });
+  // زبان رابط — دری پیش‌فرض؛ پشتو و انگلیسی از تنظیمات (نسخهٔ ۳.۳.۰)
+  const [lang, setLang] = useState<AppLocale>('dr');
   const { toast } = useToast();
 
-  // فیلتر منو: دسترسی مؤثر کاربر (نقش پیش‌فرض + رونویسی مدیر) + برچسب‌های قابل‌تغییر
+  // فیلتر منو: دسترسی مؤثر کاربر (نقش پیش‌فرض + رونویسی مدیر) + برچسب‌های قابل‌تغییر و ترجمهٔ زبان
   // sectionAllowed خودش نقش پیش‌فرض را چک می‌کند — رونویسی مدیر می‌تواند بخشی را به نقشی بدهد که پیش‌فرض نداشت
   const visibleNav = NAV_ITEMS
     .filter((n) => sectionAllowed(user, n.key))
-    .map((n) => ({ ...n, label: titles.nav[n.key] || n.label }));
+    .map((n) => ({ ...n, label: titles.nav[n.key] || navLabel(n.key, lang, n.label) }));
+
+  // اعمال زبان: جهت متن (انگلیسی LTR) و ویژگی زبان سند
+  useEffect(() => {
+    document.documentElement.dir = dirOfLocale(lang);
+    document.documentElement.lang = lang === 'dr' ? 'fa' : lang;
+  }, [lang]);
+
+  // تغییر فوری زبان از تنظیمات (بدون بارگیری مجدد صفحه)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail;
+      setLang(localeOf(detail));
+    };
+    window.addEventListener('noq-language', handler as EventListener);
+    return () => window.removeEventListener('noq-language', handler as EventListener);
+  }, []);
 
   // بخش‌های دلخواهِ مجاز برای این نقش — به منوی اصلی افزوده می‌شوند
   useEffect(() => {
@@ -204,6 +235,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
           tagline: d.settings.tagline || 'سیستم مدیریت تعلیمی',
           nav,
         });
+        setLang(localeOf(d.settings.language));
         if (d.settings.schoolName) {
           document.title = `${d.settings.schoolName} | سیستم مدیریت مکتب`;
         }
@@ -747,6 +779,11 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
           {view === 'activities' && <ActivitiesView user={user} />}
           {view === 'grades' && <GradesView user={user} />}
           {view === 'finance' && <FeesView user={user} />}
+          {view === 'transport' && <TransportView user={user} />}
+          {view === 'store' && <StoreView user={user} />}
+          {view === 'treasury' && <TreasuryView user={user} />}
+          {view === 'expenses' && <ExpensesView user={user} />}
+          {view === 'sms' && <SmsView user={user} />}
           {view === 'messages' && <MessagesView user={user} />}
           {view === 'results' && <ResultsView user={user} />}
           {view === 'certificates' && <CertificatesView user={user} />}

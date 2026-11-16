@@ -47,14 +47,18 @@ check('نهائی ۴۰ → کامیاب', subjectResult(40) === 'کامیاب', 
 check('نهائی ۳۹.۵ → ناکام', subjectResult(39.5) === 'ناکام', String(subjectResult(39.5)));
 check('نهائی null → null', subjectResult(null) === null, 'x');
 
-// ۵) نتیجهٔ کل شاگرد
+// ۵) نتیجهٔ کل شاگرد — قوانین رسمی وزارت معارف (نسخهٔ ۳.۳.۰: مادهٔ ۵۳ و ۵۹ لایحهٔ مکاتب ثانوی)
 check('همهٔ مضامین بالای نصاب → کامیاب',
   overallResult([80, 45, 90], DEFAULT_SCALE, DEFAULT_RESULT_LABELS).result === 'کامیاب');
-check('ناکامی در بیش از نصف مضامین → ناکام',
-  overallResult([30, 20, 80], DEFAULT_SCALE, DEFAULT_RESULT_LABELS).result === 'ناکام');
-check('ناکامی در نصف یا کمتر → کامیاب مشروط (لیاقت)',
-  overallResult([30, 80, 90], DEFAULT_SCALE, DEFAULT_RESULT_LABELS).result === 'کامیاب مشروط (لیاقت)',
+check('اوسط زیر ۵۰٪ → ناکام (تکرار صنف)',
+  overallResult([30, 20, 80], DEFAULT_SCALE, DEFAULT_RESULT_LABELS).result === 'ناکام',
+  overallResult([30, 20, 80], DEFAULT_SCALE, DEFAULT_RESULT_LABELS).result);
+check('ناکامی در ۱ تا ۳ مضمون با اوسط کافی → مشروط (امتحان مشروطی)',
+  overallResult([30, 80, 90], DEFAULT_SCALE, DEFAULT_RESULT_LABELS).result === 'مشروط',
   overallResult([30, 80, 90], DEFAULT_SCALE, DEFAULT_RESULT_LABELS).result);
+check('ناکامی در بیش از ۳ مضمون → ناکام حتی با اوسط کافی',
+  overallResult([30, 30, 30, 30, 90, 90, 90, 90], DEFAULT_SCALE, DEFAULT_RESULT_LABELS).result === 'ناکام',
+  overallResult([30, 30, 30, 30, 90, 90, 90, 90], DEFAULT_SCALE, DEFAULT_RESULT_LABELS).result);
 check('بدون نمره → ناقص',
   overallResult([null, null], DEFAULT_SCALE, DEFAULT_RESULT_LABELS).result === 'ناقص');
 check('شمار مضامین ناکام درست است',

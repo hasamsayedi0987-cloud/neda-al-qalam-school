@@ -4,20 +4,17 @@ import type { Prisma } from '@prisma/client';
 import { requireUser, requireRole, requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
 import { pushToUsers } from '@/lib/push';
-import { clampComponent, componentTotal, componentCapsFor, DEFAULT_PERIOD_MAX } from '@/lib/grading';
+import { clampComponent, componentTotal, DEFAULT_PERIOD_MAX, parsePeriodComponents, type PeriodComponentsMap } from '@/lib/grading';
 import { getTeacherPerms, ownsClassSubject } from '@/lib/teacher-scope';
 
-async function getWeights() {
-  const settings = await db.setting.findMany({
-    where: { key: { in: ['maxWritten', 'maxOral', 'maxHomework', 'maxActivity'] } },
-  });
-  const map = new Map(settings.map((s) => [s.key, Number(s.value)]));
-  return {
-    maxWritten: map.get('maxWritten') ?? 40,
-    maxOral: map.get('maxOral') ?? 20,
-    maxHomework: map.get('maxHomework') ?? 20,
-    maxActivity: map.get('maxActivity') ?? 20,
-  };
+/** ترکیب رسمی اجزای امتحان — لایحهٔ مکاتب ثانوی: چهارو‌نیم‌ماهه (تحریری ۲۵ + تقریری ۱۵)،
+ *  سالانه (تحریری ۴۰ + تقریری ۲۰) — قابل رونویسی از تنظیمات (periodComponents JSON) */
+async function getPeriodComponents(): Promise<PeriodComponentsMap> {
+  const [row, periodMax] = await Promise.all([
+    db.setting.findUnique({ where: { key: 'periodComponents' } }),
+    getPeriodMax(),
+  ]);
+  return parsePeriodComponents(row?.value, periodMax);
 }
 
 /** سقف نمرهٔ هر دوره + حد نصاب — از تنظیمات؛ ساختار افغانستان: ۴۰ (چهارو‌نیم‌ماهه) + ۶۰ (سالانه) */
@@ -89,7 +86,8 @@ export async function GET(req: NextRequest) {
       },
       students,
       grades,
-      weights: await getWeights(),
+      weights: await getPeriodComponents().then((pc) => pc.MIDTERM),
+      periodComponents: await getPeriodComponents(),
       periodMax: await getPeriodMax(),
     });
   } catch (e) {
@@ -215,10 +213,10 @@ export async function POST(req: NextRequest) {
         throw new ApiError('این مضمون به شما سپرده نشده است', 403);
       }
     }
-    const w = await getWeights();
-    // سقف اجزای همین دوره — مثلاً چهارو‌نیم‌ماهه: تحریری از ۱۶، تقریری از ۸ … (مجموع از ۴۰)
+    // سقف اجزای همین دوره — ترکیب رسمی معارف: چهارو‌نیم‌ماهه تحریری ۲۵ + تقریری ۱۵، سالانه تحریری ۴۰ + تقریری ۲۰
     const periodMaxMap = await getPeriodMax();
-    const caps = componentCapsFor(periodMaxMap[period as 'MIDTERM' | 'ANNUAL'] || 100, w);
+    const pc = await getPeriodComponents();
+    const caps = pc[period as 'MIDTERM' | 'ANNUAL'];
 
     // پیش‌واکشی: یک کوئری برای همهٔ نمرات موجود (قبلاً N+1 کوئری بود)
     const reqStudentIds = items.map((item: { studentId?: unknown }) => str(item.studentId)).filter(Boolean);

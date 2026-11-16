@@ -66,6 +66,37 @@ export const SECTIONS: Record<string, SectionDef> = {
     manageable: true,
     hint: 'ثبت پرداخت‌های فیس، مجموع‌ها و هشدار تأخیر — دسترسی اصلی با مدیر',
   },
+  // ═════ نسخهٔ ۳.۳.۰ — مطابقت کامل با وزارت معارف و مقررهٔ مؤسسات تعلیمی خصوصی ═════
+  transport: {
+    label: 'ترانسپورت',
+    roles: ['ADMIN', 'HEADTEACHER'],
+    manageable: true,
+    hint: 'فیس ماهانهٔ ترانسپورت، وصولی‌ها، مصارف و گذارش مفاد/نقص با فلتر صنف و ماه',
+  },
+  store: {
+    label: 'فروشات کتاب و یونیفورم',
+    roles: ['ADMIN', 'HEADTEACHER', 'LIBRARIAN'],
+    manageable: true,
+    hint: 'خریداری از بازار، فروش به متعلمین، انبار و گذارش عواید/مفاد-نقص',
+  },
+  treasury: {
+    label: 'خزانه و تسلیمی پول',
+    roles: ['ADMIN', 'HEADTEACHER'],
+    manageable: true,
+    hint: 'دخل، تجری، بیلانس خزانه و تسلیمی پول فیس به صاحب مکتب با رسید',
+  },
+  expenses: {
+    label: 'مصارفات و معاشات',
+    roles: ['ADMIN', 'HEADTEACHER'],
+    manageable: true,
+    hint: 'کتگوری‌های مصرف، مصارفات با فلتر تاریخ و کتگوری، معاشات ماهانهٔ کارمندان',
+  },
+  sms: {
+    label: 'پیام‌های والدین (SMS)',
+    roles: ['ADMIN', 'HEADTEACHER'],
+    manageable: true,
+    hint: 'اطلاع حاضری، فیس باقی، امتحانات و اطلاعیه به شماره‌های والدین — از دروازهٔ SMS قابل تنظیم',
+  },
   messages: {
     label: 'ارتباطات و پیام‌ها',
     roles: ALL_ROLES,

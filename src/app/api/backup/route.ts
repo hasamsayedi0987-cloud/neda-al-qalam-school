@@ -22,6 +22,11 @@ export async function GET() {
       notifications, tasks, settings, customSections, customEntries, certificates,
       feePayments, messages, scheduleSlots, messageRecipients, guardianLinks, auditLogs,
       employeeAttendance,
+      // نسخهٔ ۵ — جدول‌های ترانسپورت، فروشات، خزانه، مصارفات، معاشات و SMS
+      transportEnrollments, transportPayments, transportExpenses,
+      storeItems, storePurchases, storeSales,
+      expenseCategories, expenses, salaryPayments,
+      moneyHandovers, treasuryTransactions, smsOutbox,
     ] = await Promise.all([
       db.user.findMany(),
       db.class.findMany(),
@@ -48,9 +53,21 @@ export async function GET() {
       db.guardianLink.findMany(),
       db.auditLog.findMany({ orderBy: { createdAt: 'desc' }, take: 500 }),
       db.employeeAttendance.findMany(),
+      db.transportEnrollment.findMany(),
+      db.transportPayment.findMany(),
+      db.transportExpense.findMany(),
+      db.storeItem.findMany(),
+      db.storePurchase.findMany(),
+      db.storeSale.findMany(),
+      db.expenseCategory.findMany(),
+      db.expense.findMany(),
+      db.salaryPayment.findMany(),
+      db.moneyHandover.findMany(),
+      db.treasuryTransaction.findMany(),
+      db.smsOutbox.findMany(),
     ]);
     const backup = {
-      version: 4,
+      version: 5,
       app: 'مکتب خصوصی نداالقلم',
       createdAt: new Date().toISOString(),
       data: {
@@ -61,6 +78,10 @@ export async function GET() {
         feePayments, messages, scheduleSlots,
         messageRecipients, guardianLinks, auditLogs,
         employeeAttendance,
+        transportEnrollments, transportPayments, transportExpenses,
+        storeItems, storePurchases, storeSales,
+        expenseCategories, expenses, salaryPayments,
+        moneyHandovers, treasuryTransactions, smsOutbox,
         // کلید امنیتی نشست هرگز پشتیبان نمی‌شود
         settings: settings.filter((s) => s.key !== 'authSecret'),
         customSections, customEntries, certificates,
@@ -118,6 +139,19 @@ export async function POST(req: NextRequest) {
       await tx.messageRecipient.deleteMany({});
       await tx.guardianLink.deleteMany({});
       await tx.auditLog.deleteMany({});
+      // نسخهٔ ۵ — پاک‌سازی جدول‌های ترانسپورت، فروشات، خزانه، مصارفات، معاشات و SMS
+      await tx.smsOutbox.deleteMany({});
+      await tx.transportPayment.deleteMany({});
+      await tx.transportEnrollment.deleteMany({});
+      await tx.transportExpense.deleteMany({});
+      await tx.storeSale.deleteMany({});
+      await tx.storePurchase.deleteMany({});
+      await tx.storeItem.deleteMany({});
+      await tx.expense.deleteMany({});
+      await tx.expenseCategory.deleteMany({});
+      await tx.salaryPayment.deleteMany({});
+      await tx.moneyHandover.deleteMany({});
+      await tx.treasuryTransaction.deleteMany({});
       await tx.message.deleteMany({});
       await tx.feePayment.deleteMany({});
       await tx.scheduleSlot.deleteMany({});
@@ -185,6 +219,7 @@ export async function POST(req: NextRequest) {
               grandFather: s.grandFather ?? null, gender: s.gender ?? 'M', birthDate: s.birthDate ?? null,
               idNumber: s.idNumber ?? null, guardianName: s.guardianName ?? null, guardianPhone: s.guardianPhone ?? null,
               address: s.address ?? null, photo: s.photo ?? null, classId: s.classId ?? null,
+              idPlace: s.idPlace ?? null, fatherTongue: s.fatherTongue ?? null, motherTongue: s.motherTongue ?? null,
               rollNo: s.rollNo ?? null, status: s.status ?? 'ACTIVE', enrolledYear: s.enrolledYear ?? null,
             },
           });
@@ -301,6 +336,67 @@ export async function POST(req: NextRequest) {
           await tx.scheduleSlot.create({
             data: { id: s.id, classId: s.classId, subjectId: s.subjectId, teacherId: s.teacherId ?? null, day: s.day, period: s.period },
           });
+        }
+      }
+      // نسخهٔ ۵ — بازیابی جدول‌های ترانسپورت، فروشات، خزانه، مصارفات، معاشات و SMS
+      if (Array.isArray(data.expenseCategories)) {
+        for (const c of data.expenseCategories) {
+          await tx.expenseCategory.create({ data: { id: c.id, name: c.name, createdAt: c.createdAt ?? new Date() } });
+        }
+      }
+      if (Array.isArray(data.expenses)) {
+        for (const e of data.expenses) {
+          await tx.expense.create({ data: { id: e.id, categoryId: e.categoryId, amount: e.amount, date: e.date, note: e.note ?? null, clientToken: e.clientToken ?? null } });
+        }
+      }
+      if (Array.isArray(data.transportEnrollments)) {
+        for (const t of data.transportEnrollments) {
+          await tx.transportEnrollment.create({ data: { id: t.id, studentId: t.studentId, route: t.route ?? null, vehicleNo: t.vehicleNo ?? null, monthlyFee: t.monthlyFee ?? 0, active: t.active ?? true, clientToken: t.clientToken ?? null } });
+        }
+      }
+      if (Array.isArray(data.transportPayments)) {
+        for (const p of data.transportPayments) {
+          await tx.transportPayment.create({ data: { id: p.id, enrollmentId: p.enrollmentId, month: p.month, amount: p.amount, paidAt: p.paidAt, note: p.note ?? null, clientToken: p.clientToken ?? null } });
+        }
+      }
+      if (Array.isArray(data.transportExpenses)) {
+        for (const e of data.transportExpenses) {
+          await tx.transportExpense.create({ data: { id: e.id, month: e.month, amount: e.amount, note: e.note ?? null, clientToken: e.clientToken ?? null } });
+        }
+      }
+      if (Array.isArray(data.storeItems)) {
+        for (const i of data.storeItems) {
+          await tx.storeItem.create({ data: { id: i.id, name: i.name, kind: i.kind ?? 'BOOK', size: i.size ?? null, buyPrice: i.buyPrice ?? 0, sellPrice: i.sellPrice ?? 0, stock: i.stock ?? 0, clientToken: i.clientToken ?? null } });
+        }
+      }
+      if (Array.isArray(data.storePurchases)) {
+        for (const p of data.storePurchases) {
+          await tx.storePurchase.create({ data: { id: p.id, itemId: p.itemId, qty: p.qty, unitCost: p.unitCost, date: p.date, note: p.note ?? null, clientToken: p.clientToken ?? null } });
+        }
+      }
+      if (Array.isArray(data.storeSales)) {
+        for (const s of data.storeSales) {
+          await tx.storeSale.create({ data: { id: s.id, itemId: s.itemId, studentId: s.studentId ?? null, qty: s.qty, unitPrice: s.unitPrice, discount: s.discount ?? 0, date: s.date, clientToken: s.clientToken ?? null } });
+        }
+      }
+      if (Array.isArray(data.salaryPayments)) {
+        for (const s of data.salaryPayments) {
+          await tx.salaryPayment.create({ data: { id: s.id, teacherId: s.teacherId, month: s.month, amount: s.amount, status: s.status ?? 'PAID', paidAt: s.paidAt ?? null, clientToken: s.clientToken ?? null } });
+        }
+      }
+      if (Array.isArray(data.moneyHandovers)) {
+        for (const h of data.moneyHandovers) {
+          await tx.moneyHandover.create({ data: { id: h.id, amount: h.amount, date: h.date, receiptNo: h.receiptNo ?? null, note: h.note ?? null, clientToken: h.clientToken ?? null } });
+        }
+      }
+      if (Array.isArray(data.treasuryTransactions)) {
+        for (const t of data.treasuryTransactions) {
+          await tx.treasuryTransaction.create({ data: { id: t.id, type: t.type, source: t.source ?? null, amount: t.amount, date: t.date, note: t.note ?? null, refId: t.refId ?? null } });
+        }
+      }
+      if (Array.isArray(data.smsOutbox)) {
+        for (const s of data.smsOutbox) {
+          await tx.smsOutbox.create({ data: { id: s.id, to: s.to, studentId: s.studentId ?? null, category: s.category ?? 'NOTICE', body: s.body, status: s.status ?? 'PENDING', error: s.error ?? null, sentAt: s.sentAt ?? null } });
         }
       }
       // بخش‌های دلخواه + ثبت‌ها (قبلاً در پشتیبان نبودند = گم می‌شدند!)

@@ -1,6 +1,12 @@
 /**
  * منطق نمرات و نتایج — مکتب خصوصی نداالقلم
- * مقیاس: ۹۰-۱۰۰ = الف | ۸۰-۹۰ = ب | ۷۰-۸۰ = ج | ۶۰-۷۰ = د | ۵۰-۶۰ = هـ | زیر ۵۰ = تکرار صنف
+ * نظام رسمی وزارت معارف افغانستان:
+ *  • چهارو‌نیم‌ماهه از ۴۰ (تحریری ۲۵ + تقریری ۱۵) + سالانه از ۶۰ (تحریری ۴۰ + تقریری ۲۰) = ۱۰۰
+ *  • حد نصاب کامیابی هر مضمون: ۴۰ از ۱۰۰ — مادهٔ ۵۳ لایحهٔ مکاتب ثانوی
+ *  • ارتقا: اوسط مجموع نمرات ≥ ۵۰٪ + همهٔ مضامین ≥ ۴۰ — مشروط: اوسط ≥ ۵۰٪ اما ۱ تا ۳ مضمون کمتر از ۴۰
+ *  • محروم از امتحان: حاضری سالانه کمتر از ۷۵٪
+ *  • مکتسبه‌ها به اساس اوسط مجموع نمرات: الف ≥۹۰٪ | ب ≥۷۵٪ | ج ≥۶۰٪ | د ≥۵۰٪ | هـ <۵۰٪
+ *    (لایحهٔ درجه‌بندی شاگردان ۱۳۹۸ + جداول نتایج معتبر مکاتب افغانستان)
  */
 
 export interface GradeWeights {
@@ -38,6 +44,59 @@ export interface PeriodMax {
 
 export const DEFAULT_PERIOD_MAX: PeriodMax = { MIDTERM: 40, ANNUAL: 60 };
 export const DEFAULT_PASS_MARK = 40;
+
+/** ترکیب رسمی اجزای هر دوره — لایحهٔ مکاتب ثانوی (مواضع ۱۹-۳۰):
+ *  چهارو‌نیم‌ماهه: تحریری ۲۵ + تقریری ۱۵ | سالانه: تحریری ۴۰ + تقریری ۲۰ */
+export const DEFAULT_PERIOD_COMPONENTS: Record<'MIDTERM' | 'ANNUAL', GradeWeights> = {
+  MIDTERM: { maxWritten: 25, maxOral: 15, maxHomework: 0, maxActivity: 0 },
+  ANNUAL: { maxWritten: 40, maxOral: 20, maxHomework: 0, maxActivity: 0 },
+};
+
+export type PeriodComponentsMap = Record<'MIDTERM' | 'ANNUAL', GradeWeights>;
+
+/** خواندن ترکیب اجزا از تنظیمات (periodComponents JSON) — با سقف دوره متناسب می‌شود
+ *  وقتی مدیر سقف دوره را عوض کند، اجزا با نسبت سقف رسمی مقیاس می‌شوند */
+export function parsePeriodComponents(json: string | null | undefined, periodMax: PeriodMax): PeriodComponentsMap {
+  const base: PeriodComponentsMap = {
+    MIDTERM: { ...DEFAULT_PERIOD_COMPONENTS.MIDTERM },
+    ANNUAL: { ...DEFAULT_PERIOD_COMPONENTS.ANNUAL },
+  };
+  if (json) {
+    try {
+      const obj = JSON.parse(json) as Partial<PeriodComponentsMap>;
+      for (const p of ['MIDTERM', 'ANNUAL'] as const) {
+        const v = obj[p];
+        if (v && Number.isFinite(Number(v.maxWritten))) {
+          const oralRaw = Number((v as { oral?: number }).oral ?? 0);
+          base[p] = {
+            maxWritten: Math.max(0, Number(v.maxWritten)),
+            maxOral: Math.max(0, Number.isFinite(oralRaw) && oralRaw > 0 ? oralRaw : Number(v.maxOral ?? 0)),
+            maxHomework: Math.max(0, Number(v.maxHomework ?? (v as { homework?: number }).homework ?? 0)),
+            maxActivity: Math.max(0, Number(v.maxActivity ?? (v as { activity?: number }).activity ?? 0)),
+          };
+        }
+      }
+    } catch {
+      /* تنظیمات نامعتبر — پیش‌فرض رسمی */
+    }
+  }
+  // متناسب‌سازی با سقف دوره (اگر مدیر سقف را از ۴۰/۶۰ تغییر داده باشد)
+  const scaleMid = periodMax.MIDTERM !== 40 ? periodMax.MIDTERM / 40 : 1;
+  const scaleAnn = periodMax.ANNUAL !== 60 ? periodMax.ANNUAL / 60 : 1;
+  const scaleMap = { MIDTERM: scaleMid, ANNUAL: scaleAnn } as const;
+  for (const p of ['MIDTERM', 'ANNUAL'] as const) {
+    if (scaleMap[p] !== 1) {
+      const s = round2(scaleMap[p]);
+      base[p] = {
+        maxWritten: round2(base[p].maxWritten * s),
+        maxOral: round2(base[p].maxOral * s),
+        maxHomework: round2(base[p].maxHomework * s),
+        maxActivity: round2(base[p].maxActivity * s),
+      };
+    }
+  }
+  return base;
+}
 
 /** سقف اجزای یک دوره — نسبت هر جزء (از تنظیمات، جمعاً از ۱۰۰) × سقف دورهٔ همان امتحان
  *  مثال پیش‌فرض: چهارو‌نیم‌ماهه ۴۰ → تحریری ۱۶، تقریری ۸، کارخانگی ۸، فعالیت ۸ */
@@ -92,7 +151,8 @@ export function finalScore(
   return round2(values.reduce((a, b) => a + b, 0));
 }
 
-/** مکتسبه (حرف) بر اساس نمرهٔ نهائی — مقیاس قابل تنظیم توسط مدیر */
+/** مکتسبه (حرف) بر اساس نمرهٔ نهائی — باندهای رسمی وزارت معارف
+ *  الف ≥۹۰٪ | ب ≥۷۵٪ | ج ≥۶۰٪ | د ≥۵۰٪ | هـ <۵۰٪ — قابل تنظیم توسط مدیر */
 export interface GradeScaleEntry {
   label: string;
   min: number; // حداقل درصد برای این مکتسبه (نزولی مرتب می‌شود)
@@ -100,11 +160,10 @@ export interface GradeScaleEntry {
 
 export const DEFAULT_SCALE: GradeScaleEntry[] = [
   { label: 'الف', min: 90 },
-  { label: 'ب', min: 80 },
-  { label: 'ج', min: 70 },
-  { label: 'د', min: 60 },
-  { label: 'هـ', min: 50 },
-  { label: 'تکرار', min: 0 },
+  { label: 'ب', min: 75 },
+  { label: 'ج', min: 60 },
+  { label: 'د', min: 50 },
+  { label: 'هـ', min: 0 },
 ];
 
 /** خواندن و اعتبارسنجی مقیاس از تنظیمات */
@@ -145,14 +204,13 @@ function toPersianDigitsSafe(n: number): string {
   return String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
 }
 
-/** رنگ پیشنهادی برای مکتسبه */
+/** رنگ پیشنهادی برای مکتسبه — باندهای رسمی ۹۰/۷۵/۶۰/۵۰ */
 export function letterColor(score: number | null): string {
   if (score == null) return 'text-muted-foreground';
   if (score >= 90) return 'text-emerald-700 dark:text-emerald-300 font-bold';
-  if (score >= 80) return 'text-green-700 dark:text-green-300 font-bold';
-  if (score >= 70) return 'text-teal-700 dark:text-teal-300 font-bold';
-  if (score >= 60) return 'text-amber-700 dark:text-amber-300 font-bold';
-  if (score >= 50) return 'text-orange-700 dark:text-orange-300 font-bold';
+  if (score >= 75) return 'text-green-700 dark:text-green-300 font-bold';
+  if (score >= 60) return 'text-teal-700 dark:text-teal-300 font-bold';
+  if (score >= 50) return 'text-amber-700 dark:text-amber-300 font-bold';
   return 'text-red-700 dark:text-red-300 font-bold';
 }
 
@@ -161,16 +219,22 @@ export const RESULT_REPEAT = 'تکرار صنف';
 export const RESULT_INCOMPLETE = 'ناقص';
 
 export interface ResultLabels {
-  passMark: number; // حد نصاب کامیابی هر مضمون (پیش‌فرض ۴۰ از ۱۰۰)
+  passMark: number; // حد نصاب کامیابی هر مضمون (پیش‌فرض ۴۰ از ۱۰۰ — مادهٔ ۵۳)
+  minAverage: number; // حداقل اوسط مجموع نمرات برای ارتقا (پیش‌فرض ۵۰٪ — مادهٔ ۵۹)
   passLabel: string; // کامیاب
   failLabel: string; // ناکام
 }
 
 export const DEFAULT_RESULT_LABELS: ResultLabels = {
   passMark: DEFAULT_PASS_MARK,
+  minAverage: 50,
   passLabel: 'کامیاب',
   failLabel: 'ناکام',
 };
+
+export const RESULT_CONDITIONAL = 'مشروط';
+export const RESULT_DEPRIVED = 'محروم'; // حاضری سالانه کمتر از حد نصاب
+export const DEFAULT_ATTENDANCE_MIN = 75; // ۷۵٪ حاضری سالانه — لایحهٔ مکاتب ثانوی
 
 /** نتیجهٔ یک مضمون — کامیاب یا ناکام بر اساس حد نصاب قابل‌تغییر از تنظیمات */
 export function subjectResult(
@@ -181,10 +245,19 @@ export function subjectResult(
   return final >= labels.passMark ? labels.passLabel : labels.failLabel;
 }
 
-/** نتیجهٔ کل شاگرد بر اساس نمرات نهائی همهٔ مضامین:
- *  • بدون مضمون ناکام → کامیاب
- *  • ناکامی در بیش از نصف مضامین → ناکام (تکرار صنف)
- *  • ناکامی در نصف یا کمتر → کامیاب مشروط (لیاقت) — مطابق لایحهٔ مکاتب ثانوی */
+/** واجدیت امتحان بر اساس حاضری سالانه — کمتر از ۷۵٪ (قابل‌تغییر) → محروم */
+export function examEligibility(
+  attendanceRate: number | null,
+  attendanceMin: number = DEFAULT_ATTENDANCE_MIN,
+): string | null {
+  if (attendanceRate == null) return null;
+  return attendanceRate < attendanceMin ? RESULT_DEPRIVED : null;
+}
+
+/** نتیجهٔ کل شاگرد — قوانین رسمی وزارت معارف (لایحهٔ مکاتب ثانوی، مواد ۵۳ و ۵۹):
+ *  • اوسط مجموع نمرات ≥ حد نصاب اوسط (۵۰٪) و بدون مضمون ناکام → کامیاب
+ *  • اوسط ≥ حد نصاب اما ناکامی در ۱ تا ۳ مضمون → مشروط (امتحان مشروطی — چانس دوم از ۱۰۰)
+ *  • اوسط < حد نصاب یا ناکامی در بیش از ۳ مضمون → ناکام (تکرار صنف) */
 export function overallResult(
   finals: Array<number | null>,
   scale: GradeScaleEntry[] = DEFAULT_SCALE,
@@ -196,9 +269,11 @@ export function overallResult(
   const valid = finals.filter((f) => f != null) as number[];
   if (valid.length === 0) return { result: RESULT_INCOMPLETE, failed: 0 };
   const failed = valid.filter((f) => f < labels.passMark).length;
+  const average = valid.reduce((a, b) => a + b, 0) / valid.length;
+  if (average < labels.minAverage) return { result: labels.failLabel, failed };
   if (failed === 0) return { result: labels.passLabel, failed: 0 };
-  if (failed > valid.length / 2) return { result: labels.failLabel, failed };
-  return { result: `${labels.passLabel} مشروط (لیاقت)`, failed };
+  if (failed <= 3) return { result: RESULT_CONDITIONAL, failed };
+  return { result: labels.failLabel, failed };
 }
 
 /** رتبه‌بندی شاگردان صنف بر اساس اوسط */
