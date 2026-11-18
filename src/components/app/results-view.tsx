@@ -11,10 +11,11 @@ import { PageHeader, LoadingBlock, EmptyState, Field } from './ui-bits';
 import { apiGet } from '@/lib/client/api';
 import { toPersianDigits, isoToJalaliDisplay, isoToday } from '@/lib/jalali';
 import { letterGrade, letterColor, PERIOD_LABELS } from '@/lib/grading';
-import { printDocument, exportWord, exportExcel, fileStamp, exportBrand } from '@/lib/client/exports';
+import { printDocument, exportWord, exportExcel, fileStamp, exportBrand, downloadBlob } from '@/lib/client/exports';
+import { generateMoeAnnualWorkbook, moeWorkbookFileName, type MoeWorkbookInput } from '@/lib/client/moe-workbook';
 import {
   printGradeSheet, printOfficialResults, printOfficialNotices,
-  excelGradeSheet, excelOfficialResults, excelOfficialNotices,
+  excelGradeSheet, excelOfficialNotices,
   type OfficialClassInput,
 } from '@/lib/client/official-docs';
 import { useToast } from '@/hooks/use-toast';
@@ -241,6 +242,44 @@ export function ResultsView({ user }: { user: SessionUser }) {
   };
 
   const printResults = () => data && printDocument('جدول نتایج', buildResultsHtml(data));
+
+  // نسخهٔ ۳.۵.۰ — خروجی Excel «جدول نتایج سالانه» دقیقاً در فرم اصلی وزارت معارف
+  // (قالب رسمی ۱۴۰۵ با فرمول‌های زنده — خلیجدول، خلص، اطلاع‌نامه و شقه‌ها خودکار محاسبه می‌شوند)
+  const [moeExporting, setMoeExporting] = useState(false);
+  const exportMoeJadwal = async () => {
+    if (!data || moeExporting) return;
+    setMoeExporting(true);
+    try {
+      const inp: MoeWorkbookInput = {
+        className: data.classInfo.name,
+        teacherName: classes.find((c) => c.id === data.classInfo.id)?.supervisorName || null,
+        schoolName: schoolInfo.schoolName || exportBrand().schoolName,
+        directorateLine: schoolInfo.directorateLine || null,
+        province: schoolInfo.province || null,
+        academicYear: schoolInfo.academicYear || null,
+        subjects: data.subjects.map((s) => s.name),
+        students: data.rows.map((r) => ({
+          firstName: r.student.firstName,
+          lastName: r.student.lastName,
+          fatherName: r.student.fatherName || '',
+          grandFather: r.student.grandFather || null,
+          idNumber: r.student.idNumber || null,
+          marks: data.subjects.map((s) => {
+            const v = r.perSubject[s.id];
+            return { subject: s.name, midterm: v?.midterm ?? null, annual: v?.annual ?? null };
+          }),
+        })),
+      };
+      const blob = await generateMoeAnnualWorkbook(inp);
+      downloadBlob(blob, moeWorkbookFileName(inp));
+      toast({ title: 'جدول نتایج وزارت معارف آماده شد', description: 'فرم اصلی با فرمول‌های زنده — نتیجه، درجه و خلص خودکار محاسبه می‌شوند' });
+    } catch {
+      toast({ title: 'خطا در تولید فایل', description: 'دوباره تلاش کنید', variant: 'destructive' });
+    } finally {
+      setMoeExporting(false);
+    }
+  };
+
   const wordResults = () => data && exportWord('جدول نتایج', buildResultsHtml(data), `جدول-نتایج-${data.classInfo.name}-${fileStamp()}`);
 
   const excelResults = () => {
@@ -440,8 +479,8 @@ export function ResultsView({ user }: { user: SessionUser }) {
               <Button variant="outline" size="sm" onClick={() => printOfficialResults(buildOfficialInput(data))} className="gap-1">
                 <Printer className="h-4 w-4" /> جدول نتایج رسمی (خلیجدول)
               </Button>
-              <Button variant="outline" size="sm" onClick={() => excelOfficialResults(buildOfficialInput(data))} className="gap-1">
-                <Table2 className="h-4 w-4" /> جدول نتایج — Excel
+              <Button variant="outline" size="sm" onClick={exportMoeJadwal} disabled={moeExporting} className="gap-1">
+                <Table2 className="h-4 w-4" /> {moeExporting ? 'در حال ساخت…' : 'جدول نتایج — Excel اصلی وزارت معارف'}
               </Button>
               <Button variant="outline" size="sm" onClick={() => printOfficialNotices(buildOfficialInput(data))} className="gap-1">
                 <Printer className="h-4 w-4" /> اطلاع‌نامه‌های رسمی صنف

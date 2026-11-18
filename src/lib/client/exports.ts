@@ -142,7 +142,7 @@ function buildDocument(title: string, bodyHtml: string, withLogo = true): string
 </body></html>`;
 }
 
-function downloadBlob(blob: Blob, filename: string) {
+export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   // نام فایل برای WebView اندروید (DownloadListener) — فایل واقعی در Downloads ذخیره می‌شود
   (window as unknown as { __noqDownloadName?: string }).__noqDownloadName = filename;
