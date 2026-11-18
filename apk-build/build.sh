@@ -10,7 +10,7 @@
 set -e
 cd "$(dirname "$0")"
 
-SDK=/home/z/android-sdk
+SDK=/home/z/my-project/tools/android-sdk
 BT="$SDK/android-14"
 PLATFORM="$SDK/android-34/android.jar"
 OUT="$(pwd)/build"

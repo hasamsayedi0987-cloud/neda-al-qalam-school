@@ -417,13 +417,19 @@ export function ResultsView({ user }: { user: SessionUser }) {
         )}
       />
 
-      {/* اسناد رسمی وزارت معارف — دقیقاً مطابق فرم‌های کاغذی رسمی (نسخهٔ ۳.۴.۰) */}
-      {data && data.rows.length > 0 && (
+      {/* اسناد رسمی وزارت معارف — دقیقاً مطابق فرم‌های کاغذی رسمی (نسخهٔ ۳.۴.۰)
+          نسخهٔ ۳.۴.۲: همیشه دیده می‌شود — قبل از ثبت نمرات با راهنما ظاهر می‌گردد */}
+      {data && (
         <Card className="border-amber-200 dark:border-amber-500/30 bg-amber-50/40 dark:bg-amber-500/5 mb-4">
           <CardContent className="p-3">
             <p className="text-xs font-bold text-amber-800 dark:text-amber-300 mb-2">
               اسناد رسمی وزارت معارف — با سربرگ، لوگو و نام مکتب از تنظیمات (PDF و Excel)
             </p>
+            {data.rows.length === 0 ? (
+              <p className="text-xs text-muted-foreground leading-6">
+                برای فعال شدن دکمه‌های اسناد رسمی (ورق نشریه، خلیجدول، اطلاع‌نامه)، ابتدا شاگردان را در این صنف ثبت کنید و نمرات نهائی را از بخش «ثبت نمرات» وارد نمایید.
+              </p>
+            ) : (
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={() => printGradeSheet(buildOfficialInput(data))} className="gap-1">
                 <Printer className="h-4 w-4" /> ورق نشریهٔ نمرات
@@ -444,6 +450,7 @@ export function ResultsView({ user }: { user: SessionUser }) {
                 <Table2 className="h-4 w-4" /> اطلاع‌نامه‌ها — Excel
               </Button>
             </div>
+            )}
           </CardContent>
         </Card>
       )}

@@ -47,3 +47,6 @@ apk-build/assets/
 
 # پوشهٔ بررسی موقت فایل زیپ کاربر
 zip-work/
+
+# Android SDK محلی — در مخزن نمی‌رود
+tools/
