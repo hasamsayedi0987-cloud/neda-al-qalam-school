@@ -93,6 +93,7 @@ export async function POST(req: NextRequest) {
         gender: str(body.gender) === 'F' ? 'F' : 'M',
         birthDate: str(body.birthDate) || null,
         idNumber: str(body.idNumber) || null,
+        baseNumber: str(body.baseNumber) || null, // نمبر اساس وزارت معارف — اختیاری
         guardianName: str(body.guardianName) || null,
         guardianPhone: str(body.guardianPhone) || null,
         address: str(body.address) || null,
@@ -130,7 +131,7 @@ export async function PATCH(req: NextRequest) {
       }
     }
     const data: Record<string, unknown> = {};
-    for (const key of ['firstName', 'lastName', 'fatherName', 'grandFather', 'birthDate', 'idNumber', 'guardianName', 'guardianPhone', 'address', 'enrolledYear', 'idPlace', 'fatherTongue', 'motherTongue']) {
+    for (const key of ['firstName', 'lastName', 'fatherName', 'grandFather', 'birthDate', 'idNumber', 'baseNumber', 'guardianName', 'guardianPhone', 'address', 'enrolledYear', 'idPlace', 'fatherTongue', 'motherTongue']) {
       if (body[key] !== undefined) data[key] = str(body[key]) || null;
     }
     if (body.gender !== undefined) data.gender = str(body.gender) === 'F' ? 'F' : 'M';

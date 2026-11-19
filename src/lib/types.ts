@@ -50,6 +50,7 @@ export interface StudentInfo {
   gender: string;
   birthDate?: string | null;
   idNumber?: string | null;
+  baseNumber?: string | null; // نمبر اساس وزارت معارف — اختیاری (نسخهٔ ۳.۵.۱)
   idPlace?: string | null;
   fatherTongue?: string | null;
   motherTongue?: string | null;

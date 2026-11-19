@@ -25,7 +25,7 @@ import {
 
 const EMPTY_FORM = {
   id: '', firstName: '', lastName: '', fatherName: '', grandFather: '',
-  gender: 'M', birthDate: '', idNumber: '', idPlace: '', fatherTongue: '', motherTongue: '',
+  gender: 'M', birthDate: '', idNumber: '', idPlace: '', fatherTongue: '', motherTongue: '', baseNumber: '',
   guardianName: '', guardianPhone: '',
   address: '', classId: '', rollNo: '', enrolledYear: '', status: 'ACTIVE', photo: '',
 };
@@ -234,6 +234,7 @@ export function StudentsView({ user }: { user: SessionUser }) {
       id: s.id, firstName: s.firstName, lastName: s.lastName || '', fatherName: s.fatherName,
       grandFather: s.grandFather || '', gender: s.gender, birthDate: s.birthDate || '',
       idNumber: s.idNumber || '', idPlace: s.idPlace || '', fatherTongue: s.fatherTongue || '', motherTongue: s.motherTongue || '',
+      baseNumber: s.baseNumber || '',
       guardianName: s.guardianName || '', guardianPhone: s.guardianPhone || '',
       address: s.address || '', classId: s.classId || '', rollNo: s.rollNo != null ? String(s.rollNo) : '',
       enrolledYear: s.enrolledYear || '', status: s.status, photo: s.photo || '',
@@ -641,6 +642,9 @@ export function StudentsView({ user }: { user: SessionUser }) {
             </Field>
             <Field label="نمبر تذکره">
               <Input value={form.idNumber} onChange={(e) => setForm({ ...form, idNumber: e.target.value })} />
+            </Field>
+            <Field label="نمبر اساس وزارت معارف (اختیاری)">
+              <Input value={form.baseNumber} onChange={(e) => setForm({ ...form, baseNumber: e.target.value })} />
             </Field>
             <Field label="محل صدور تذکره" hint="ولایت/ولسوالی — کارت سوانح">
               <Input value={form.idPlace} onChange={(e) => setForm({ ...form, idPlace: e.target.value })} />

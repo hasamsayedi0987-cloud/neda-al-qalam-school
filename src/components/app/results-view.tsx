@@ -245,11 +245,16 @@ export function ResultsView({ user }: { user: SessionUser }) {
 
   // نسخهٔ ۳.۵.۰ — خروجی Excel «جدول نتایج سالانه» دقیقاً در فرم اصلی وزارت معارف
   // (قالب رسمی ۱۴۰۵ با فرمول‌های زنده — خلیجدول، خلص، اطلاع‌نامه و شقه‌ها خودکار محاسبه می‌شوند)
+  // نسخهٔ ۳.۵.۱ — ضوابط حاضری از حاضری یومیهٔ سیستم + نمبر اساس شاگرد
   const [moeExporting, setMoeExporting] = useState(false);
   const exportMoeJadwal = async () => {
     if (!data || moeExporting) return;
     setMoeExporting(true);
     try {
+      // حاضری یومیهٔ صنف در سال تعلیمی جاری — اگر سال تعلیمی در تنظیمات نباشد، ستون‌های حاضری خالی می‌مانند
+      const att = await apiGet<{ students: MoeWorkbookInput['attendance'] }>(
+        `/api/results/attendance?classId=${data.classInfo.id}`
+      ).catch(() => null);
       const inp: MoeWorkbookInput = {
         className: data.classInfo.name,
         teacherName: classes.find((c) => c.id === data.classInfo.id)?.supervisorName || null,
@@ -258,12 +263,15 @@ export function ResultsView({ user }: { user: SessionUser }) {
         province: schoolInfo.province || null,
         academicYear: schoolInfo.academicYear || null,
         subjects: data.subjects.map((s) => s.name),
+        attendance: att?.students || null,
         students: data.rows.map((r) => ({
+          id: r.student.id,
           firstName: r.student.firstName,
           lastName: r.student.lastName,
           fatherName: r.student.fatherName || '',
           grandFather: r.student.grandFather || null,
           idNumber: r.student.idNumber || null,
+          baseNumber: r.student.baseNumber || null,
           marks: data.subjects.map((s) => {
             const v = r.perSubject[s.id];
             return { subject: s.name, midterm: v?.midterm ?? null, annual: v?.annual ?? null };
@@ -272,7 +280,7 @@ export function ResultsView({ user }: { user: SessionUser }) {
       };
       const blob = await generateMoeAnnualWorkbook(inp);
       downloadBlob(blob, moeWorkbookFileName(inp));
-      toast({ title: 'جدول نتایج وزارت معارف آماده شد', description: 'فرم اصلی با فرمول‌های زنده — نتیجه، درجه و خلص خودکار محاسبه می‌شوند' });
+      toast({ title: 'جدول نتایج وزارت معارف آماده شد', description: 'فرم اصلی با فرمول‌های زنده — نتیجه، درجه، خلص و ضوابط حاضری خودکار محاسبه می‌شوند' });
     } catch {
       toast({ title: 'خطا در تولید فایل', description: 'دوباره تلاش کنید', variant: 'destructive' });
     } finally {

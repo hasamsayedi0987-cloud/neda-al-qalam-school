@@ -145,6 +145,7 @@ model Student {
   motherTongue  String? // زبان مادری
   classId       String?
   rollNo        Int? // شماره در جدول
+  baseNumber    String? // نمبر اساس وزارت معارف — اختیاری (جدول نتایج رسمی)
   status        String   @default("ACTIVE") // ACTIVE | LEFT | GRADUATED
   enrolledYear  String? // سال شمولیت
   clientToken   String? @unique // توکن ایدمپوتنسی صف آفلاین — ثبت تکراری پس از replay صف غیرممکن می‌شود

@@ -14,12 +14,23 @@
 import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate';
 
 export interface MoeStudentRow {
+  id?: string; // شناسهٔ شاگرد — کلید نگاشت حاضری
   firstName: string;
   lastName?: string | null;
   fatherName: string;
   grandFather?: string | null;
   idNumber?: string | null;
+  baseNumber?: string | null; // نمبر اساس وزارت معارف — ستون E لیست (نسخهٔ ۳.۵.۱)
   marks: Array<{ subject: string; midterm: number | null; annual: number | null }>;
+}
+
+/** شمار حاضری یک شاگرد در یک پنجرهٔ زمانی (چهارونیم‌ماهه یا سالانه) */
+export interface MoeAttendanceCount {
+  days: number; // ایام سال تعلیمی — روزهای ثبت‌حاضری صنف
+  present: number;
+  absent: number;
+  sick: number;
+  leave: number;
 }
 
 export interface MoeWorkbookInput {
@@ -31,6 +42,8 @@ export interface MoeWorkbookInput {
   academicYear?: string | null; // مثلاً ۱۴۰۵
   students: MoeStudentRow[];
   subjects: string[]; // نام مضامین صنف از دیتابیس
+  /** حاضری یومیه از سیستم: studentId → {mid: چهارونیم‌ماهه, annual: سالانه} (نسخهٔ ۳.۵.۱) */
+  attendance?: Record<string, { mid?: MoeAttendanceCount | null; annual?: MoeAttendanceCount | null }> | null;
 }
 
 const TEMPLATE_URL = '/templates/moe-annual-results-template.xlsx';
@@ -265,7 +278,27 @@ export function fillMoeTemplate(buf: Uint8Array, inp: MoeWorkbookInput): Uint8Ar
     L = setCell(L, `B${r}`, fullName, sst); // اسم (+ شهرت در صورت وجود — قالب ستون جدا ندارد)
     L = setCell(L, `C${r}`, st.fatherName || '', sst); // ولد
     if (st.grandFather) L = setCell(L, `D${r}`, st.grandFather, sst); // ولدیت
+    if (st.baseNumber) L = setCell(L, `E${r}`, st.baseNumber, sst); // نمبر اساس — نسخهٔ ۳.۵.۱
     if (st.idNumber) L = setCell(L, `F${r}`, st.idNumber, sst); // نمبر تذکره
+
+    // ═══ ضوابط حاضری — از حاضری یومیهٔ سیستم (نسخهٔ ۳.۵.۱) ═══
+    // لیست: G=ایام/H=حاضر/I=غیرحاضر/J=مریض/K=رخصت (چهارونیم‌ماهه) — L..P همان (سالانه)
+    // جدول نتایج سطرهای ۳۸-۴۲ با فرمول از این ستون‌ها تغذیه می‌شود + «از میان» خودکار
+    const att = st.id ? inp.attendance?.[st.id] : undefined;
+    if (att?.annual && att.annual.days > 0) {
+      L = setCell(L, `L${r}`, att.annual.days);
+      L = setCell(L, `M${r}`, att.annual.present);
+      L = setCell(L, `N${r}`, att.annual.absent);
+      L = setCell(L, `O${r}`, att.annual.sick);
+      L = setCell(L, `P${r}`, att.annual.leave);
+    }
+    if (att?.mid && att.mid.days > 0) {
+      L = setCell(L, `G${r}`, att.mid.days);
+      L = setCell(L, `H${r}`, att.mid.present);
+      L = setCell(L, `I${r}`, att.mid.absent);
+      L = setCell(L, `J${r}`, att.mid.sick);
+      L = setCell(L, `K${r}`, att.mid.leave);
+    }
   });
 
   // ═══ شیت «جدول نتایج» ═══
