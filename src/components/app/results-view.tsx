@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -162,6 +162,21 @@ export function ResultsView({ user }: { user: SessionUser }) {
   };
 
   // ─── ورودی اسناد رسمی وزارت معارف — از همان دادهٔ جدول نتایج (نسخهٔ ۳.۴.۰) ───
+  // نسخهٔ ۳.۶.۰: نمبر اساس + حاضری یومیه برای ضوابط حاضری اسناد رسمی
+  const attRef = useRef<{ cid: string; map: OfficialClassInput['attendance'] } | null>(null);
+  const loadAttendance = async (cid: string): Promise<OfficialClassInput['attendance']> => {
+    if (attRef.current?.cid === cid) return attRef.current.map;
+    const res = await apiGet<{ students: OfficialClassInput['attendance'] }>(
+      `/api/results/attendance?classId=${cid}`
+    ).catch(() => null);
+    const map = res?.students || null;
+    attRef.current = { cid, map };
+    return map;
+  };
+  const officialInput = async (d: ClassResultData): Promise<OfficialClassInput> => ({
+    ...buildOfficialInput(d),
+    attendance: await loadAttendance(d.classInfo.id),
+  });
   const buildOfficialInput = (d: ClassResultData): OfficialClassInput => ({
     school: {
       name: schoolInfo.schoolName || exportBrand().schoolName,
@@ -183,6 +198,7 @@ export function ResultsView({ user }: { user: SessionUser }) {
       grandFather: r.student.grandFather || null,
       rollNo: r.student.rollNo ?? null,
       idNumber: r.student.idNumber ?? null,
+      baseNumber: r.student.baseNumber ?? null,
       eligible: r.eligible ?? null,
     })),
     marks: Object.fromEntries(d.rows.map((r) => [
@@ -478,22 +494,22 @@ export function ResultsView({ user }: { user: SessionUser }) {
               </p>
             ) : (
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={() => printGradeSheet(buildOfficialInput(data))} className="gap-1">
+              <Button variant="outline" size="sm" onClick={async () => printGradeSheet(await officialInput(data))} className="gap-1">
                 <Printer className="h-4 w-4" /> ورق نشریهٔ نمرات
               </Button>
-              <Button variant="outline" size="sm" onClick={() => excelGradeSheet(buildOfficialInput(data))} className="gap-1">
+              <Button variant="outline" size="sm" onClick={async () => excelGradeSheet(await officialInput(data))} className="gap-1">
                 <Table2 className="h-4 w-4" /> ورق نشریه — Excel
               </Button>
-              <Button variant="outline" size="sm" onClick={() => printOfficialResults(buildOfficialInput(data))} className="gap-1">
+              <Button variant="outline" size="sm" onClick={async () => printOfficialResults(await officialInput(data))} className="gap-1">
                 <Printer className="h-4 w-4" /> جدول نتایج رسمی (خلیجدول)
               </Button>
               <Button variant="outline" size="sm" onClick={exportMoeJadwal} disabled={moeExporting} className="gap-1">
                 <Table2 className="h-4 w-4" /> {moeExporting ? 'در حال ساخت…' : 'جدول نتایج — Excel اصلی وزارت معارف'}
               </Button>
-              <Button variant="outline" size="sm" onClick={() => printOfficialNotices(buildOfficialInput(data))} className="gap-1">
+              <Button variant="outline" size="sm" onClick={async () => printOfficialNotices(await officialInput(data))} className="gap-1">
                 <Printer className="h-4 w-4" /> اطلاع‌نامه‌های رسمی صنف
               </Button>
-              <Button variant="outline" size="sm" onClick={() => excelOfficialNotices(buildOfficialInput(data))} className="gap-1">
+              <Button variant="outline" size="sm" onClick={async () => excelOfficialNotices(await officialInput(data))} className="gap-1">
                 <Table2 className="h-4 w-4" /> اطلاع‌نامه‌ها — Excel
               </Button>
             </div>
@@ -600,7 +616,7 @@ export function ResultsView({ user }: { user: SessionUser }) {
                 {data && (
                   <Button
                     variant="outline"
-                    onClick={() => printOfficialNotices(buildOfficialInput(data), reportCard!.student.id)}
+                    onClick={async () => printOfficialNotices(await officialInput(data), reportCard!.student.id)}
                     className="gap-1"
                     title="اطلاع‌نامهٔ رسمی وزارت معارف برای همین شاگرد"
                   >
