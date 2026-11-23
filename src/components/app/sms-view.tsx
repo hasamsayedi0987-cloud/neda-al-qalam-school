@@ -61,10 +61,13 @@ export function SmsView({ user }: { user: SessionUser }) {
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  const send = async (payload: Record<string, unknown>, okMsg: string) => {
+  /** نسخهٔ ۳.۶.۱: عملیات‌های دروازه (ارسال صف/تلاش مجدد/حذف/تنظیمات) فقط آنلاین —
+   *  آفلاین در صف همگام‌سازی نمی‌روند تا خطای «دروازهٔ SMS تنظیم نشده» به‌عنوان ثبتِ ردشدهٔ
+   *  دائمی، بنر سرخ همگام‌سازی را پر نکند. */
+  const send = async (payload: Record<string, unknown>, okMsg: string, onlineOnly = false) => {
     setBusy(true);
     try {
-      const res = await apiSend<{ queued?: number; note?: string; sent?: number; failed?: number; attempted?: number }>('/api/sms', 'POST', payload);
+      const res = await apiSend<{ queued?: number; note?: string; sent?: number; failed?: number; attempted?: number }>('/api/sms', 'POST', payload, onlineOnly ? { allowQueue: false } : {});
       if (res.error) {
         toast({ title: 'خطا', description: res.error.slice(0, 160), variant: 'destructive' });
         return;
@@ -94,8 +97,8 @@ export function SmsView({ user }: { user: SessionUser }) {
         {!data?.providerConfigured && <Badge variant="destructive">دروازه تنظیم نشده</Badge>}
         {data?.providerConfigured && <Badge className="bg-emerald-600 text-white">دروازه فعال</Badge>}
         <div className="ms-auto flex gap-2">
-          {canWrite && <Button onClick={() => send({ action: 'send-pending' }, 'ارسال صف')} disabled={busy} className="gap-1"><Send className="h-4 w-4" /> ارسال صف انتظار</Button>}
-          {canWrite && <Button variant="outline" onClick={() => send({ action: 'retry-failed' }, 'ناکام‌ها به صف برگشت')} className="gap-1"><RefreshCw className="h-4 w-4" /> تلاش مجدد</Button>}
+          {canWrite && <Button onClick={() => send({ action: 'send-pending' }, 'ارسال صف', true)} disabled={busy} className="gap-1"><Send className="h-4 w-4" /> ارسال صف انتظار</Button>}
+          {canWrite && <Button variant="outline" onClick={() => send({ action: 'retry-failed' }, 'ناکام‌ها به صف برگشت', true)} className="gap-1"><RefreshCw className="h-4 w-4" /> تلاش مجدد</Button>}
         </div>
       </div>
 
@@ -169,7 +172,7 @@ export function SmsView({ user }: { user: SessionUser }) {
                       : m.status === 'FAILED' ? <Badge variant="destructive" title={m.error || ''}>ناکام</Badge>
                       : <Badge variant="outline">در انتظار</Badge>}
                   </td>
-                  <td className="p-2">{canWrite && <Button size="sm" variant="ghost" onClick={() => send({ action: 'delete', id: m.id }, 'حذف شد')}><Trash2 className="h-4 w-4 text-red-600" /></Button>}</td>
+                  <td className="p-2">{canWrite && <Button size="sm" variant="ghost" onClick={() => send({ action: 'delete', id: m.id }, 'حذف شد', true)}><Trash2 className="h-4 w-4 text-red-600" /></Button>}</td>
                 </tr>
               ))}
               {(data?.outbox.length || 0) === 0 && <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">صف خالی است — با دکمه‌های بالا پیام جور کنید</td></tr>}

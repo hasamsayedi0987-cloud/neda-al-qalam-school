@@ -16,6 +16,7 @@ import { generateMoeAnnualWorkbook, moeWorkbookFileName, type MoeWorkbookInput }
 import {
   printGradeSheet, printOfficialResults, printOfficialNotices,
   excelGradeSheet, excelOfficialNotices,
+  buildOfficialResultsHtml, buildOfficialNoticeHtml, buildGradeSheetHtml,
   type OfficialClassInput,
 } from '@/lib/client/official-docs';
 import { useToast } from '@/hooks/use-toast';
@@ -263,6 +264,22 @@ export function ResultsView({ user }: { user: SessionUser }) {
   // (قالب رسمی ۱۴۰۵ با فرمول‌های زنده — خلیجدول، خلص، اطلاع‌نامه و شقه‌ها خودکار محاسبه می‌شوند)
   // نسخهٔ ۳.۵.۱ — ضوابط حاضری از حاضری یومیهٔ سیستم + نمبر اساس شاگرد
   const [moeExporting, setMoeExporting] = useState(false);
+  // نسخهٔ ۳.۶.۱ — پیش‌نمایش داخل صفحه: عین جدول‌های فایل رسمی اکسل، بدون چاپ
+  const [docPreview, setDocPreview] = useState<{ kind: 'results' | 'notices' | 'gradesheet'; html: string } | null>(null);
+  const [docPreviewBusy, setDocPreviewBusy] = useState(false);
+  const openDocPreview = async (kind: 'results' | 'notices' | 'gradesheet') => {
+    if (!data || docPreviewBusy) return;
+    setDocPreviewBusy(true);
+    try {
+      const input = await officialInput(data);
+      const html = kind === 'results' ? buildOfficialResultsHtml(input)
+        : kind === 'notices' ? buildOfficialNoticeHtml(input)
+        : buildGradeSheetHtml(input);
+      setDocPreview({ kind, html });
+    } finally {
+      setDocPreviewBusy(false);
+    }
+  };
   const exportMoeJadwal = async () => {
     if (!data || moeExporting) return;
     setMoeExporting(true);
@@ -513,6 +530,33 @@ export function ResultsView({ user }: { user: SessionUser }) {
                 <Table2 className="h-4 w-4" /> اطلاع‌نامه‌ها — Excel
               </Button>
             </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* نسخهٔ ۳.۶.۱ — پیش‌نمایش عین جدول‌های فایل رسمی اکسل داخل صفحه */}
+      {data && data.rows.length > 0 && (
+        <Card className="mb-4">
+          <CardContent className="p-3">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <p className="text-xs font-bold">پیش‌نمایش اسناد رسمی — عین جدول‌های فایل اکسل وزارت معارف (۱۴۰۵)</p>
+              <div className="ms-auto flex flex-wrap gap-2">
+                <Button variant={docPreview?.kind === 'results' ? 'default' : 'outline'} size="sm" disabled={docPreviewBusy} onClick={() => openDocPreview('results')}>جدول نتایج (عمودی A4)</Button>
+                <Button variant={docPreview?.kind === 'notices' ? 'default' : 'outline'} size="sm" disabled={docPreviewBusy} onClick={() => openDocPreview('notices')}>اطلاع‌نامه‌ها (عمودی A4)</Button>
+                <Button variant={docPreview?.kind === 'gradesheet' ? 'default' : 'outline'} size="sm" disabled={docPreviewBusy} onClick={() => openDocPreview('gradesheet')}>فهرست مضمونوار (افقی A4)</Button>
+              </div>
+            </div>
+            {docPreview ? (
+              <iframe
+                title="پیش‌نمایش سند رسمی وزارت معارف"
+                srcDoc={docPreview.html}
+                className="w-full h-[75vh] min-h-[420px] rounded-lg border bg-white"
+              />
+            ) : (
+              <p className="text-xs text-muted-foreground leading-6">
+                یکی از دکمه‌های بالا را بزنید تا همان جدولی که چاپ می‌شود — با همان ستون‌ها، ادغام‌ها، درجه‌بندی و جهت ورق A4 فایل رسمی — همین‌جا دیده شود.
+              </p>
             )}
           </CardContent>
         </Card>
