@@ -26,7 +26,7 @@ import {
   ShieldCheck, UserCog, Users, ClipboardCheck, BookMarked, Wifi, KeyRound,
   FileSpreadsheet, UserCheck, Award, LayoutGrid, AlertTriangle, Loader2,
   Sun, Moon, Monitor, Wallet, MessageSquare, X,
-  Bus, ShoppingCart, Landmark, ReceiptText, MessageCircleMore,
+  Bus, ShoppingCart, Landmark, ReceiptText, MessageCircleMore, IdCard,
 } from 'lucide-react';
 
 /* ─── بارگذاری تنبل ویوها: هر بخش فقط هنگام باز شدن دانلود می‌شود (بستهٔ اولیه سبک‌تر) ─── */
@@ -66,6 +66,7 @@ const StoreView = dynamic(() => import('./store-view').then((m) => m.StoreView),
 const TreasuryView = dynamic(() => import('./treasury-view').then((m) => m.TreasuryView), { loading: () => <ViewSkeleton /> });
 const ExpensesView = dynamic(() => import('./expenses-view').then((m) => m.ExpensesView), { loading: () => <ViewSkeleton /> });
 const SmsView = dynamic(() => import('./sms-view').then((m) => m.SmsView), { loading: () => <ViewSkeleton /> });
+const IdCardsView = dynamic(() => import('./id-cards-view').then((m) => m.IdCardsView), { loading: () => <ViewSkeleton /> });
 
 export interface NavItem {
   key: string;
@@ -92,6 +93,7 @@ const SECTION_ICONS: Record<string, React.ComponentType<{ className?: string }>>
   sms: MessageCircleMore,
   messages: MessageSquare,
   results: FileSpreadsheet,
+  idcards: IdCard,
   certificates: Award,
   customs: LayoutGrid,
   library: Library,
@@ -799,6 +801,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
           {view === 'sms' && <SmsView user={user} />}
           {view === 'messages' && <MessagesView user={user} />}
           {view === 'results' && <ResultsView user={user} />}
+          {view === 'idcards' && <IdCardsView />}
           {view === 'certificates' && <CertificatesView user={user} />}
           {view === 'customs' && <CustomSectionsView user={user} />}
           {view === 'library' && <LibraryView user={user} />}

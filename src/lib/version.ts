@@ -5,5 +5,5 @@
  * و با هر انتشار به‌روزرسانی فراموش می‌شد — کاربر نسخهٔ وب را «کهنه» می‌دید.
  * از این پس همه‌جا از همین فایل خوانده می‌شود.
  */
-export const APP_VERSION = '3.6.2';
-export const APP_VERSION_FA = '۳.۶.۲';
+export const APP_VERSION = '3.7.0';
+export const APP_VERSION_FA = '۳.۷.۰';

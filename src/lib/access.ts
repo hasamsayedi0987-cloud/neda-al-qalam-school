@@ -113,6 +113,11 @@ export const SECTIONS: Record<string, SectionDef> = {
     roles: ['ADMIN', 'HEADTEACHER', 'TEACHER'],
     manageable: true,
   },
+  idcards: {
+    label: 'کارت هویت',
+    roles: ['ADMIN', 'HEADTEACHER', 'TEACHER'],
+    manageable: true,
+  },
   customs: {
     label: 'بخش‌های دلخواه',
     roles: ['ADMIN'],
