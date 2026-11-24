@@ -40,7 +40,9 @@ export function setCacheScope(userId: string | null | undefined) {
 }
 
 /** بخش‌هایی که پاسخ‌شان به‌ازای هر کاربر جداگانه ذخیره می‌شود */
-const USER_SCOPED_PREFIXES = ['/api/dashboard', '/api/notifications', '/api/messages', '/api/tasks', '/api/comm'];
+// امنیت — تنظیمات هم کاربر-مخصوص شد: مدیر کلیدهای حساس SMS را در کش دارد،
+// اما روی گوشی مشترک این کش هرگز به کاربر بعدی نشان داده نمی‌شود
+const USER_SCOPED_PREFIXES = ['/api/dashboard', '/api/notifications', '/api/messages', '/api/tasks', '/api/comm', '/api/settings'];
 
 function scopedKey(url: string): string {
   if (USER_SCOPED_PREFIXES.some((p) => url === p || url.startsWith(p + '?'))) {
@@ -398,8 +400,8 @@ const SPECS: Record<string, { apply: (data: Row, e: OverlayEntry, url: string) =
     apply(data, e) {
       if (!Array.isArray(data.tasks)) return data;
       const list = data.tasks as Row[];
+      const b = (e.body as Row) || {};
       if (e.method === 'POST') {
-        const b = (e.body as Row) || {};
         const staffArr = Array.isArray(data.staff) ? (data.staff as Row[]) : [];
         list.unshift({
           ...b, id: e.tempId, status: 'PENDING', assigner: null,
@@ -460,7 +462,7 @@ const SPECS: Record<string, { apply: (data: Row, e: OverlayEntry, url: string) =
           if (book) {
             book.available = (num(book.available) ?? 0) + 1;
             book.lentCount = Math.max(0, (num(book.lentCount) ?? 0) - 1);
-            if (Array.isArray(book.loans)) book.loans = (book.loans as Row[]).filter((l) => l.id !== b.loanId);
+            if (Array.isArray(book.loans)) book.loans = (book.loans as Row[]).filter((x) => x.id !== b.loanId);
           }
         }
       } else if (e.method === 'DELETE') {
@@ -1354,6 +1356,8 @@ async function refreshRecentCache() {
 
 if (typeof window !== 'undefined') {
   pendingCount = readQueue().length;
+  // امنیت — پاک‌سازی رمزهای متنی مانده از نسخه‌های قبل (اولین بارگیری پس از به‌روزرسانی)
+  stripStoredPasswords();
   window.addEventListener('online', () => {
     online = true;
     notify();
@@ -1420,8 +1424,14 @@ export interface OfflineCred {
   };
   salt: string;
   hash: string;
-  /** رمز رمزنگاری‌شدهٔ ساده (base64) — فقط برای ورود مجدد خودکار پس از برگشت انترنت */
-  pw?: string;
+  /**
+   * امنیت — متن رمز هرگز ذخیره نمی‌شود:
+   * پیشتر رمز به‌شکل base64 (قابل رمزگشایی آسان) در حافظهٔ مرورگر نگه داشته می‌شد
+   * تا ورود مجدد خودکار ممکن شود — هرکسی که به گوشی دسترسی داشت می‌توانست رمز را بخواند.
+   * اکنون فقط «تأییدکنندهٔ» PBKDF2 (salt + هش) ذخیره می‌شود که برای ورود آفلاین کافی است
+   * اما بازگرداندن رمز از آن غیرممکن است. ورود مجدد پس از انقضای نشست از این پس
+   * یک بار به‌شکل دستی (صفحهٔ ورود) انجام می‌شود.
+   */
 }
 
 function toHex(buf: ArrayBuffer): string {
@@ -1438,6 +1448,36 @@ async function derive(password: string, salt: string): Promise<string> {
   return toHex(bits);
 }
 
+/**
+ * پاک‌سازی یک‌بارهٔ رمزهای متنی مانده از نسخه‌های قبل — هر دستگاهی که قبلاً با نسخهٔ قدیمی
+ * وارد شده بود، فیلد pw (base64 رمز) در حافظه‌اش دارد؛ در اولین بارگیری حذف می‌شود.
+ */
+export function stripStoredPasswords() {
+  if (typeof window === 'undefined') return;
+  try {
+    // امنیت — کش تنظیماتِ بدون دامنهٔ کاربر (نسخه‌های قبل) حذف می‌شود؛
+    // روی گوشی مشترک ممکن بود کلیدهای حساس SMS مدیر در آن مانده باشد
+    const cache = readGetCache();
+    if (cache['/api/settings']) {
+      delete cache['/api/settings'];
+      writeGetCache(cache);
+    }
+  } catch { /* ignore */ }
+  try {
+    const raw = localStorage.getItem(CREDS_KEY);
+    if (!raw) return;
+    const all = JSON.parse(raw) as Record<string, OfflineCred & { pw?: string }>;
+    let changed = false;
+    for (const cred of Object.values(all)) {
+      if (cred && 'pw' in cred) {
+        delete cred.pw; // حذف رمز متنی — فقط تأییدکنندهٔ PBKDF2 می‌ماند
+        changed = true;
+      }
+    }
+    if (changed) localStorage.setItem(CREDS_KEY, JSON.stringify(all));
+  } catch { /* ignore */ }
+}
+
 /** پس از ورود موفق آنلاین، مشخصات برای ورود آفلاین بعدی ذخیره می‌شود (asLastUser=false برای ذخیرهٔ کاربر تازه‌ساخته بدون تغییر کاربر جاری) */
 export async function saveOfflineCred(user: OfflineCred['user'], password: string, asLastUser = true) {
   if (typeof window === 'undefined' || !password) return;
@@ -1446,12 +1486,8 @@ export async function saveOfflineCred(user: OfflineCred['user'], password: strin
     const saltHex = toHex(salt.buffer as ArrayBuffer);
     const hash = await derive(password, saltHex);
     const all = JSON.parse(localStorage.getItem(CREDS_KEY) || '{}') as Record<string, OfflineCred>;
-    all[user.username.toLowerCase()] = {
-      user, salt: saltHex, hash,
-      // برای ورود مجدد خودکار پس از برگشت انترنت (وقتی نشست کوکی مرده) —
-      // تا صف آفلاین هرگز به‌خاطر نشست مرده گیر نکند
-      pw: typeof password === 'string' ? btoa(unescape(encodeURIComponent(password))) : undefined,
-    };
+    // امنیت — فقط salt + هش PBKDF2 ذخیره می‌شود؛ متن رمز هرگز در حافظهٔ مرورگر نمی‌ماند
+    all[user.username.toLowerCase()] = { user, salt: saltHex, hash };
     localStorage.setItem(CREDS_KEY, JSON.stringify(all));
     if (asLastUser) localStorage.setItem(LAST_USER_KEY, user.username.toLowerCase());
   } catch { /* ignore */ }
@@ -1464,35 +1500,13 @@ export function lastUsername(): string {
 }
 
 /**
- * ورود مجدد خودکار بدون دخالت کاربر:
- * وقتی صف هنگام تخلیه با ۴۰۱ روبه‌رو می‌شود (نشست کوکی با بستن اپ مرده)،
- * با اعتبار ذخیره‌شدهٔ همان کاربر یک بار وارد می‌شود و صف بلافاصله تخلیه می‌شود.
- * این همان جایی است که پیشتر ثبت‌های آفلاین برای همیشه معطل می‌ماندند.
+ * ورود مجدد خودکار — از این نسخه غیرفعال (امنیتی):
+ * متن رمز دیگر در مرورگر ذخیره نمی‌شود، پس ورود خودکار بی‌دخالت کاربر ممکن نیست.
+ * وقتی نشست کوکی منقضی شود، کاربر یک بار از صفحهٔ ورود وارد می‌شود و صف بلافاصله تخلیه می‌شود.
+ * (تابع برای سازگاری با کدهای موجود نگه داشته شده و همیشه false برمی‌گرداند.)
  */
 export async function tryAutoRelogin(): Promise<boolean> {
-  if (typeof window === 'undefined') return false;
-  try {
-    const uname = lastUsername();
-    if (!uname) return false;
-    const all = JSON.parse(localStorage.getItem(CREDS_KEY) || '{}') as Record<string, OfflineCred>;
-    const cred = all[uname];
-    if (!cred?.pw) return false;
-    const password = decodeURIComponent(escape(atob(cred.pw)));
-    const res = await fetchTimeout('/api/auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'login', username: cred.user.username, password }),
-      cache: 'no-store',
-    }, 10000);
-    if (!res.ok) return false;
-    const json = await res.json().catch(() => ({}));
-    if (!(json as Row).user) return false;
-    // نشست تازه — شاید نقش/شناسه تغییر کرده باشد، اعتبار محلی هم به‌روز می‌شود
-    await saveOfflineCred((json as Row).user as OfflineCred['user'], password);
-    return true;
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 /** ورود بدون اینترنت — رمز در برابر هش ذخیره‌شدهٔ همین دستگاه بررسی می‌شود */
