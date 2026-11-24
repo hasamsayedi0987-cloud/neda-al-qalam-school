@@ -255,7 +255,17 @@ export function UsersView({ user: me }: { user: SessionUser }) {
                     const needsLink = ['TEACHER', 'HEADTEACHER', 'STAFF', 'LIBRARIAN'].includes(u.role) && !u.teacherId;
                     return (
                       <TableRow key={u.id}>
-                        <TableCell dir="ltr" className="text-left font-mono text-xs">@{u.username}</TableCell>
+                        <TableCell dir="ltr" className="text-left font-mono text-xs">
+                          @{u.username}
+                          {u.defaultPassword && (
+                            <span
+                              className="inline-flex items-center gap-1 mr-1.5 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 px-2 py-0.5 text-[10px] font-bold align-middle"
+                              title="این حساب هنوز رمز اولیه/پیش‌فرض دارد — با «بازنشانی رمز» عوض کنید. کاربر تا تغییر رمز به سیستم راه ندارد."
+                            >
+                              رمز اولیه
+                            </span>
+                          )}
+                        </TableCell>
                         <TableCell className="font-medium">{u.name}</TableCell>
                         <TableCell>
                           {u.id === me.id || u.role === 'ADMIN' ? (

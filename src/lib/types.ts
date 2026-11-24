@@ -9,6 +9,8 @@ export interface SessionUser {
   teacherId: string | null;
   studentId: string | null;
   perms?: string | null; // JSON دسترسی بخش‌ها (رونویسی نقش)
+  /** درست = رمز این حساب هنوز رمز اولیه/پیش‌فرض است — باید پیش از استفاده تغییر کند */
+  mustChangePassword?: boolean;
 }
 
 export interface ClassInfo {
@@ -90,6 +92,7 @@ export interface UserInfo {
   studentId?: string | null;
   perms?: string | null; // JSON دسترسی بخش‌ها
   studentName?: string | null;
+  defaultPassword?: boolean; // هنوز رمز اولیه/پیش‌فرض دارد — مدیر باید بازنشانی کند
 }
 
 export interface AttendanceRow {
