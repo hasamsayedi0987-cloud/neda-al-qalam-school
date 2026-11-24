@@ -4,7 +4,7 @@
  * عین طرح رسمی نمونه: کارت عمودی ۵×۹ سانتی‌متر (۵۰×۹۰mm)، لوگو و نام دو‌زبانهٔ مکتب،
  * روبان طلایی «کارت هویت»، عکس وسط با قاب آبی، فهرست نقطه‌دار مشخصات، امضای اداره،
  * QR «کد حاضری» و نوار آدرس و تلفن در پایین.
- * چاپ: ورق A4 افقی — ۱۰ کارت در هر صفحه (۲×۵ عمودی) با خطوط برش. */
+ * چاپ: کاغذ A4 عمودی (پیش‌فرض همهٔ چاپگرها) با شبکهٔ ۱۰ کارتی چرخیده ۹۰° — ۲×۵ — با خطوط برش. */
 
 import QRCode from 'qrcode';
 import { jalaliNowDisplay, toPersianDigits } from '@/lib/jalali';
@@ -192,10 +192,10 @@ const CARDS_CSS = `
     background: linear-gradient(180deg, #e2c14f, #c9a227); z-index: -1; }
   .ribbon::before { left: -3.6mm; transform: skewY(-14deg); border-radius: .6mm 0 0 .6mm; }
   .ribbon::after { right: -3.6mm; transform: skewY(14deg); border-radius: 0 .6mm .6mm 0; }
-  .year-l { font-size: 5.2pt; color: #334155; margin-top: 1mm; font-weight: 500; white-space: nowrap; }
+  .year-l { font-size: 5.2pt; color: #334155; margin-top: .8mm; font-weight: 500; white-space: nowrap; }
 
   /* عکس وسط با قاب آبی */
-  .photo { width: 15.5mm; height: 18.5mm; background: #fff; border: .5mm solid #1d3f8f; border-radius: 1.8mm;
+  .photo { width: 15.5mm; height: 18mm; background: #fff; border: .5mm solid #1d3f8f; border-radius: 1.8mm;
     overflow: hidden; margin-top: 1.3mm; box-shadow: 0 .4mm 1mm rgba(16,33,79,.18); display: flex; align-items: center; justify-content: center; }
   .photo img { width: 100%; height: 100%; object-fit: cover; }
   .photo .initial { font-size: 11pt; font-weight: 700; color: #1d3f8f; }
@@ -211,22 +211,22 @@ const CARDS_CSS = `
   .irow .v.num { direction: ltr; unicode-bidi: embed; }
 
   /* امضای اداره + QR کد حاضری */
-  .botrow { width: 100%; display: flex; align-items: flex-end; justify-content: space-between; margin-top: auto; padding-bottom: 1mm; gap: 2mm; }
+  .botrow { width: 100%; display: flex; align-items: flex-end; justify-content: space-between; margin-top: auto; padding-bottom: .8mm; gap: 2mm; }
   .sig { flex: 1; text-align: center; padding-left: 1.5mm; }
   .sig-l { font-size: 5.4pt; font-weight: 700; color: #10214f; margin-bottom: .6mm; }
-  .signstamp { width: 21mm; display: block; margin: 0 auto; }
+  .signstamp { width: 18mm; display: block; margin: 0 auto; }
   .qrside { text-align: center; flex-shrink: 0; }
   .qrside img { width: 14.5mm; height: 14.5mm; display: block; background: #fff; padding: .5mm; border: .3mm solid #dbe2ee; border-radius: .9mm; }
   .qr-l { font-size: 5pt; font-weight: 700; color: #10214f; margin-top: .5mm; }
 
   /* نوار آدرس و تلفن — پایین کارت */
   .foot { position: relative; z-index: 1; background: linear-gradient(90deg, #16306f 0%, #1d3f8f 50%, #16306f 100%);
-    border: .42mm solid #d8b13c; border-radius: 1.6mm; text-align: center; padding: .7mm 1mm .8mm;
-    margin: 0 1.3mm 1.3mm; }
+    border: .42mm solid #d8b13c; border-radius: 1.6mm; text-align: center; padding: .6mm 1mm .7mm;
+    margin: 0 2.2mm 2.2mm; }
   .foot .f1 { font-size: 5.4pt; font-weight: 700; color: #f7df8e; white-space: nowrap; }
   .foot .f2 { font-size: 4.7pt; font-weight: 500; color: #f39c2d; direction: ltr; white-space: nowrap; margin-top: .25mm; }
 
-  @page { size: A4 landscape; margin: 2mm 3mm; }
+  @page { size: A4 portrait; margin: 2mm 3mm; }
   @media screen { body { padding: 12px; } }
 `;
 
@@ -296,7 +296,7 @@ export async function buildIdCardsSheet(
     pages.push(`<section class="page">
       <div class="sheet-note"><b>کارت‌های هویت — ${esc(school.name)}</b>
         <span>سال تعلیمی ${esc(school.academicYear)} • تاریخ صدور: ${esc(issueDate)} • صفحهٔ ${fa(p + 1)} از ${fa(totalPages)} • خط‌چین = محل قیچی</span></div>
-      <div class="grid">${cells.join('')}</div>
+      <div class="grid-rot"><div class="grid">${cells.join('')}</div></div>
     </section>`);
   }
   return `<!DOCTYPE html>
@@ -304,6 +304,17 @@ export async function buildIdCardsSheet(
 <head><meta charset="utf-8"><title>کارت‌های هویت</title><style>${FONT_FACE}${CARDS_CSS}
 .page { page-break-after: always; }
 .page:last-child { page-break-after: auto; }
+@media print {
+  .sheet-note { display: none; }
+  html, body { overflow: hidden; }
+  .page { position: relative; width: 198mm; height: 277mm; overflow: hidden; margin: 0 auto; }
+  /* چینش چاپ: کاغذ عمودی (پیش‌فرض اندروید که @page landscape را نادیده می‌گیرد) با
+     خانه‌های افقی ۹۰×۵۰ و چرخش ۹۰° هر کارت — ۲ ستون × ۵ ردیف = ۱۰ کارت در هر ورق.
+     هیچ سرریز چیدمانی وجود ندارد تا چاپگر مقیاس را تغییر ندهد (۱:۱ واقعی) */
+  .grid { display: grid; grid-template-columns: 90mm 90mm; grid-auto-rows: 50mm; gap: 2mm; justify-content: center; margin-top: 8mm; }
+  .cellwrap { width: 90mm; height: 50mm; position: relative; }
+  .card { position: absolute; top: -20mm; left: 20mm; transform: rotate(90deg); transform-origin: 25mm 45mm; }
+}
 </style></head><body>${pages.join('')}</body></html>`;
 }
 
