@@ -178,31 +178,31 @@ const CARDS_CSS = `
   .dots2 { position: absolute; z-index: 0; bottom: 22mm; right: 2mm; width: 12mm; height: 14mm; opacity: .45;
     background-image: radial-gradient(#b9cbe6 .34mm, transparent .34mm); background-size: 2.1mm 2.1mm; }
 
-  .inner { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; align-items: center; padding: 1.2mm 3mm 0; }
+  .inner { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; align-items: center; padding: 1mm 3mm 0; }
 
   /* سربرگ */
-  .logo { width: 11mm; height: 11mm; border-radius: 50%; background: #fff; object-fit: cover;
+  .logo { width: 10mm; height: 10mm; border-radius: 50%; background: #fff; object-fit: cover;
     border: .55mm solid #1d3f8f; box-shadow: 0 .4mm 1.2mm rgba(16,33,79,.22); margin-top: .8mm; }
-  .sname { font-size: 9pt; font-weight: 700; color: #10214f; line-height: 1.15; margin-top: .8mm; white-space: nowrap; }
+  .sname { font-size: 8.6pt; font-weight: 700; color: #10214f; line-height: 1.15; margin-top: .5mm; white-space: nowrap; }
   .sname-en { font-size: 5pt; font-weight: 700; color: #1d3f8f; letter-spacing: .45px; margin-top: .2mm; direction: ltr; white-space: nowrap; }
   /* روبان با بال‌های طلایی */
-  .ribbon { position: relative; margin-top: 1.2mm; background: linear-gradient(180deg, #2a55b1 0%, #16306f 100%);
-    border: .42mm solid #d8b13c; color: #fff; font-size: 6.4pt; font-weight: 700; padding: .8mm 4.5mm; border-radius: 1.1mm; white-space: nowrap; }
+  .ribbon { position: relative; margin-top: .9mm; background: linear-gradient(180deg, #2a55b1 0%, #16306f 100%);
+    border: .42mm solid #d8b13c; color: #fff; font-size: 6.4pt; font-weight: 700; padding: .7mm 4.5mm; border-radius: 1.1mm; white-space: nowrap; }
   .ribbon::before, .ribbon::after { content: ''; position: absolute; top: 1.3mm; width: 5mm; height: 3.4mm;
     background: linear-gradient(180deg, #e2c14f, #c9a227); z-index: -1; }
   .ribbon::before { left: -3.6mm; transform: skewY(-14deg); border-radius: .6mm 0 0 .6mm; }
   .ribbon::after { right: -3.6mm; transform: skewY(14deg); border-radius: 0 .6mm .6mm 0; }
-  .year-l { font-size: 5.2pt; color: #334155; margin-top: .8mm; font-weight: 500; white-space: nowrap; }
+  .year-l { font-size: 5.2pt; color: #334155; margin-top: .5mm; font-weight: 500; white-space: nowrap; }
 
   /* عکس وسط با قاب آبی */
-  .photo { width: 15.5mm; height: 18mm; background: #fff; border: .5mm solid #1d3f8f; border-radius: 1.8mm;
-    overflow: hidden; margin-top: 1.3mm; box-shadow: 0 .4mm 1mm rgba(16,33,79,.18); display: flex; align-items: center; justify-content: center; }
+  .photo { width: 17mm; height: 20mm; background: #fff; border: .5mm solid #1d3f8f; border-radius: 1.8mm;
+    overflow: hidden; margin-top: 1mm; box-shadow: 0 .4mm 1mm rgba(16,33,79,.18); display: flex; align-items: center; justify-content: center; }
   .photo img { width: 100%; height: 100%; object-fit: cover; }
   .photo .initial { font-size: 11pt; font-weight: 700; color: #1d3f8f; }
 
   /* فهرست مشخصات نقطه‌دار */
-  .rows { width: 100%; margin-top: 1.5mm; }
-  .irow { display: flex; align-items: center; gap: 1.1mm; padding: .35mm 0; font-size: 6pt; color: #1e293b; }
+  .rows { width: 100%; margin-top: 1mm; }
+  .irow { display: flex; align-items: center; gap: 1.1mm; padding: .25mm 0; font-size: 6pt; color: #1e293b; }
   .irow .dot { width: 1.5mm; height: 1.5mm; border-radius: 50%; flex-shrink: 0; }
   .irow .dot.o { background: #f39c2d; }
   .irow .dot.b { background: #2a55b1; }
@@ -211,18 +211,18 @@ const CARDS_CSS = `
   .irow .v.num { direction: ltr; unicode-bidi: embed; }
 
   /* امضای اداره + QR کد حاضری */
-  .botrow { width: 100%; display: flex; align-items: flex-end; justify-content: space-between; margin-top: auto; padding-bottom: .8mm; gap: 2mm; }
+  .botrow { width: 100%; display: flex; align-items: flex-end; justify-content: space-between; margin-top: auto; padding-bottom: 2mm; gap: 2mm; }
   .sig { flex: 1; text-align: center; padding-left: 1.5mm; }
   .sig-l { font-size: 5.4pt; font-weight: 700; color: #10214f; margin-bottom: .6mm; }
-  .signstamp { width: 18mm; display: block; margin: 0 auto; }
+  .signstamp { width: 16mm; display: block; margin: 0 auto; }
   .qrside { text-align: center; flex-shrink: 0; }
-  .qrside img { width: 14.5mm; height: 14.5mm; display: block; background: #fff; padding: .5mm; border: .3mm solid #dbe2ee; border-radius: .9mm; }
+  .qrside img { width: 13.5mm; height: 13.5mm; display: block; background: #fff; padding: .5mm; border: .3mm solid #dbe2ee; border-radius: .9mm; }
   .qr-l { font-size: 5pt; font-weight: 700; color: #10214f; margin-top: .5mm; }
 
   /* نوار آدرس و تلفن — پایین کارت */
   .foot { position: relative; z-index: 1; background: linear-gradient(90deg, #16306f 0%, #1d3f8f 50%, #16306f 100%);
-    border: .42mm solid #d8b13c; border-radius: 1.6mm; text-align: center; padding: .6mm 1mm .7mm;
-    margin: 0 2.2mm 2.2mm; }
+    border: .42mm solid #d8b13c; border-radius: 1.6mm; text-align: center; padding: .55mm 1mm .65mm;
+    margin: 0 4.2mm 4.2mm; }
   .foot .f1 { font-size: 5.4pt; font-weight: 700; color: #f7df8e; white-space: nowrap; }
   .foot .f2 { font-size: 4.7pt; font-weight: 500; color: #f39c2d; direction: ltr; white-space: nowrap; margin-top: .25mm; }
 
