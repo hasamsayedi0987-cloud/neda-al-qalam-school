@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { LoginView } from '@/components/app/login-view';
 import { AppShell } from '@/components/app/app-shell';
-import { apiGet, markAuthRestored, setCacheScope, restoreLastUser, tryAutoRelogin } from '@/lib/client/api';
+import { ForceChangePassword } from '@/components/app/force-change-password';
+import { apiGet, markAuthRestored, setCacheScope, restoreLastUser, tryAutoRelogin, stripStoredPasswords } from '@/lib/client/api';
 import { ensurePushAfterLogin } from '@/lib/client/push';
 import type { SessionUser } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
@@ -59,6 +60,8 @@ export default function Page() {
   };
 
   useEffect(() => {
+    // امنیت — پاک‌سازی رمزهای متنی مانده از نسخه‌های قبل در حافظهٔ مرورگر
+    stripStoredPasswords();
     // ثبت Service Worker برای حالت آفلاین — همیشه در production
     // (updateViaCache none — خود sw.js همیشه از شبکه چک می‌شود تا به‌روزرسانی هرگز گم نشود)
     if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
@@ -151,6 +154,17 @@ export default function Page() {
   }
 
   if (!user) return <LoginView onLoggedIn={handleLoggedIn} setupDone={setupDone} />;
+
+  // امنیت — حسابی که هنوز رمز اولیه/پیش‌فرض دارد: تا تغییر رمز، هیچ بخشی از اپ باز نمی‌شود
+  if (user.mustChangePassword) {
+    return (
+      <ForceChangePassword
+        user={user}
+        onDone={() => void loadSession()}
+        onLogout={handleLogout}
+      />
+    );
+  }
 
   return <AppShell user={user} onLogout={handleLogout} />;
 }

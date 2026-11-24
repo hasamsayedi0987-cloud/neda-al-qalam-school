@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { PageHeader, Field } from './ui-bits';
-import { apiGet, apiSend } from '@/lib/client/api';
+import { apiGet, apiSend, saveOfflineCred } from '@/lib/client/api';
 import { toPersianDigits, toLatinDigits, isoToJalaliDisplay, gregorianToJalali } from '@/lib/jalali';
 import { DEFAULT_SCALE, scaleRangesText, type GradeScaleEntry } from '@/lib/grading';
 import { SECTIONS } from '@/lib/access';
@@ -210,16 +210,26 @@ export function SettingsView({ user }: { user: SessionUser }) {
       toast({ title: 'خطا', description: 'تکرار رمز عبور مطابقت ندارد', variant: 'destructive' });
       return;
     }
+    if (pwForm.newPassword === pwForm.currentPassword) {
+      toast({ title: 'خطا', description: 'رمز جدید باید با رمز فعلی متفاوت باشد', variant: 'destructive' });
+      return;
+    }
     const res = await apiSend('/api/auth', 'POST', {
       action: 'change-password',
       currentPassword: pwForm.currentPassword,
       newPassword: pwForm.newPassword,
-    });
+    }, { allowQueue: false });
     if (res.error) {
       toast({ title: 'خطا', description: res.error, variant: 'destructive' });
       return;
     }
-    toast({ title: 'رمز عبور تغییر کرد' });
+    // ورود آفلاین همین دستگاه با رمز جدید به‌روز می‌شود — فقط تأییدکنندهٔ PBKDF2 ذخیره می‌شود
+    // (متن رمز هرگز در مرورگر نگه داشته نمی‌شود)
+    void saveOfflineCred(user, pwForm.newPassword);
+    toast({
+      title: 'رمز عبور تغییر کرد',
+      description: 'همهٔ نشست‌های قبلی این حساب در دستگاه‌های دیگر باطل شد. ورود آفلاین این دستگاه هم با رمز تازه به‌روز شد.',
+    });
     setPwOpen(false);
     setPwForm({ currentPassword: '', newPassword: '', confirm: '' });
   };
