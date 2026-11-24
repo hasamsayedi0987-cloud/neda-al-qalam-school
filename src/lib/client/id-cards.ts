@@ -4,11 +4,12 @@
  * عین طرح رسمی نمونه: کارت عمودی ۵×۹ سانتی‌متر (۵۰×۹۰mm)، لوگو و نام دو‌زبانهٔ مکتب،
  * روبان طلایی «کارت هویت»، عکس وسط با قاب آبی، فهرست نقطه‌دار مشخصات، امضای اداره،
  * QR «کد حاضری» و نوار آدرس و تلفن در پایین.
- * چاپ: ورق A4 افقی — ۱۰ کارت در هر صفحه (۲×۵) با خطوط برش. */
+ * چاپ: ورق A4 عمودی — ۹ کارت در هر صفحه (۳×۳) با خطوط برش. */
 
 import QRCode from 'qrcode';
 import { jalaliNowDisplay, toPersianDigits } from '@/lib/jalali';
 import { printRawHtml } from './exports';
+import { SIGN_STAMP_DATA_URL } from './sign-stamp-data';
 
 /* ─── انواع ورودی ─── */
 
@@ -123,7 +124,7 @@ export function idCardQrPayload(c: IdCardData, school: IdCardSchoolInfo): string
   if (c.kind === 'student') {
     return `${base} | شاگرد: ${c.name} | ولد: ${c.father} | صنف: ${c.line1} | شمارهٔ کارت: ${c.cardNo}${school.issueDate ? ` | صدور: ${school.issueDate}` : ''} | شناسه: ${c.id}`;
   }
-  return `${base} | کارمند: ${c.name} | سمت: ${c.line1} | شمارهٔ کارت: ${c.cardNo} | شناسه: ${c.id}`;
+  return `${base} | کارمند: ${c.name} | وظیفه: ${c.line1} | شمارهٔ کارت: ${c.cardNo} | شناسه: ${c.id}`;
 }
 
 /** QR به‌صورت dataURL PNG — کیفیت بالا برای چاپ */
@@ -138,20 +139,22 @@ export async function idCardQrDataUrl(text: string): Promise<string> {
 
 /* ─── استایل مشترک سند کارت‌ها ─── */
 
+const ORIGIN = typeof window !== 'undefined' ? window.location.origin : '';
+
 const FONT_FACE = `
-  @font-face { font-family: 'Vazirmatn'; src: url('${typeof window !== 'undefined' ? window.location.origin : ''}/fonts/Vazirmatn-Regular.woff2') format('woff2'); font-weight: 400; }
-  @font-face { font-family: 'Vazirmatn'; src: url('${typeof window !== 'undefined' ? window.location.origin : ''}/fonts/Vazirmatn-Medium.woff2') format('woff2'); font-weight: 500; }
-  @font-face { font-family: 'Vazirmatn'; src: url('${typeof window !== 'undefined' ? window.location.origin : ''}/fonts/Vazirmatn-Bold.woff2') format('woff2'); font-weight: 700; }
+  @font-face { font-family: 'Vazirmatn'; src: url('${ORIGIN}/fonts/Vazirmatn-Regular.woff2') format('woff2'); font-weight: 400; }
+  @font-face { font-family: 'Vazirmatn'; src: url('${ORIGIN}/fonts/Vazirmatn-Medium.woff2') format('woff2'); font-weight: 500; }
+  @font-face { font-family: 'Vazirmatn'; src: url('${ORIGIN}/fonts/Vazirmatn-Bold.woff2') format('woff2'); font-weight: 700; }
 `;
 
 /* طرح کارت ۵۰×۹۰mm — عین نمونهٔ رسمی */
 const CARDS_CSS = `
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { font-family: Vazirmatn, Tahoma, sans-serif; direction: rtl; background: #eef1f6; }
-  .sheet-note { max-width: 288mm; margin: 0 auto 2.2mm; display: flex; justify-content: space-between; align-items: center;
-    font-size: 6.6pt; color: #475569; border-bottom: 1px solid #cbd5e1; padding-bottom: 1.2mm; }
+  .sheet-note { max-width: 159mm; margin: 0 auto 1.6mm; display: flex; justify-content: space-between; align-items: center;
+    font-size: 6.4pt; color: #475569; border-bottom: 1px solid #cbd5e1; padding-bottom: 1mm; }
   .sheet-note b { color: #10214f; }
-  .grid { display: grid; grid-template-columns: repeat(5, 50mm); grid-auto-rows: 90mm; gap: 4mm 4.4mm; justify-content: center; }
+  .grid { display: grid; grid-template-columns: repeat(3, 50mm); grid-auto-rows: 90mm; gap: 3.5mm 4.4mm; justify-content: center; }
   .cellwrap { position: relative; }
   /* خط برش دور هر کارت */
   .cut { position: absolute; inset: -1.2mm; border: 1px dashed #94a3b8; pointer-events: none; }
@@ -208,9 +211,9 @@ const CARDS_CSS = `
 
   /* امضای اداره + QR کد حاضری */
   .botrow { width: 100%; display: flex; align-items: flex-end; justify-content: space-between; margin-top: auto; padding-bottom: 1.4mm; gap: 2mm; }
-  .sig { flex: 1; text-align: center; padding-left: 2mm; }
-  .sig-l { font-size: 5.4pt; font-weight: 700; color: #10214f; margin-bottom: 1.2mm; }
-  .sig-line { border-top: .35mm dashed #64748b; width: 20mm; margin: 0 auto; padding-top: .7mm; font-size: 4.6pt; color: #64748b; }
+  .sig { flex: 1; text-align: center; padding-left: 1.5mm; }
+  .sig-l { font-size: 5.4pt; font-weight: 700; color: #10214f; margin-bottom: .6mm; }
+  .signstamp { width: 27.5mm; display: block; margin: 0 auto; }
   .qrside { text-align: center; flex-shrink: 0; }
   .qrside img { width: 14.5mm; height: 14.5mm; display: block; background: #fff; padding: .5mm; border: .3mm solid #dbe2ee; border-radius: .9mm; }
   .qr-l { font-size: 5pt; font-weight: 700; color: #10214f; margin-top: .5mm; }
@@ -221,7 +224,7 @@ const CARDS_CSS = `
   .foot .f1 { font-size: 5.4pt; font-weight: 700; color: #f7df8e; white-space: nowrap; }
   .foot .f2 { font-size: 4.7pt; font-weight: 500; color: #f39c2d; direction: ltr; white-space: nowrap; margin-top: .25mm; }
 
-  @page { size: A4 landscape; margin: 5mm 4mm 4mm; }
+  @page { size: A4 portrait; margin: 4mm 5mm; }
   @media screen { body { padding: 12px; } }
 `;
 
@@ -235,7 +238,7 @@ function cardHtml(c: IdCardData, school: IdCardSchoolInfo, qr: string, issueDate
   const rows: Array<[string, string, boolean]> = [
     ['نام', c.name, false],
     ['ولد', c.father, false],
-    [c.kind === 'student' ? 'صنف' : 'سمت', c.line1, false],
+    [c.kind === 'student' ? 'صنف' : 'وظیفه', c.line1, false],
     ['شمارهٔ کارت', c.cardNo, true],
     ['تاریخ صدور', issueDate, false],
   ];
@@ -261,7 +264,7 @@ function cardHtml(c: IdCardData, school: IdCardSchoolInfo, qr: string, issueDate
     <div class="rows">${rowsHtml}</div>
     <div class="botrow">
       <div class="qrside"><img src="${qr}" alt="QR"/><div class="qr-l">کد حاضری</div></div>
-      <div class="sig"><div class="sig-l">امضای اداره</div><div class="sig-line">مدیر مکتب</div></div>
+      <div class="sig"><div class="sig-l">امضای اداره</div><img class="signstamp" src="${SIGN_STAMP_DATA_URL}" alt=""/></div>
     </div>
   </div>
   <div class="foot">
@@ -279,7 +282,7 @@ export async function buildIdCardsSheet(
 ): Promise<string> {
   const issueDate = school.issueDate || jalaliNowDisplay();
   const pages: string[] = [];
-  const perPage = 10;
+  const perPage = 9;
   const totalPages = Math.ceil(cards.length / perPage);
   for (let p = 0; p < totalPages; p++) {
     const slice = cards.slice(p * perPage, (p + 1) * perPage);
