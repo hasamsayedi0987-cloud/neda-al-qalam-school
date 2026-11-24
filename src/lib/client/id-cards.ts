@@ -1,21 +1,31 @@
 'use client';
 
 /* ─────────────── کارت هویت آویزان شاگردان و معلمین — با QR کد ───────────────
- * طراحی حرفه‌ای کارت آویزان (لانیارد): سوراخ بند در بالا، سربرگ سرمه‌ای با لوگو،
- * عکس، مشخصات، امضاء مدیر مکتب و QR قابل اسکن.
+ * عین طرح رسمی نمونه: کارت عمودی ۵×۹ سانتی‌متر (۵۰×۹۰mm)، لوگو و نام دو‌زبانهٔ مکتب،
+ * روبان طلایی «کارت هویت»، عکس وسط با قاب آبی، فهرست نقطه‌دار مشخصات، امضای اداره،
+ * QR «کد حاضری» و نوار آدرس و تلفن در پایین.
  * چاپ: ورق A4 افقی — ۱۰ کارت در هر صفحه (۲×۵) با خطوط برش. */
 
 import QRCode from 'qrcode';
-import { toPersianDigits } from '@/lib/jalali';
+import { jalaliNowDisplay, toPersianDigits } from '@/lib/jalali';
 import { printRawHtml } from './exports';
 
 /* ─── انواع ورودی ─── */
 
 export interface IdCardSchoolInfo {
   name: string;
+  /** نام انگلیسی مکتب — زیر نام فارسی چاپ می‌شود */
+  nameEn: string;
   logo: string; // dataURL یا مسیر لوگو
+  /** آدرس فارسی — مثال: کابل، افغانستان */
+  address: string;
+  /** آدرس انگلیسی — مثال: Kabul, Afghanistan */
+  addressEn: string;
+  /** تلفن مکتب — انگلیسی/ساده */
   phone: string;
   academicYear: string;
+  /** تاریخ صدور کارت‌ها — جلالی؛ در زمان چاپ یکسان */
+  issueDate?: string;
 }
 
 export interface IdCardStudent {
@@ -33,7 +43,6 @@ export interface IdCardStaff {
   name: string;
   father?: string | null;
   position: string;
-  education?: string | null;
   photo?: string | null;
 }
 
@@ -45,10 +54,15 @@ export interface IdCardData {
   father: string;
   /** سطر مشخصهٔ اصلی — صنف یا سمت */
   line1: string;
-  /** سطر دوم — شمارهٔ حاضری یا واخد تعلیمی */
-  line2: string;
-  baseNumber?: string | null;
+  /** شمارهٔ کارت — مثال 1405-012 */
+  cardNo: string;
   photo?: string | null;
+}
+
+/** تبدیل ارقام فارسی/عربی به لاتین — برای ساخت شمارهٔ کارت از سال تعلیمی */
+function faDigitsToLatin(s: string): string {
+  return s.replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+    .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
 }
 
 function fa(v: number | string | null | undefined): string {
@@ -63,36 +77,29 @@ function esc(s: string | null | undefined): string {
     .replace(/>/g, '&gt;');
 }
 
-/** محتوای QR — متن ساخت‌یافتهٔ قابل خواندن پس از اسکن */
-export function idCardQrPayload(c: IdCardData, school: IdCardSchoolInfo): string {
-  const base = `مکتب: ${school.name}`;
-  if (c.kind === 'student') {
-    return `${base} | شاگرد: ${c.name} | پدر: ${c.father} | صنف: ${c.line1} | حاضری: ${c.line2}${c.baseNumber ? ` | اساس: ${c.baseNumber}` : ''} | شناسه: ${c.id}`;
-  }
-  return `${base} | کارمند: ${c.name} | سمت: ${c.line1} | شناسه: ${c.id}`;
+/** شمارهٔ کارت شاگرد — نمبر اساس، یا سال-شمارهٔ حاضری، یا شناسهٔ کوتاه */
+function studentCardNo(s: IdCardStudent, academicYear: string): string {
+  if (s.baseNumber && s.baseNumber.trim()) return s.baseNumber.trim();
+  const y = (faDigitsToLatin(academicYear).match(/\d{4}/) || [''])[0];
+  if (s.rollNo != null && y) return `${y}-${String(s.rollNo).padStart(3, '0')}`;
+  if (y) return `${y}-${faDigitsToLatin(String(s.id).slice(-4)).replace(/\D/g, '') || '000'}`;
+  return faDigitsToLatin(String(s.id).slice(-8));
 }
 
-/** QR به‌صورت dataURL PNG — کیفیت بالا برای چاپ */
-export async function idCardQrDataUrl(text: string): Promise<string> {
-  return QRCode.toDataURL(text, {
-    margin: 1,
-    width: 420,
-    errorCorrectionLevel: 'L',
-    color: { dark: '#10214f', light: '#ffffff' },
-  });
+function staffCardNo(t: IdCardStaff): string {
+  return `T-${String(t.id).slice(-4).toUpperCase()}`;
 }
 
 /* ─── شکل شاگرد/کارمند به کارت یکپارچه ─── */
 
-export function studentToCard(s: IdCardStudent): IdCardData {
+export function studentToCard(s: IdCardStudent, academicYear = ''): IdCardData {
   return {
     kind: 'student',
     id: s.id,
     name: s.name,
     father: s.father,
     line1: s.className || '',
-    line2: s.rollNo != null ? fa(s.rollNo) : '',
-    baseNumber: s.baseNumber,
+    cardNo: studentCardNo(s, academicYear),
     photo: s.photo,
   };
 }
@@ -104,9 +111,29 @@ export function staffToCard(t: IdCardStaff): IdCardData {
     name: t.name,
     father: t.father || '',
     line1: t.position || '',
-    line2: t.education || '',
+    cardNo: staffCardNo(t),
     photo: t.photo,
   };
+}
+
+/* ─── محتوای QR — متن ساخت‌یافتهٔ قابل خواندن پس از اسکن ─── */
+
+export function idCardQrPayload(c: IdCardData, school: IdCardSchoolInfo): string {
+  const base = `مکتب: ${school.name}`;
+  if (c.kind === 'student') {
+    return `${base} | شاگرد: ${c.name} | ولد: ${c.father} | صنف: ${c.line1} | شمارهٔ کارت: ${c.cardNo}${school.issueDate ? ` | صدور: ${school.issueDate}` : ''} | شناسه: ${c.id}`;
+  }
+  return `${base} | کارمند: ${c.name} | سمت: ${c.line1} | شمارهٔ کارت: ${c.cardNo} | شناسه: ${c.id}`;
+}
+
+/** QR به‌صورت dataURL PNG — کیفیت بالا برای چاپ */
+export async function idCardQrDataUrl(text: string): Promise<string> {
+  return QRCode.toDataURL(text, {
+    margin: 0,
+    width: 420,
+    errorCorrectionLevel: 'L',
+    color: { dark: '#10131a', light: '#ffffff' },
+  });
 }
 
 /* ─── استایل مشترک سند کارت‌ها ─── */
@@ -117,94 +144,130 @@ const FONT_FACE = `
   @font-face { font-family: 'Vazirmatn'; src: url('${typeof window !== 'undefined' ? window.location.origin : ''}/fonts/Vazirmatn-Bold.woff2') format('woff2'); font-weight: 700; }
 `;
 
+/* طرح کارت ۵۰×۹۰mm — عین نمونهٔ رسمی */
 const CARDS_CSS = `
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { font-family: Vazirmatn, Tahoma, sans-serif; direction: rtl; background: #eef1f6; }
-  .sheet-note { max-width: 288mm; margin: 0 auto 2.5mm; display: flex; justify-content: space-between; align-items: center;
-    font-size: 6.6pt; color: #475569; border-bottom: 1px solid #cbd5e1; padding-bottom: 1.4mm; }
+  .sheet-note { max-width: 288mm; margin: 0 auto 2.2mm; display: flex; justify-content: space-between; align-items: center;
+    font-size: 6.6pt; color: #475569; border-bottom: 1px solid #cbd5e1; padding-bottom: 1.2mm; }
   .sheet-note b { color: #10214f; }
-  .grid { display: grid; grid-template-columns: repeat(5, 54mm); grid-auto-rows: 86mm; gap: 4mm 4.2mm; justify-content: center; }
+  .grid { display: grid; grid-template-columns: repeat(5, 50mm); grid-auto-rows: 90mm; gap: 4mm 4.4mm; justify-content: center; }
   .cellwrap { position: relative; }
   /* خط برش دور هر کارت */
   .cut { position: absolute; inset: -1.2mm; border: 1px dashed #94a3b8; pointer-events: none; }
-  .cut::before { content: ''; position: absolute; top: -1.2mm; right: -1.2mm; width: 3mm; height: 3mm; border-top: 1.5px solid #64748b; border-right: 1.5px solid #64748b; }
-  .cut::after  { content: ''; position: absolute; bottom: -1.2mm; left: -1.2mm; width: 3mm; height: 3mm; border-bottom: 1.5px solid #64748b; border-left: 1.5px solid #64748b; }
-  /* ─── خود کارت (۵۴×۸۶ میلی‌متر) ─── */
-  .card { width: 54mm; height: 86mm; background: #fff; border-radius: 3.2mm; overflow: hidden;
-    border: 1px solid #c3cbda; box-shadow: 0 1px 2px rgba(15,33,79,.14); display: flex; flex-direction: column; position: relative; }
-  .band { background: linear-gradient(135deg, #0e1f4d 0%, #1d3f8f 62%, #2a55b1 100%); padding: 1.6mm 2.2mm 2mm; text-align: center; position: relative; }
-  .slot { width: 15mm; height: 3.4mm; background: #fff; border: 1px solid #b9c2d8; border-radius: 1.7mm; margin: 0 auto 1.2mm; }
-  .bandrow { display: flex; align-items: center; justify-content: center; gap: 1.6mm; }
-  .bandrow img { width: 8.4mm; height: 8.4mm; border-radius: 50%; background: #fff; object-fit: cover; border: .7mm solid rgba(255,255,255,.85); }
-  .school-nm { color: #fff; font-size: 7.6pt; font-weight: 700; line-height: 1.25; }
-  .chip { margin: 1mm auto 0; display: inline-block; background: #c9a227; color: #0e1f4d; font-size: 5.6pt; font-weight: 700;
-    padding: .5mm 3mm; border-radius: 2mm; letter-spacing: .2px; }
-  .cbody { flex: 1; display: flex; gap: 2.2mm; padding: 2mm 2.4mm 0; }
-  .photo { width: 19mm; height: 23.5mm; border-radius: 1.8mm; overflow: hidden; flex-shrink: 0;
-    border: .55mm solid #1d3f8f; background: #f1f5f9; display: flex; align-items: center; justify-content: center; }
+
+  /* ─── خود کارت (۵۰×۹۰ میلی‌متر — عمودی) ─── */
+  .card { width: 50mm; height: 90mm; position: relative; overflow: hidden; border-radius: 2.6mm;
+    background: linear-gradient(165deg, #f9fbff 0%, #f1f5fc 55%, #e9eefa 100%);
+    border: 1px solid #c3cbda; display: flex; flex-direction: column; }
+  /* تزئینات مورب گوشه‌ها — عین نمونه */
+  .deco { position: absolute; z-index: 0; }
+  .deco-tl1 { top: -9mm; left: -7mm; width: 26mm; height: 5.2mm; background: #f39c2d; transform: rotate(-45deg); border-radius: 1mm; }
+  .deco-tl2 { top: -4mm; left: -12mm; width: 30mm; height: 1.6mm; background: #3aa655; transform: rotate(-45deg); }
+  .deco-tl3 { top: -14mm; left: -4mm; width: 34mm; height: 4.6mm; background: #1d3f8f; transform: rotate(-45deg); border-radius: 1mm; }
+  .deco-tr1 { top: -5mm; right: -11mm; width: 24mm; height: 4mm; background: #f39c2d; transform: rotate(45deg); border-radius: 1mm; }
+  .deco-tr2 { top: 1mm; right: -6mm; width: 18mm; height: 1.3mm; background: #1d3f8f; transform: rotate(45deg); }
+  .deco-bl1 { bottom: 8mm; left: -12mm; width: 30mm; height: 3.6mm; background: #1d3f8f; transform: rotate(-45deg); border-radius: 1mm; }
+  .deco-bl2 { bottom: 10.5mm; left: -9mm; width: 22mm; height: 1.3mm; background: #f39c2d; transform: rotate(-45deg); }
+  .dots { position: absolute; z-index: 0; top: 6mm; left: 2.5mm; width: 13mm; height: 20mm; opacity: .5;
+    background-image: radial-gradient(#b9cbe6 .38mm, transparent .38mm); background-size: 2.2mm 2.2mm; }
+  .dots2 { position: absolute; z-index: 0; bottom: 22mm; right: 2mm; width: 12mm; height: 14mm; opacity: .45;
+    background-image: radial-gradient(#b9cbe6 .34mm, transparent .34mm); background-size: 2.1mm 2.1mm; }
+
+  .inner { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; align-items: center; padding: 1.2mm 3mm 0; }
+
+  /* سربرگ */
+  .logo { width: 11mm; height: 11mm; border-radius: 50%; background: #fff; object-fit: cover;
+    border: .55mm solid #1d3f8f; box-shadow: 0 .4mm 1.2mm rgba(16,33,79,.22); margin-top: .8mm; }
+  .sname { font-size: 9pt; font-weight: 700; color: #10214f; line-height: 1.15; margin-top: 1mm; white-space: nowrap; }
+  .sname-en { font-size: 5pt; font-weight: 700; color: #1d3f8f; letter-spacing: .45px; margin-top: .2mm; direction: ltr; white-space: nowrap; }
+  /* روبان با بال‌های طلایی */
+  .ribbon { position: relative; margin-top: 1.2mm; background: linear-gradient(180deg, #2a55b1 0%, #16306f 100%);
+    border: .42mm solid #d8b13c; color: #fff; font-size: 6.4pt; font-weight: 700; padding: .8mm 4.5mm; border-radius: 1.1mm; white-space: nowrap; }
+  .ribbon::before, .ribbon::after { content: ''; position: absolute; top: 1.3mm; width: 5mm; height: 3.4mm;
+    background: linear-gradient(180deg, #e2c14f, #c9a227); z-index: -1; }
+  .ribbon::before { left: -3.6mm; transform: skewY(-14deg); border-radius: .6mm 0 0 .6mm; }
+  .ribbon::after { right: -3.6mm; transform: skewY(14deg); border-radius: 0 .6mm .6mm 0; }
+  .year-l { font-size: 5.2pt; color: #334155; margin-top: 1mm; font-weight: 500; white-space: nowrap; }
+
+  /* عکس وسط با قاب آبی */
+  .photo { width: 15.5mm; height: 18.5mm; background: #fff; border: .5mm solid #1d3f8f; border-radius: 1.8mm;
+    overflow: hidden; margin-top: 1.3mm; box-shadow: 0 .4mm 1mm rgba(16,33,79,.18); display: flex; align-items: center; justify-content: center; }
   .photo img { width: 100%; height: 100%; object-fit: cover; }
-  .photo .initial { font-size: 13pt; font-weight: 700; color: #1d3f8f; }
-  .info { flex: 1; padding-top: .6mm; }
-  .nm { font-size: 8.6pt; font-weight: 700; color: #0e1f4d; margin-bottom: 1.3mm; line-height: 1.2; }
-  .irow { font-size: 6.1pt; color: #1e293b; border-bottom: .5px dotted #cbd5e1; padding: .55mm 0; display: flex; gap: 1mm; }
-  .irow .k { color: #64748b; white-space: nowrap; }
-  .irow .v { font-weight: 700; }
-  .cfoot { display: flex; align-items: flex-end; justify-content: space-between; padding: 1.2mm 2.4mm 1.6mm; gap: 2mm; }
-  .sigside { flex: 1; }
-  .year-t { font-size: 5.4pt; color: #475569; margin-bottom: .8mm; }
-  .sig-line { border-top: 1px dashed #64748b; padding-top: .8mm; font-size: 5.4pt; color: #334155; text-align: center; width: 24mm; }
+  .photo .initial { font-size: 11pt; font-weight: 700; color: #1d3f8f; }
+
+  /* فهرست مشخصات نقطه‌دار */
+  .rows { width: 100%; margin-top: 1.5mm; }
+  .irow { display: flex; align-items: center; gap: 1.1mm; padding: .35mm 0; font-size: 6pt; color: #1e293b; }
+  .irow .dot { width: 1.5mm; height: 1.5mm; border-radius: 50%; flex-shrink: 0; }
+  .irow .dot.o { background: #f39c2d; }
+  .irow .dot.b { background: #2a55b1; }
+  .irow .k { font-weight: 700; color: #10214f; white-space: nowrap; }
+  .irow .v { font-weight: 500; white-space: nowrap; }
+  .irow .v.num { direction: ltr; unicode-bidi: embed; }
+
+  /* امضای اداره + QR کد حاضری */
+  .botrow { width: 100%; display: flex; align-items: flex-end; justify-content: space-between; margin-top: auto; padding-bottom: 1.4mm; gap: 2mm; }
+  .sig { flex: 1; text-align: center; padding-left: 2mm; }
+  .sig-l { font-size: 5.4pt; font-weight: 700; color: #10214f; margin-bottom: 1.2mm; }
+  .sig-line { border-top: .35mm dashed #64748b; width: 20mm; margin: 0 auto; padding-top: .7mm; font-size: 4.6pt; color: #64748b; }
   .qrside { text-align: center; flex-shrink: 0; }
-  .qrside img { width: 20mm; height: 20mm; display: block; }
-  .scan-t { font-size: 4.8pt; color: #64748b; margin-top: .4mm; }
-  .goldline { height: 2.2mm; background: linear-gradient(90deg, #c9a227 0%, #e2c14f 45%, #c9a227 100%); }
+  .qrside img { width: 14.5mm; height: 14.5mm; display: block; background: #fff; padding: .5mm; border: .3mm solid #dbe2ee; border-radius: .9mm; }
+  .qr-l { font-size: 5pt; font-weight: 700; color: #10214f; margin-top: .5mm; }
+
+  /* نوار آدرس و تلفن — پایین کارت */
+  .foot { position: relative; z-index: 1; background: linear-gradient(90deg, #16306f 0%, #1d3f8f 50%, #16306f 100%);
+    border-top: .42mm solid #d8b13c; text-align: center; padding: .8mm 1mm .9mm; }
+  .foot .f1 { font-size: 5.4pt; font-weight: 700; color: #f7df8e; white-space: nowrap; }
+  .foot .f2 { font-size: 4.7pt; font-weight: 500; color: #f39c2d; direction: ltr; white-space: nowrap; margin-top: .25mm; }
+
   @page { size: A4 landscape; margin: 5mm 4mm 4mm; }
   @media screen { body { padding: 12px; } }
 `;
 
 /* ─── رندر یک کارت ─── */
 
-function cardHtml(c: IdCardData, school: IdCardSchoolInfo, qr: string): string {
+function cardHtml(c: IdCardData, school: IdCardSchoolInfo, qr: string, issueDate: string): string {
   const kindLabel = c.kind === 'student' ? 'کارت هویت شاگرد' : 'کارت هویت کارمند';
   const photo = c.photo
     ? `<img src="${c.photo}" alt=""/>`
     : `<div class="initial">${esc(c.name.trim().charAt(0) || '؟')}</div>`;
-  const rows = c.kind === 'student'
-    ? [
-        ['نام پدر', c.father],
-        ['صنف', c.line1],
-        ['شمارهٔ حاضری', c.line2],
-        ['نمبر اساس', c.baseNumber || ''],
-      ]
-    : [
-        ['نام پدر', c.father],
-        ['سمت', c.line1],
-        ['واخد تعلیمی', c.line2],
-      ];
+  const rows: Array<[string, string, boolean]> = [
+    ['نام', c.name, false],
+    ['ولد', c.father, false],
+    [c.kind === 'student' ? 'صنف' : 'سمت', c.line1, false],
+    ['شمارهٔ کارت', c.cardNo, true],
+    ['تاریخ صدور', issueDate, false],
+  ];
   const rowsHtml = rows
     .filter(([, v]) => v)
-    .map(([k, v]) => `<div class="irow"><span class="k">${k}:</span><span class="v">${esc(v)}</span></div>`)
+    .map(([k, v, num], i) =>
+      `<div class="irow"><span class="dot ${i % 2 === 0 ? 'o' : 'b'}"></span><span class="k">${k}:</span><span class="v${num ? ' num' : ''}">${esc(v)}</span></div>`)
     .join('');
+  const phoneFa = school.phone ? ` | تلفن: ${fa(school.phone)}` : '';
+  const phoneEn = school.phone ? ` | Tel: ${school.phone}` : '';
   return `<div class="card">
-  <div class="band">
-    <div class="slot"></div>
-    <div class="bandrow"><img src="${school.logo}" alt=""/><div class="school-nm">${esc(school.name)}</div></div>
-    <div class="chip">${kindLabel}</div>
-  </div>
-  <div class="cbody">
+  <div class="deco deco-tl1"></div><div class="deco deco-tl2"></div><div class="deco deco-tl3"></div>
+  <div class="deco deco-tr1"></div><div class="deco deco-tr2"></div>
+  <div class="deco deco-bl1"></div><div class="deco deco-bl2"></div>
+  <div class="dots"></div><div class="dots2"></div>
+  <div class="inner">
+    <img class="logo" src="${school.logo}" alt=""/>
+    <div class="sname">${esc(school.name)}</div>
+    <div class="sname-en">${esc(school.nameEn)}</div>
+    <div class="ribbon">${kindLabel}</div>
+    <div class="year-l">سال تعلیمی: ${esc(school.academicYear)}</div>
     <div class="photo">${photo}</div>
-    <div class="info">
-      <div class="nm">${esc(c.name)}</div>
-      ${rowsHtml}
+    <div class="rows">${rowsHtml}</div>
+    <div class="botrow">
+      <div class="qrside"><img src="${qr}" alt="QR"/><div class="qr-l">کد حاضری</div></div>
+      <div class="sig"><div class="sig-l">امضای اداره</div><div class="sig-line">مدیر مکتب</div></div>
     </div>
   </div>
-  <div class="cfoot">
-    <div class="sigside">
-      <div class="year-t">سال تعلیمی ${esc(school.academicYear)}</div>
-      <div class="sig-line">امضاء مدیر مکتب</div>
-    </div>
-    <div class="qrside"><img src="${qr}" alt="QR"/><div class="scan-t">اسکن برای تأیید کارت</div></div>
+  <div class="foot">
+    <div class="f1">${esc(school.address)}${phoneFa}</div>
+    <div class="f2">${esc(school.addressEn)}${phoneEn}</div>
   </div>
-  <div class="goldline"></div>
 </div>`;
 }
 
@@ -214,18 +277,20 @@ export async function buildIdCardsSheet(
   cards: IdCardData[],
   school: IdCardSchoolInfo,
 ): Promise<string> {
+  const issueDate = school.issueDate || jalaliNowDisplay();
   const pages: string[] = [];
   const perPage = 10;
-  for (let p = 0; p < Math.ceil(cards.length / perPage); p++) {
+  const totalPages = Math.ceil(cards.length / perPage);
+  for (let p = 0; p < totalPages; p++) {
     const slice = cards.slice(p * perPage, (p + 1) * perPage);
     const cells: string[] = [];
     for (const c of slice) {
       const qr = await idCardQrDataUrl(idCardQrPayload(c, school));
-      cells.push(`<div class="cellwrap"><div class="cut"></div>${cardHtml(c, school, qr)}</div>`);
+      cells.push(`<div class="cellwrap"><div class="cut"></div>${cardHtml(c, school, qr, issueDate)}</div>`);
     }
     pages.push(`<section class="page">
       <div class="sheet-note"><b>کارت‌های هویت — ${esc(school.name)}</b>
-        <span>سال تعلیمی ${esc(school.academicYear)} • صفحهٔ ${fa(p + 1)} از ${fa(Math.ceil(cards.length / perPage))} • خط‌چین = محل قیچی • کادر سفید بالای کارت = محل سوراخ بند</span></div>
+        <span>سال تعلیمی ${esc(school.academicYear)} • تاریخ صدور: ${esc(issueDate)} • صفحهٔ ${fa(p + 1)} از ${fa(totalPages)} • خط‌چین = محل قیچی</span></div>
       <div class="grid">${cells.join('')}</div>
     </section>`);
   }

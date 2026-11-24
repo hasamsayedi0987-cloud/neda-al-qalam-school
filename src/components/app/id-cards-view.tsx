@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { PageHeader, EmptyState, Field } from './ui-bits';
 import { apiGet } from '@/lib/client/api';
-import { toPersianDigits } from '@/lib/jalali';
+import { toPersianDigits, jalaliNowDisplay } from '@/lib/jalali';
 import {
   buildIdCardsSheet, printIdCards, studentToCard, staffToCard,
   type IdCardSchoolInfo, type IdCardData,
@@ -28,7 +28,7 @@ export function IdCardsView() {
   const [classId, setClassId] = useState<string>('');
   const [students, setStudents] = useState<StudentInfo[]>([]);
   const [teachers, setTeachers] = useState<TeacherInfo[]>([]);
-  const [school, setSchool] = useState<IdCardSchoolInfo>({ name: '', logo: '', phone: '', academicYear: '' });
+  const [school, setSchool] = useState<IdCardSchoolInfo>({ name: '', nameEn: '', logo: '', address: '', addressEn: '', phone: '', academicYear: '' });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
@@ -45,11 +45,18 @@ export function IdCardsView() {
     ]).then(([st, cl, sd, tc]) => {
       if (!alive) return;
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      /* آدرس فارسی: ولسوالی، ولایت، افغانستان — و نام انگلیسی مکتب */
+      const cityFa = [st.settings.district, st.settings.province].filter(Boolean).join('، ') || 'کابل';
+      const cityEn = st.settings.province === 'کابل' || !st.settings.province ? 'Kabul' : st.settings.province;
       setSchool({
         name: st.settings.schoolName || 'مکتب خصوصی نداالقلم',
+        nameEn: 'NEDA-UL-QALAM PRIVATE SCHOOL',
         logo: st.settings.schoolLogo || `${origin}/logo.png`,
+        address: `${cityFa}، افغانستان`,
+        addressEn: `${cityEn}, Afghanistan`,
         phone: st.settings.schoolPhone || '',
         academicYear: st.settings.academicYear || '۱۴۰۵',
+        issueDate: jalaliNowDisplay(),
       });
       setClasses(cl.classes || []);
       setStudents(sd.students || []);
@@ -100,11 +107,11 @@ export function IdCardsView() {
           rollNo: s.rollNo,
           baseNumber: s.baseNumber,
           photo: s.photo,
-        }));
+        }, school.academicYear));
     }
     return activeTeachers
       .filter((t) => selected.has(t.id))
-      .map((t) => staffToCard({ id: t.id, name: t.name, father: t.fatherName, position: t.position, education: t.education }));
+      .map((t) => staffToCard({ id: t.id, name: t.name, father: t.fatherName, position: t.position }));
   }, [kind, classStudents, activeTeachers, selected, classes, classId]);
 
   const makePreview = useCallback(async () => {
