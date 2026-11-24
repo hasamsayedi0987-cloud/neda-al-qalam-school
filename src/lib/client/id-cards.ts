@@ -151,13 +151,14 @@ const FONT_FACE = `
 const CARDS_CSS = `
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { font-family: Vazirmatn, Tahoma, sans-serif; direction: rtl; background: #eef1f6; }
-  .sheet-note { max-width: 159mm; margin: 0 auto 1.6mm; display: flex; justify-content: space-between; align-items: center;
+  .sheet-note { max-width: 156mm; margin: 0 auto 1.6mm; display: flex; justify-content: space-between; align-items: center;
     font-size: 6.4pt; color: #475569; border-bottom: 1px solid #cbd5e1; padding-bottom: 1mm; }
   .sheet-note b { color: #10214f; }
-  .grid { display: grid; grid-template-columns: repeat(3, 50mm); grid-auto-rows: 90mm; gap: 3.5mm 4.4mm; justify-content: center; }
+  .grid { display: grid; grid-template-columns: repeat(3, 50mm); grid-auto-rows: 90mm; gap: 2mm 3mm; justify-content: center; }
   .cellwrap { position: relative; }
+  @media print { .sheet-note { display: none; } }
   /* خط برش دور هر کارت */
-  .cut { position: absolute; inset: -1.2mm; border: 1px dashed #94a3b8; pointer-events: none; }
+  .cut { position: absolute; inset: -.9mm; border: 1px dashed #94a3b8; pointer-events: none; }
 
   /* ─── خود کارت (۵۰×۹۰ میلی‌متر — عمودی) ─── */
   .card { width: 50mm; height: 90mm; position: relative; overflow: hidden; border-radius: 2.6mm;
@@ -213,7 +214,7 @@ const CARDS_CSS = `
   .botrow { width: 100%; display: flex; align-items: flex-end; justify-content: space-between; margin-top: auto; padding-bottom: 1.4mm; gap: 2mm; }
   .sig { flex: 1; text-align: center; padding-left: 1.5mm; }
   .sig-l { font-size: 5.4pt; font-weight: 700; color: #10214f; margin-bottom: .6mm; }
-  .signstamp { width: 27.5mm; display: block; margin: 0 auto; }
+  .signstamp { width: 28mm; display: block; margin: 0 auto; }
   .qrside { text-align: center; flex-shrink: 0; }
   .qrside img { width: 14.5mm; height: 14.5mm; display: block; background: #fff; padding: .5mm; border: .3mm solid #dbe2ee; border-radius: .9mm; }
   .qr-l { font-size: 5pt; font-weight: 700; color: #10214f; margin-top: .5mm; }
@@ -224,7 +225,7 @@ const CARDS_CSS = `
   .foot .f1 { font-size: 5.4pt; font-weight: 700; color: #f7df8e; white-space: nowrap; }
   .foot .f2 { font-size: 4.7pt; font-weight: 500; color: #f39c2d; direction: ltr; white-space: nowrap; margin-top: .25mm; }
 
-  @page { size: A4 portrait; margin: 4mm 5mm; }
+  @page { size: A4 portrait; margin: 2mm 3mm; }
   @media screen { body { padding: 12px; } }
 `;
 
