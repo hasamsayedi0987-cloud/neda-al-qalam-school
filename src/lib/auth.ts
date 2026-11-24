@@ -6,7 +6,7 @@
  *  ۲) در غیر این صورت کلید تصادفی قوی ساخته و در جدول Setting (کلید authSecret)
  *     ذخیره می‌شود — کلید دیگر در کد عمومی نیست و با استقرار مجدد هم ثابت می‌ماند
  */
-import { createHmac, timingSafeEqual, randomBytes, scryptSync } from 'crypto';
+import { createHmac, timingSafeEqual, randomBytes, scryptSync, createHash } from 'crypto';
 import { cookies } from 'next/headers';
 import { db } from '@/lib/db';
 import { sectionAllowed } from '@/lib/access';
@@ -18,6 +18,18 @@ export interface SessionPayload {
   uid: string;
   role: string;
   iat: number;
+  /** نسخهٔ رمز عبور — پس از تغییر رمز، نشست‌های قدیمی با نسخهٔ کهنه نامعتبر می‌شوند */
+  pwv?: string;
+}
+
+/**
+ * نسخهٔ رمز عبور (pwv) — اثر انگشت کوتاه از هش ذخیره‌شدهٔ رمز.
+ * چون salt هر بار hashPassword تصادفی است، با «هر» تغییر رمز این مقدار عوض می‌شود
+ * حتی اگر متن رمز همان باشد. توکن‌های قدیمی با pwv ناهم‌خوان دیگر پذیرفته نمی‌شوند
+ * → تغییر رمز = باطل‌شدن خودکار همهٔ نشست‌های قبلی (همین دستگاه و دستگاه‌های دیگر).
+ */
+export function pwTag(storedPassword: string): string {
+  return createHash('sha256').update(storedPassword).digest('hex').slice(0, 12);
 }
 
 // ─── کلید امضای نشست (پویا) ───
@@ -104,9 +116,11 @@ export interface AuthUser {
   teacherId: string | null;
   studentId: string | null;
   perms: string | null; // JSON دسترسی بخش‌ها (رونویسی نقش)
+  /** درست = رمز این حساب هنوز رمز اولیه/پیش‌فرض است — کاربر باید تغییرش دهد */
+  mustChangePassword?: boolean;
 }
 
-/** کاربر جاری از کوکی — با بررسی فعال بودن حساب */
+/** کاربر جاری از کوکی — با بررسی فعال بودن حساب و نسخهٔ رمز عبور */
 export async function getSessionUser(): Promise<AuthUser | null> {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
@@ -117,10 +131,16 @@ export async function getSessionUser(): Promise<AuthUser | null> {
     select: {
       id: true, username: true, name: true, role: true,
       active: true, phone: true, teacherId: true, studentId: true, perms: true,
+      password: true,
     },
   });
   if (!user || !user.active) return null; // کاربر غیرفعال یا حذف‌شده نمی‌تواند وارد شود
-  return user;
+  // ── امنیت: پس از تغییر رمز، توکن‌های قدیمی (با نسخهٔ رمز کهنه) باطل می‌شوند ──
+  // توکن بدون pwv (نسخه‌های قبل از این اصلاح) هم پذیرفته نمی‌شود تا نشست‌های
+  // مانده از قبلِ تغییر رمز هرگز معتبر نمانند.
+  if (!payload.pwv || payload.pwv !== pwTag(user.password)) return null;
+  const { password: _pw, ...safe } = user;
+  return safe;
 }
 
 export class ApiError extends Error {

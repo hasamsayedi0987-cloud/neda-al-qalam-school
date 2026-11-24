@@ -88,15 +88,16 @@ export async function GET(req: NextRequest) {
     }
 
     // ─── حاضری یومیه صنف ───
+    // امنیت دسترسی بر اساس نقش:
+    //  • شاگرد/سرپرست → فقط حاضری خود شاگرد
+    //  • معلم → فقط صنف‌های تحت تدریس خود (assertClassScope)
+    //  • مدیر/سرمعلم → همهٔ صنف‌ها
+    //  • سایر نقش‌ها (کارمند/کتابخانه‌دار) → دادهٔ صنف‌ها ممنوع؛ فقط حاضری خودشان (mode=staff&mine=1)
     if (mode === 'daily') {
       const classId = sp.get('classId') || '';
       const date = sp.get('date');
       if (!classId) throw new ApiError('صنف را انتخاب کنید');
-      await assertClassScope(me, classId);
-      const cls = await db.class.findUnique({ where: { id: classId } });
-      if (!cls) throw new ApiError('صنف یافت نشد');
-
-      // شاگرد: فقط حاضری خودش
+      // شاگرد: فقط حاضری خودش — پیش از بررسی صنف
       if (me.role === 'STUDENT' || me.role === 'GUARDIAN') {
         if (!me.studentId) throw new ApiError('دسترسی مجاز نیست', 403);
         const records = await db.attendanceRecord.findMany({
@@ -106,6 +107,10 @@ export async function GET(req: NextRequest) {
         });
         return NextResponse.json({ students: [], records, classInfo: null });
       }
+      await requireRole('ADMIN', 'HEADTEACHER', 'TEACHER');
+      await assertClassScope(me, classId);
+      const cls = await db.class.findUnique({ where: { id: classId } });
+      if (!cls) throw new ApiError('صنف یافت نشد');
 
       const students = await db.student.findMany({
         where: { classId, status: 'ACTIVE' },
@@ -139,6 +144,7 @@ export async function GET(req: NextRequest) {
 
       const classId = sp.get('classId') || '';
       if (!classId) throw new ApiError('صنف را انتخاب کنید');
+      await requireRole('ADMIN', 'HEADTEACHER', 'TEACHER');
       await assertClassScope(me, classId);
 
       const students = await db.student.findMany({
@@ -158,6 +164,7 @@ export async function GET(req: NextRequest) {
       if (!jy) throw new ApiError('سال شمسی را انتخاب کنید');
       const classId = sp.get('classId') || '';
       if (!classId) throw new ApiError('صنف را انتخاب کنید');
+      await requireRole('ADMIN', 'HEADTEACHER', 'TEACHER');
       await assertClassScope(me, classId);
       // مرز سال شمسی: از ۱/۱ تا ۱۲/آخر (مبدل به ISO)
       const startG = jalaliToGregorian(jy, 1, 1);
@@ -220,6 +227,11 @@ export async function POST(req: NextRequest) {
     }
 
     // ─── ثبت حاضری شاگردان ───
+    // امنیت — ثبت حاضری فقط برای نقش‌های آموزشی: مدیر، سرمعلم و معلم.
+    // شاگرد/سرپرست/کارمند هرگز نمی‌تواند حاضری ثبت یا تغییر دهد (دست‌کاری حاضری ممنوع)
+    if (!['ADMIN', 'HEADTEACHER', 'TEACHER'].includes(me.role)) {
+      throw new ApiError('ثبت حاضری فقط توسط مدیر، سرمعلم و معلم امکان‌پذیر است', 403);
+    }
     await requireSection('attendance');
     const date = str(body.date);
     const classId = str(body.classId);

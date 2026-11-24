@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { requireRole, hashPassword, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
 import { SECTIONS } from '@/lib/access';
+import { hasDefaultPassword } from '@/lib/bootstrap';
 
 const VALID_ROLES = ['ADMIN', 'HEADTEACHER', 'TEACHER', 'STUDENT', 'GUARDIAN', 'STAFF', 'LIBRARIAN'];
 
@@ -37,6 +38,9 @@ export async function GET() {
         active: u.active, phone: u.phone, teacherId: u.teacherId, studentId: u.studentId,
         perms: u.perms,
         studentName: u.studentProfile ? `${u.studentProfile.firstName} ${u.studentProfile.lastName}` : null,
+        // امنیت — حساب‌هایی که هنوز رمز اولیه دارند تا مدیر ببیند و بازنشانی کند
+        // (بررسی واقعی با هش ذخیره‌شده؛ فقط برای نام‌های کاربری پیش‌فرض شناخته‌شده)
+        defaultPassword: hasDefaultPassword(u.username, u.password),
       })),
     });
   } catch (e) {

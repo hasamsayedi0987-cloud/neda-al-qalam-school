@@ -47,12 +47,14 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    await requireUser();
+    const me = await requireUser();
     const body = (await req.json().catch(() => ({}))) as { endpoint?: string } | null;
     const endpoint = str(body?.endpoint || '');
     if (!endpoint) return NextResponse.json({ error: 'شناسه لازم است' }, { status: 400 });
-    await db.pushSubscription.deleteMany({ where: { endpoint } });
-    return NextResponse.json({ ok: true });
+    // امنیت — هر کاربر فقط اشتراک خودش را می‌تواند حذف کند؛ حذف اشتراک دیگران ممنوع
+    // (endpoint با userId کاربر جاری فیلتر می‌شود)
+    const removed = await db.pushSubscription.deleteMany({ where: { endpoint, userId: me.id } });
+    return NextResponse.json({ ok: true, removed: removed.count });
   } catch (e) {
     return handleApiError(e);
   }

@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import {
-  createToken, getSessionUser, hashPassword, verifyPassword,
+  createToken, getSessionUser, hashPassword, verifyPassword, pwTag,
   SESSION_COOKIE, requireUser, ApiError,
 } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
-import { ensureBootstrap } from '@/lib/bootstrap';
+import { ensureBootstrap, hasDefaultPassword } from '@/lib/bootstrap';
 import {
   checkRateLimit, recordFailure, clearFailures, clientIp,
   LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS,
@@ -20,7 +20,13 @@ export async function GET() {
       const setup = await db.setting.findUnique({ where: { key: 'setup_done' } });
       return NextResponse.json({ user: null, setupDone: setup?.value === '1' }, { status: 200 });
     }
-    return NextResponse.json({ user, setupDone: true });
+    // امنیت — اگر رمز این حساب هنوز رمز اولیه/پیش‌فرض است، کاربر موظف به تغییر آن است
+    let mustChangePassword = false;
+    try {
+      const row = await db.user.findUnique({ where: { id: user.id }, select: { password: true } });
+      mustChangePassword = row ? hasDefaultPassword(user.username, row.password) : false;
+    } catch { /* بررسی پیش‌فرض‌بودن حیاتی نیست */ }
+    return NextResponse.json({ user: { ...user, mustChangePassword }, setupDone: true });
   } catch (e) {
     return handleApiError(e);
   }
@@ -91,7 +97,12 @@ export async function POST(req: NextRequest) {
           }
         }
       } catch { /* ترمیم پیوند حیاتی نیست — ورود ادامه می‌یابد */ }
-      const token = await createToken({ uid: user.id, role: user.role, iat: Math.floor(Date.now() / 1000) });
+      // امنیت نشست — نسخهٔ رمز (pwv) داخل توکن ثبت می‌شود؛ با تغییر رمز بعدی،
+      // همین توکن و همهٔ توکن‌های قدیمی خودکار باطل می‌شوند (بند ۵ امنیت)
+      const token = await createToken({
+        uid: user.id, role: user.role, iat: Math.floor(Date.now() / 1000),
+        pwv: pwTag(user.password),
+      });
       // بعد از اولین ورود مدیر، حساب‌های ابتدایی دیگر به هیچ‌کس نمایش داده نمی‌شود
       if (user.role === 'ADMIN') {
         await db.setting.upsert({
@@ -100,10 +111,14 @@ export async function POST(req: NextRequest) {
           create: { key: 'setup_done', value: '1' },
         });
       }
+      // امنیت — حساب‌های پیش‌فرض: اگر رمز هنوز رمز اولیه است، کاربر موظف به تغییر آن است
+      let mustChangePassword = false;
+      try { mustChangePassword = hasDefaultPassword(user.username, user.password); } catch { /* حیاتی نیست */ }
       const res = NextResponse.json({
         user: {
           id: user.id, username: user.username, name: user.name,
           role: user.role, phone: user.phone, teacherId, studentId, perms: user.perms,
+          mustChangePassword,
         },
         setupDone: true,
       });
@@ -131,15 +146,31 @@ export async function POST(req: NextRequest) {
       const current = str(body.currentPassword);
       const next = str(body.newPassword);
       if (next.length < 6) throw new ApiError('رمز عبور جدید باید حداقل ۶ حرف باشد');
+      if (next === current) throw new ApiError('رمز جدید باید با رمز فعلی متفاوت باشد');
       const dbUser = await db.user.findUnique({ where: { id: me.id } });
       if (!dbUser || !verifyPassword(current, dbUser.password)) {
         throw new ApiError('رمز عبور فعلی نادرست است');
       }
+      const newHash = hashPassword(next);
       await db.user.update({
         where: { id: me.id },
-        data: { password: hashPassword(next) },
+        data: { password: newHash },
       });
-      return NextResponse.json({ ok: true });
+      // امنیت — نسخهٔ رمز عوض شد: همهٔ نشست‌های قبلی (کوکی‌های قدیمی) از این لحظه
+      // نامعتبرند؛ برای نشستِ جاری کوکی تازه با نسخهٔ جدید صادر می‌شود تا کاربر
+      // از سیستم بیرون پرتاب نشود، اما هر دستگاه دیگری باید دوباره وارد شود.
+      const token = await createToken({
+        uid: me.id, role: me.role, iat: Math.floor(Date.now() / 1000),
+        pwv: pwTag(newHash),
+      });
+      const res = NextResponse.json({ ok: true });
+      const isHttps =
+        req.nextUrl.protocol === 'https:' ||
+        (req.headers.get('x-forwarded-proto') || '').split(',')[0].trim() === 'https';
+      res.cookies.set(SESSION_COOKIE, token, {
+        httpOnly: true, sameSite: 'lax', path: '/', secure: isHttps,
+      });
+      return res;
     }
 
     throw new ApiError('عملیات نامعلوم');

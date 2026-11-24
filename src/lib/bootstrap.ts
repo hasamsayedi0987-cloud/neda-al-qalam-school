@@ -8,7 +8,7 @@
  * تا مدیر بداند باید در تنظیمات هاست، دیتابیس را متصل کند.
  */
 import { db } from './db';
-import { ApiError, hashPassword } from './auth';
+import { ApiError, hashPassword, verifyPassword } from './auth';
 
 let checked = false;
 
@@ -21,6 +21,24 @@ const DEFAULT_USERS = [
   { username: 'student', password: '12345678', name: 'شاگرد نمونه', role: 'STUDENT', phone: null },
   { username: 'parent', password: '12345678', name: 'سرپرست شاگرد', role: 'GUARDIAN', phone: null },
 ];
+
+/**
+ * امنیت — حساب‌های پیش‌فرض و رمزهای اولیه:
+ * هر حسابی که هنوز با رمز اولیهٔ خودش وارد می‌شود باید رمزش را عوض کند.
+ * این بررسی فقط برای همین ۷ نام کاربری شناخته‌شده انجام می‌شود (هزینهٔ scrypt ناچیز می‌ماند)؛
+ * اگر مدیر رمز حسابی را تغییر داده باشد، دیگر «پیش‌فرض» شمرده نمی‌شود.
+ */
+export function defaultPasswordOf(username: string): string | null {
+  const uname = username.trim().toLowerCase();
+  const hit = DEFAULT_USERS.find((u) => u.username === uname);
+  return hit ? hit.password : null;
+}
+
+/** آیا رمز فعلیِ این حساب هنوز همان رمز اولیه است؟ (بررسی واقعی با هش ذخیره‌شده) */
+export function hasDefaultPassword(username: string, storedHash: string): boolean {
+  const initial = defaultPasswordOf(username);
+  return initial ? verifyPassword(initial, storedHash) : false;
+}
 
 export async function ensureBootstrap(): Promise<void> {
   if (checked) return;

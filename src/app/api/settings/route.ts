@@ -35,6 +35,15 @@ const EDITABLE_KEYS = [
 /** کلیدهای عمومی — صفحهٔ ورود و boot بدون احراز هویت می‌خواند (آفلاین هم نام/لوگوی واقعی مکتب را ببیند) */
 const PUBLIC_KEYS = ['schoolName', 'tagline', 'language', 'schoolLogo', 'emblemLogo'];
 
+/**
+ * امنیت — تنظیمات حساس SMS فقط برای مدیر:
+ * smsProvider شامل آدرس دروازهٔ پیام، پارامترها و هدرها (کلید API/توکن) است؛
+ * smsTemplates هم متن پیام‌های اداری است. این کلیدها هرگز به کاربران غیرمدیر
+ * (شاگرد/والد/معلم/کارمند) برگردانده نمی‌شود — پیشتر هر کاربر وارد‌شده‌ای
+ * می‌توانست آدرس و کلیدهای دروازهٔ SMS را بخواند.
+ */
+const ADMIN_ONLY_KEYS = new Set(['smsProvider', 'smsTemplates']);
+
 /** سقف حجم هر لوگو (dataURL) — تصویر فشردهٔ ~۱۰۰KB کافی است */
 const LOGO_KEYS = ['schoolLogo', 'emblemLogo'];
 const LOGO_MAX_CHARS = 500_000;
@@ -49,12 +58,17 @@ export async function GET(req: NextRequest) {
       for (const s of rows) map[s.key] = s.value;
       return NextResponse.json({ settings: map }, { headers: { 'Cache-Control': 'public, max-age=60' } });
     }
-    await requireUser();
+    const me = await requireUser();
     const settings = await db.setting.findMany({
       where: { key: { in: EDITABLE_KEYS } },
     });
+    const isAdmin = me.role === 'ADMIN';
     const map: Record<string, string> = {};
-    for (const s of settings) map[s.key] = s.value;
+    for (const s of settings) {
+      // امنیت — کلیدهای حساس SMS فقط برای مدیر
+      if (!isAdmin && ADMIN_ONLY_KEYS.has(s.key)) continue;
+      map[s.key] = s.value;
+    }
     return NextResponse.json({ settings: map });
   } catch (e) {
     return handleApiError(e);
