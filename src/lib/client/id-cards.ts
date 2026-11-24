@@ -4,7 +4,7 @@
  * عین طرح رسمی نمونه: کارت عمودی ۵×۹ سانتی‌متر (۵۰×۹۰mm)، لوگو و نام دو‌زبانهٔ مکتب،
  * روبان طلایی «کارت هویت»، عکس وسط با قاب آبی، فهرست نقطه‌دار مشخصات، امضای اداره،
  * QR «کد حاضری» و نوار آدرس و تلفن در پایین.
- * چاپ: ورق A4 عمودی — ۹ کارت در هر صفحه (۳×۳) با خطوط برش. */
+ * چاپ: ورق A4 افقی — ۱۰ کارت در هر صفحه (۲×۵ عمودی) با خطوط برش. */
 
 import QRCode from 'qrcode';
 import { jalaliNowDisplay, toPersianDigits } from '@/lib/jalali';
@@ -151,10 +151,10 @@ const FONT_FACE = `
 const CARDS_CSS = `
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { font-family: Vazirmatn, Tahoma, sans-serif; direction: rtl; background: #eef1f6; }
-  .sheet-note { max-width: 156mm; margin: 0 auto 1.6mm; display: flex; justify-content: space-between; align-items: center;
+  .sheet-note { max-width: 262mm; margin: 0 auto 1.6mm; display: flex; justify-content: space-between; align-items: center;
     font-size: 6.4pt; color: #475569; border-bottom: 1px solid #cbd5e1; padding-bottom: 1mm; }
   .sheet-note b { color: #10214f; }
-  .grid { display: grid; grid-template-columns: repeat(3, 50mm); grid-auto-rows: 90mm; gap: 2mm 3mm; justify-content: center; }
+  .grid { display: grid; grid-template-columns: repeat(5, 50mm); grid-auto-rows: 90mm; gap: 2mm 3mm; justify-content: center; }
   .cellwrap { position: relative; }
   @media print { .sheet-note { display: none; } }
   /* خط برش دور هر کارت */
@@ -183,7 +183,7 @@ const CARDS_CSS = `
   /* سربرگ */
   .logo { width: 11mm; height: 11mm; border-radius: 50%; background: #fff; object-fit: cover;
     border: .55mm solid #1d3f8f; box-shadow: 0 .4mm 1.2mm rgba(16,33,79,.22); margin-top: .8mm; }
-  .sname { font-size: 9pt; font-weight: 700; color: #10214f; line-height: 1.15; margin-top: 1mm; white-space: nowrap; }
+  .sname { font-size: 9pt; font-weight: 700; color: #10214f; line-height: 1.15; margin-top: .8mm; white-space: nowrap; }
   .sname-en { font-size: 5pt; font-weight: 700; color: #1d3f8f; letter-spacing: .45px; margin-top: .2mm; direction: ltr; white-space: nowrap; }
   /* روبان با بال‌های طلایی */
   .ribbon { position: relative; margin-top: 1.2mm; background: linear-gradient(180deg, #2a55b1 0%, #16306f 100%);
@@ -211,21 +211,22 @@ const CARDS_CSS = `
   .irow .v.num { direction: ltr; unicode-bidi: embed; }
 
   /* امضای اداره + QR کد حاضری */
-  .botrow { width: 100%; display: flex; align-items: flex-end; justify-content: space-between; margin-top: auto; padding-bottom: 1.4mm; gap: 2mm; }
+  .botrow { width: 100%; display: flex; align-items: flex-end; justify-content: space-between; margin-top: auto; padding-bottom: 1mm; gap: 2mm; }
   .sig { flex: 1; text-align: center; padding-left: 1.5mm; }
   .sig-l { font-size: 5.4pt; font-weight: 700; color: #10214f; margin-bottom: .6mm; }
-  .signstamp { width: 28mm; display: block; margin: 0 auto; }
+  .signstamp { width: 21mm; display: block; margin: 0 auto; }
   .qrside { text-align: center; flex-shrink: 0; }
   .qrside img { width: 14.5mm; height: 14.5mm; display: block; background: #fff; padding: .5mm; border: .3mm solid #dbe2ee; border-radius: .9mm; }
   .qr-l { font-size: 5pt; font-weight: 700; color: #10214f; margin-top: .5mm; }
 
   /* نوار آدرس و تلفن — پایین کارت */
   .foot { position: relative; z-index: 1; background: linear-gradient(90deg, #16306f 0%, #1d3f8f 50%, #16306f 100%);
-    border-top: .42mm solid #d8b13c; text-align: center; padding: .8mm 1mm .9mm; }
+    border: .42mm solid #d8b13c; border-radius: 1.6mm; text-align: center; padding: .7mm 1mm .8mm;
+    margin: 0 1.3mm 1.3mm; }
   .foot .f1 { font-size: 5.4pt; font-weight: 700; color: #f7df8e; white-space: nowrap; }
   .foot .f2 { font-size: 4.7pt; font-weight: 500; color: #f39c2d; direction: ltr; white-space: nowrap; margin-top: .25mm; }
 
-  @page { size: A4 portrait; margin: 2mm 3mm; }
+  @page { size: A4 landscape; margin: 2mm 3mm; }
   @media screen { body { padding: 12px; } }
 `;
 
@@ -283,7 +284,7 @@ export async function buildIdCardsSheet(
 ): Promise<string> {
   const issueDate = school.issueDate || jalaliNowDisplay();
   const pages: string[] = [];
-  const perPage = 9;
+  const perPage = 10;
   const totalPages = Math.ceil(cards.length / perPage);
   for (let p = 0; p < totalPages; p++) {
     const slice = cards.slice(p * perPage, (p + 1) * perPage);
