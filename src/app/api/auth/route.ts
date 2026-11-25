@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
       if (!username || !password) throw new ApiError('نام کاربری و رمز عبور را وارد کنید');
       // ── محدودیت تلاش ورود (ضد جستجوی رمز) ──
       const rlKey = `login:${username}:${clientIp(req)}`;
-      const rl = checkRateLimit(rlKey, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS);
+      const rl = await checkRateLimit(rlKey, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS);
       if (!rl.allowed) {
         const mins = Math.ceil(rl.retryAfterSec / 60);
         throw new ApiError(
@@ -55,8 +55,8 @@ export async function POST(req: NextRequest) {
       }
       const user = await db.user.findUnique({ where: { username } });
       if (!user || !verifyPassword(password, user.password)) {
-        recordFailure(rlKey, LOGIN_WINDOW_MS);
-        const left = checkRateLimit(rlKey, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS).remaining;
+        await recordFailure(rlKey, LOGIN_WINDOW_MS);
+        const left = (await checkRateLimit(rlKey, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS)).remaining;
         throw new ApiError(
           left <= 2
             ? `نام کاربری یا رمز عبور نادرست است (تلاش باقی‌مانده: ${left})`
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
           401,
         );
       }
-      clearFailures(rlKey);
+      await clearFailures(rlKey);
       if (!user.active) {
         throw new ApiError('حساب کاربری شما توسط مدیر غیرفعال شده است. لطفاً با مدیر مکتب تماس بگیرید.', 403);
       }

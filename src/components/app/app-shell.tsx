@@ -10,7 +10,7 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/s
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
-import { apiGet, apiSend, onSyncStateChange, pendingSyncCount, failedSyncItems, isOnline, isAuthRequired, flushQueue, tryAutoRelogin, discardQueueItem, discardAllFailedItems, forgetLastUser, prefetchSections } from '@/lib/client/api';
+import { apiGet, apiSend, onSyncStateChange, pendingSyncCount, failedSyncItems, isOnline, isAuthRequired, flushQueue, tryAutoRelogin, discardQueueItem, discardAllFailedItems, retryQueueItem, forgetLastUser, prefetchSections } from '@/lib/client/api';
 import { configureExports } from '@/lib/client/exports';
 import { SECTIONS, sectionAllowed } from '@/lib/access';
 import { navLabel, localeOf, dirOfLocale, type AppLocale } from '@/lib/i18n-nav';
@@ -722,6 +722,13 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
                     <div key={f.id} className="rounded-lg border border-rose-500/25 bg-background/60 px-2.5 py-1.5 text-[11px]">
                       <div className="flex items-center gap-2">
                         <span className="font-medium truncate flex-1" dir="auto">{f.label}</span>
+                        <button
+                          type="button"
+                          onClick={() => { retryQueueItem(f.id); toast({ title: 'دوباره تلاش می‌شود', description: f.label }); }}
+                          className="shrink-0 rounded-md border border-emerald-400/40 px-2 py-0.5 hover:bg-emerald-500/10"
+                        >
+                          تلاش دوباره
+                        </button>
                         <button
                           type="button"
                           onClick={() => discardItem(f.id, f.label)}

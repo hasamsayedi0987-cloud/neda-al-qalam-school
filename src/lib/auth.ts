@@ -48,14 +48,18 @@ async function getAuthSecret(): Promise<string> {
       cachedSecret = row.value;
       return cachedSecret;
     }
-    // تولید و ذخیرهٔ کلید تصادفی — در پایگاه داده (قابل دسترس عمومی نیست)
+    // نسخهٔ ۳.۸.۴ — ضد ناسازگاری کلید بین نمونه‌های سرور:
+    // اگر کلید از قبل در دیتابیس هست، هرگز بازنویسی نمی‌شود (update خالی — بدون رقابت)؛
+    // و مقدار نهایی همیشه از خود دیتابیس خوانده می‌شود تا دو نمونهٔ هم‌زمان که
+    // هر دو کلید تازه ساخته‌اند، در نهایت به «یک» کلید مشترک برسند.
     const generated = randomBytes(32).toString('hex');
     await db.setting.upsert({
       where: { key: 'authSecret' },
-      update: { value: generated },
+      update: {},
       create: { key: 'authSecret', value: generated },
     });
-    cachedSecret = generated;
+    const finalRow = await db.setting.findUnique({ where: { key: 'authSecret' } });
+    cachedSecret = finalRow?.value && finalRow.value.length >= 32 ? finalRow.value : generated;
     return cachedSecret;
   } catch {
     // پایگاه داده در دسترس نیست — کلید موقت برای همین نمونه (نشست‌ها پس از بازگشت دیتابیس معتبر می‌مانند)

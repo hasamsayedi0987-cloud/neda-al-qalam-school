@@ -1204,6 +1204,17 @@ export function discardQueueItem(id: string) {
   notify();
 }
 
+/** تلاش دوبارهٔ دستی یک ثبت خطاخورده — خطای پیشین پاک و بلافاصله ارسال می‌شود */
+export function retryQueueItem(id: string) {
+  const queue = readQueue();
+  const idx = queue.findIndex((q) => q.id === id);
+  if (idx === -1) return;
+  queue[idx] = { ...queue[idx], failCount: 0, lastError: undefined };
+  writeQueue(queue);
+  notify();
+  void flushQueue();
+}
+
 /** پاک‌کردن همهٔ ثبت‌های خطاخوردهٔ صف (با تأیید مدیر) — دادهٔ سرور دست‌نخورده می‌ماند */
 export function discardAllFailedItems(): number {
   const queue = readQueue();
@@ -1293,7 +1304,12 @@ async function flushQueueInner(attempt = 0): Promise<number> {
       remaining.push(item);
     }
   }
-  writeQueue(remaining);
+  // نسخهٔ ۳.۸.۴ — ضد حذف ناخواسته: درخواست‌هایی که حین ارسال این دسته به صف اضافه شدند
+  // (ثبت جدید کاربر در همان لحظه) با بازنویسی صف گم نمی‌شوند — فقط آیتم‌های همین دسته
+  // حذف/به‌روزرسانی می‌شوند و آیتم‌های تازه سر جای خود می‌مانند.
+  const processedIds = new Set(queue.map((q) => q.id));
+  const fresh = readQueue().filter((q) => !processedIds.has(q.id));
+  writeQueue([...remaining, ...fresh]);
   authRequired = authFailed && remaining.length > 0;
   if (authFailed && attempt < 2) {
     // ورود مجدد خودکار با اعتبار ذخیره‌شدهٔ همین دستگاه — اگر موفق شود صف بلافاصله تخلیه می‌شود
