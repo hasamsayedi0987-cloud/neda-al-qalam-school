@@ -140,8 +140,16 @@ export async function POST(req: NextRequest) {
         include: { student: { include: { class: { select: { name: true } } } } },
       });
       const templates = await parseTemplates((await db.setting.findUnique({ where: { key: 'smsTemplates' } }))?.value);
+      // جلوگیری از پیام تکراری — شاگردانی که برای همین تاریخ قبلاً پیام غیبت در صف یا ارسال‌شده دارند
+      const already = await db.smsOutbox.findMany({
+        where: { category: 'ATTENDANCE', refDate: date, status: { in: ['PENDING', 'SENT'] } },
+        select: { studentId: true },
+      });
+      const alreadySent = new Set(already.map((m) => m.studentId).filter(Boolean) as string[]);
       let queued = 0;
+      let skipped = 0;
       for (const rec of absents) {
+        if (alreadySent.has(rec.studentId)) { skipped += 1; continue; }
         const phone = rec.student.guardianPhone;
         if (!phone) continue;
         await db.smsOutbox.create({
@@ -149,6 +157,7 @@ export async function POST(req: NextRequest) {
             to: phone,
             studentId: rec.studentId,
             category: 'ATTENDANCE',
+            refDate: date,
             body: fill(templates.ATTENDANCE, {
               school, name: rec.student.firstName + (rec.student.lastName ? ' ' + rec.student.lastName : ''),
               class: rec.student.class?.name || '—', date,
@@ -157,7 +166,7 @@ export async function POST(req: NextRequest) {
         });
         queued += 1;
       }
-      return NextResponse.json({ queued, note: queued === 0 ? 'غایب حاضر با شمارهٔ والدین یافت نشد' : undefined });
+      return NextResponse.json({ queued, skipped, note: queued === 0 ? 'غایب حاضر با شمارهٔ والدین یافت نشد' : undefined });
     }
 
     // ─── صف‌کردن پیام‌های فیس باقی: به اساس فیس ماهانهٔ صنف − وصولی‌های ماه ───

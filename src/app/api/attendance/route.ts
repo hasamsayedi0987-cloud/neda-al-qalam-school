@@ -4,7 +4,7 @@ import type { Prisma } from '@prisma/client';
 import { requireUser, requireRole, requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
 import { pushToUsers } from '@/lib/push';
-import { jalaliMonthRange, jalaliToGregorian } from '@/lib/jalali';
+import { jalaliMonthRange, jalaliToGregorian, isoToday } from '@/lib/jalali';
 import { teacherClassIds } from '@/lib/teacher-scope';
 import { ROLE_LABELS } from '@/lib/grading';
 
@@ -84,7 +84,12 @@ export async function GET(req: NextRequest) {
         role: u.role,
         position: u.teacherProfile?.position || ROLE_LABELS[u.role] || 'کارمند',
       }));
-      return NextResponse.json({ records, staff });
+      // نام ثبت‌کنندهٔ حاضری پرسنل (مدیر/سرمعلم می‌بینند چه کسی ثبت کرده)
+      const staffRecIds = [...new Set(records.slice(0, 200).map((r) => r.recordedBy).filter((v): v is string => Boolean(v)))];
+      const staffRecUsers = staffRecIds.length
+        ? await db.user.findMany({ where: { id: { in: staffRecIds } }, select: { id: true, name: true } })
+        : [];
+      return NextResponse.json({ records, staff, recorderNames: Object.fromEntries(staffRecUsers.map((u) => [u.id, u.name])) });
     }
 
     // ─── حاضری یومیه صنف ───
@@ -121,7 +126,13 @@ export async function GET(req: NextRequest) {
         where: { classId, ...(date ? { date } : {}) },
         orderBy: { date: 'desc' },
       });
-      return NextResponse.json({ students, records, classInfo: { id: cls.id, name: cls.name } });
+      // نام کاربران ثبت‌کنندهٔ حاضری — برای نمایش «ثبت‌کننده و زمان» در رابط
+      const recIds = [...new Set(records.slice(0, 200).map((r) => r.recordedBy).filter((v): v is string => Boolean(v)))];
+      const recorderUsers = recIds.length
+        ? await db.user.findMany({ where: { id: { in: recIds } }, select: { id: true, name: true } })
+        : [];
+      const recorderNames = Object.fromEntries(recorderUsers.map((u) => [u.id, u.name]));
+      return NextResponse.json({ students, records, classInfo: { id: cls.id, name: cls.name }, recorderNames });
     }
 
     // ─── گزارش ماهانه ───
@@ -218,8 +229,8 @@ export async function POST(req: NextRequest) {
         if (!u) continue;
         staffOps.push(db.employeeAttendance.upsert({
           where: { userId_date: { userId, date } },
-          update: { status },
-          create: { userId, date, status },
+          update: { status, recordedBy: me.id },
+          create: { userId, date, status, recordedBy: me.id },
         }));
       }
       if (staffOps.length) await db.$transaction(staffOps);
@@ -239,6 +250,8 @@ export async function POST(req: NextRequest) {
     if (!date || !classId) throw new ApiError('صنف و تاریخ لازم است');
     // معلم: فقط حاضری صنف‌های تحت تدریس خود
     await assertClassScope(me, classId);
+    // ثبت دقیق — حاضری برای تاریخ آینده معنا ندارد و رد می‌شود
+    if (date > isoToday()) throw new ApiError('ثبت حاضری برای تاریخ آینده مجاز نیست');
 
     let saved = 0;
     const absentStudents: string[] = [];
@@ -248,6 +261,15 @@ export async function POST(req: NextRequest) {
       ? await db.student.findMany({ where: { id: { in: reqIds }, classId }, select: { id: true } })
       : [];
     const validIds = new Set(classStudents.map((s) => s.id));
+    // وضعیت قبلی هر شاگرد در این تاریخ — اعلان غیبت فقط برای «غیبت تازه» است؛
+    // ذخیرهٔ مجدد همان روز (بدون تغییر وضعیت) پیام/اعلان تکراری نمی‌سازد
+    const priorRecs = reqIds.length
+      ? await db.attendanceRecord.findMany({
+          where: { studentId: { in: reqIds }, date },
+          select: { studentId: true, status: true },
+        })
+      : [];
+    const priorStatus = new Map(priorRecs.map((r) => [r.studentId, r.status] as const));
     const ops: Prisma.PrismaPromise<unknown>[] = [];
     for (const item of items) {
       const studentId = str(item.studentId);
@@ -258,7 +280,7 @@ export async function POST(req: NextRequest) {
         update: { status, recordedBy: me.id, classId },
         create: { studentId, classId, date, status, recordedBy: me.id },
       }));
-      if (status === 'ABSENT') absentStudents.push(studentId);
+      if (status === 'ABSENT' && priorStatus.get(studentId) !== 'ABSENT') absentStudents.push(studentId);
       saved += 1;
     }
     if (ops.length) await db.$transaction(ops);

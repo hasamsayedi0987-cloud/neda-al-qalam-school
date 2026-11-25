@@ -205,6 +205,7 @@ model EmployeeAttendance {
   userId    String
   date      String // ISO yyyy-mm-dd
   status    String // PRESENT | ABSENT | SICK | LEAVE
+  recordedBy String? // کاربر ثبت‌کنندهٔ حاضری (نسخهٔ ۳.۸.۲)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -683,6 +684,7 @@ model SmsOutbox {
   id        String   @id @default(cuid())
   to        String // شمارهٔ موبایل
   studentId String?
+  refDate   String? // تاریخ مرجع پیام (مثلاً تاریخ غیبت) — مبنای جلوگیری از پیام تکراری (نسخهٔ ۳.۸.۲)
   category  String   @default("NOTICE") // ATTENDANCE | FEE | EXAM | NOTICE | CUSTOM
   body      String
   status    String   @default("PENDING") // PENDING | SENT | FAILED
@@ -695,4 +697,5 @@ model SmsOutbox {
 
   @@index([status])
   @@index([category])
+  @@index([category, refDate])
 }

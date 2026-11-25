@@ -21,7 +21,7 @@ import { CalendarCheck, CalendarDays, Save, Printer, FileSpreadsheet, Users, Use
 const STATUSES = ['PRESENT', 'ABSENT', 'SICK', 'LEAVE'] as const;
 type Status = (typeof STATUSES)[number];
 
-interface DailyRecord { studentId: string; date: string; status: string }
+interface DailyRecord { studentId: string; date: string; status: string; recordedBy?: string | null; updatedAt?: string }
 
 export function AttendanceView({ user }: { user: SessionUser }) {
   const { toast } = useToast();
@@ -58,6 +58,8 @@ export function AttendanceView({ user }: { user: SessionUser }) {
 
   // حاضری خود کارمند (ملازم)
   const [myStaffRecords, setMyStaffRecords] = useState<Array<{ id: string; date: string; status: string }>>([]);
+  // ثبت‌کننده و زمان آخرین ثبت حاضری روز انتخاب‌شده
+  const [recorderInfo, setRecorderInfo] = useState<{ name: string; at: string } | null>(null);
   const isStaffSelf = user.role === 'STAFF';
 
   // آمار سالانه
@@ -93,12 +95,23 @@ export function AttendanceView({ user }: { user: SessionUser }) {
   const loadDaily = useCallback(async () => {
     if (!canMark || !classId) return;
     try {
-      const data = await apiGet<{ students: StudentInfo[]; records: DailyRecord[] }>(
+      const data = await apiGet<{ students: StudentInfo[]; records: DailyRecord[]; recorderNames?: Record<string, string> }>(
         `/api/attendance?mode=daily&classId=${classId}&date=${date}`,
       );
       setStudents(data.students);
       setRecords(data.records);
       const todayRecs = data.records.filter((r) => r.date === date);
+      // ثبت‌کننده و زمان آخرین ثبت حاضری این روز — برای نمایش شفافیت
+      const withMeta = todayRecs.filter((r) => r.recordedBy);
+      if (withMeta.length && data.recorderNames) {
+        const latest = withMeta.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))[0];
+        const at = latest.updatedAt
+          ? `${isoToJalaliDisplay(latest.updatedAt.slice(0, 10))} ساعت ${toPersianDigits(latest.updatedAt.slice(11, 16))}`
+          : '';
+        setRecorderInfo({ name: data.recorderNames[latest.recordedBy as string] || '—', at });
+      } else {
+        setRecorderInfo(null);
+      }
       const m: Record<string, Status> = {};
       for (const s of data.students) {
         const rec = todayRecs.find((r) => r.studentId === s.id);
@@ -417,6 +430,11 @@ export function AttendanceView({ user }: { user: SessionUser }) {
                     <Save className="h-4 w-4" /> {saving ? 'در حال ذخیره...' : 'ذخیرهٔ حاضری'}
                   </Button>
                 </div>
+                {recorderInfo && (
+                  <p className="text-[11px] text-muted-foreground">
+                    آخرین ثبت حاضری این روز: <b>{recorderInfo.name}</b> — {recorderInfo.at}
+                  </p>
+                )}
 
                 {/* خلاصهٔ آمار پیش از ذخیره + پیام به والدین غایب */}
                 <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
