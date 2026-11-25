@@ -201,3 +201,44 @@ export function roleRank(role: string) {
 }
 
 export const SESSION_MAX_AGE_S = SESSION_MAX_AGE;
+
+
+/* ═══════════ امنیت QR کارت‌ها — توکن امضاشده و قابل لغو (مرحلهٔ ۲) ═══════════
+ * QR کارت هرگز اطلاعات شخصی (نام/ولد/صنف) حمل نمی‌کند؛ فقط یک توکن تصادفیِ
+ * امضاشده با کلید نشست است که تنها سرور می‌تواند آن را بازکند. لغو با ثبت
+ * زمان لغو به‌ازای هر شخص در Setting(qrRevocations) انجام می‌شود: هر توکنی که
+ * پیش از زمان لغو صادر شده باشد دیگر پذیرفته نمی‌شود؛ چاپ مجدد، توکن تازه می‌سازد. */
+export interface QrTokenData {
+  kind: 'student' | 'staff';
+  id: string;
+  iat: number; // ثانیهٔ یونیکس — مبنای مقایسه با زمان لغو
+}
+
+const QR_SIGN_CONTEXT = '|noq-qr-v1';
+
+export async function issueQrToken(kind: 'student' | 'staff', id: string): Promise<string> {
+  if (!id) throw new ApiError('شناسه شخص لازم است');
+  const secret = await getAuthSecret();
+  const iat = Math.floor(Date.now() / 1000);
+  const jti = randomBytes(6).toString('hex');
+  const body = Buffer.from(JSON.stringify({ k: kind === 'staff' ? 's' : 't', id, iat, jti }), 'utf8').toString('base64url');
+  const sig = createHmac('sha256', secret + QR_SIGN_CONTEXT).update(body).digest('base64url').slice(0, 24);
+  return `NOQ1.${body}.${sig}`;
+}
+
+export async function verifyQrToken(token: string): Promise<QrTokenData | null> {
+  try {
+    const parts = token.trim().split('.');
+    if (parts.length !== 3 || parts[0] !== 'NOQ1' || !parts[1] || !parts[2]) return null;
+    const secret = await getAuthSecret();
+    const expected = createHmac('sha256', secret + QR_SIGN_CONTEXT).update(parts[1]).digest('base64url').slice(0, 24);
+    const a = Buffer.from(parts[2], 'utf8');
+    const b = Buffer.from(expected, 'utf8');
+    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+    const p = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as { k?: string; id?: string; iat?: number };
+    if (typeof p.id !== 'string' || !p.id || typeof p.iat !== 'number' || !Number.isFinite(p.iat)) return null;
+    return { kind: p.k === 's' ? 'staff' : 'student', id: p.id, iat: p.iat };
+  } catch {
+    return null;
+  }
+}

@@ -10,7 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader, EmptyState, Field } from './ui-bits';
-import { apiGet } from '@/lib/client/api';
+import { apiGet, apiSend } from '@/lib/client/api';
 import { toPersianDigits, jalaliNowDisplay } from '@/lib/jalali';
 import {
   buildIdCardsSheet, printIdCards, studentToCard, staffToCard,
@@ -19,7 +19,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { cn, fullName } from '@/lib/utils';
 import type { ClassInfo, StudentInfo, TeacherInfo } from '@/lib/types';
-import { IdCard, Printer, Eye, Users, UserCog, CheckSquare, Square, QrCode } from 'lucide-react';
+import {  IdCard, Printer, Eye, Users, UserCog, CheckSquare, Square, QrCode, ShieldOff, ShieldCheck } from 'lucide-react';
 
 export function IdCardsView() {
   const { toast } = useToast();
@@ -114,6 +114,25 @@ export function IdCardsView() {
       .map((t) => staffToCard({ id: t.id, name: t.name, father: t.fatherName, position: t.position }));
   }, [kind, classStudents, activeTeachers, selected, classes, classId]);
 
+  /** لغو/بازگردانی توکن QR کارت‌های انتخاب‌شده — کدهای چاپ‌شدهٔ قبلی بی‌اعتبار می‌شوند */
+  const revokeQr = async (restore: boolean) => {
+    if (!cards.length) return;
+    const what = restore ? 'بازگردانی' : 'لغو';
+    if (!window.confirm(`${what} کد QR کارت‌های انتخاب‌شده (${toPersianDigits(cards.length)} کارت) — تأیید می‌کنید؟\nپس از لغو، کدهای چاپ‌شدهٔ قبلی دیگر معتبر نیستند؛ برای کارت جدید دوباره چاپ کنید.`)) return;
+    setBusy(true);
+    try {
+      for (const c of cards) {
+        const r = await apiSend('/api/qr', 'POST', { action: restore ? 'restore' : 'revoke', kind: c.kind, id: c.id });
+        if (r.error) throw new Error(r.error);
+      }
+      toast({ title: `${what} کد QR برای ${toPersianDigits(cards.length)} کارت انجام شد` });
+    } catch {
+      toast({ title: 'عملیات ناکام شد — با انترنت دوباره کوشش کنید', variant: 'destructive' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const makePreview = useCallback(async () => {
     if (!cards.length) return;
     setBusy(true);
@@ -191,6 +210,12 @@ export function IdCardsView() {
               </Button>
               <Button size="sm" variant="outline" disabled={!cards.length || busy} onClick={doPrint}>
                 <Printer className="h-4 w-4 ms-1" /> چاپ (PDF)
+              </Button>
+              <Button size="sm" variant="ghost" disabled={!cards.length || busy} onClick={() => revokeQr(false)}>
+                <ShieldOff className="h-4 w-4 ms-1" /> لغو QR
+              </Button>
+              <Button size="sm" variant="ghost" disabled={!cards.length || busy} onClick={() => revokeQr(true)}>
+                <ShieldCheck className="h-4 w-4 ms-1" /> بازگردانی QR
               </Button>
             </div>
           </div>

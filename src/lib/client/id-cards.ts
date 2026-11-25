@@ -9,6 +9,7 @@
 import QRCode from 'qrcode';
 import { jalaliNowDisplay, toPersianDigits } from '@/lib/jalali';
 import { printRawHtml } from './exports';
+import { apiSend } from '@/lib/client/api';
 import { SIGN_STAMP_DATA_URL } from './sign-stamp-data';
 
 /* ─── انواع ورودی ─── */
@@ -117,14 +118,34 @@ export function staffToCard(t: IdCardStaff): IdCardData {
   };
 }
 
-/* ─── محتوای QR — متن ساخت‌یافتهٔ قابل خواندن پس از اسکن ─── */
+/* ─── محتوای QR — امنیت مرحلهٔ ۲ ───
+ * QR هرگز اطلاعات شخصی (نام/ولد/صنف) حمل نمی‌کند؛ توکن امضاشدهٔ سرور است که فقط
+ * از طریق /api/qr پس از اعتبارسنجی سمت سرور به اطلاعات محدود می‌رسد.
+ * در نبود توکن (آفلاین) فقط شمارهٔ سریال کارت — که روی خود کارت چاپ شده — قرار می‌گیرد. */
+export function idCardQrPayload(c: IdCardData): string {
+  return `NOQ-CARD:${c.cardNo}`;
+}
 
-export function idCardQrPayload(c: IdCardData, school: IdCardSchoolInfo): string {
-  const base = `مکتب: ${school.name}`;
-  if (c.kind === 'student') {
-    return `${base} | شاگرد: ${c.name} | ولد: ${c.father} | صنف: ${c.line1} | شمارهٔ کارت: ${c.cardNo}${school.issueDate ? ` | صدور: ${school.issueDate}` : ''} | شناسه: ${c.id}`;
+/** گرفتن توکن‌های امن QR از سرور — ناکامی (آفلاین) → undefined و fallback به شمارهٔ کارت */
+export async function fetchIdCardTokens(cards: IdCardData[]): Promise<Map<string, string> | undefined> {
+  try {
+    const items = cards.slice(0, 500).map((c) => ({ kind: c.kind, id: c.id }));
+    const res = await apiSend<{ tokens: Record<string, string> }>('/api/qr', 'POST', { action: 'issue', items });
+    const tokens = res.data?.tokens || {};
+    const map = new Map<string, string>();
+    for (const [k, v] of Object.entries(tokens)) if (typeof v === 'string' && v) map.set(k, v);
+    return map.size ? map : undefined;
+  } catch {
+    return undefined;
   }
-  return `${base} | کارمند: ${c.name} | وظیفه: ${c.line1} | شمارهٔ کارت: ${c.cardNo} | شناسه: ${c.id}`;
+}
+
+/** امنیت — فقط dataURL تصویر معتبر وارد قالب چاپ می‌شود (ضد تزریق در src) */
+const IMG_DATA_RE = /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+function safeImg(v: string | null | undefined, max = 600_000): string {
+  if (!v) return '';
+  const s = v.trim();
+  return s.length <= max && IMG_DATA_RE.test(s) ? s : '';
 }
 
 /** QR به‌صورت dataURL PNG — کیفیت بالا برای چاپ */
@@ -234,9 +255,11 @@ const CARDS_CSS = `
 
 function cardHtml(c: IdCardData, school: IdCardSchoolInfo, qr: string, issueDate: string): string {
   const kindLabel = c.kind === 'student' ? 'کارت هویت شاگرد' : 'کارت هویت کارمند';
-  const photo = c.photo
-    ? `<img src="${c.photo}" alt=""/>`
+  const photoSrc = safeImg(c.photo);
+  const photo = photoSrc
+    ? `<img src="${photoSrc}" alt=""/>`
     : `<div class="initial">${esc(c.name.trim().charAt(0) || '؟')}</div>`;
+  const logoSrc = safeImg(school.logo);
   const rows: Array<[string, string, boolean]> = [
     ['نام', c.name, false],
     ['ولد', c.father, false],
@@ -257,7 +280,7 @@ function cardHtml(c: IdCardData, school: IdCardSchoolInfo, qr: string, issueDate
   <div class="deco deco-bl1"></div><div class="deco deco-bl2"></div>
   <div class="dots"></div><div class="dots2"></div>
   <div class="inner">
-    <img class="logo" src="${school.logo}" alt=""/>
+    ${logoSrc ? `<img class="logo" src="${logoSrc}" alt=""/>` : '<div class="logo"></div>'}
     <div class="sname">${esc(school.name)}</div>
     <div class="sname-en">${esc(school.nameEn)}</div>
     <div class="ribbon">${kindLabel}</div>
@@ -281,7 +304,9 @@ function cardHtml(c: IdCardData, school: IdCardSchoolInfo, qr: string, issueDate
 export async function buildIdCardsSheet(
   cards: IdCardData[],
   school: IdCardSchoolInfo,
+  qrTokens?: Map<string, string>,
 ): Promise<string> {
+  if (!qrTokens) qrTokens = await fetchIdCardTokens(cards);
   const issueDate = school.issueDate || jalaliNowDisplay();
   const pages: string[] = [];
   const perPage = 10;
@@ -290,7 +315,7 @@ export async function buildIdCardsSheet(
     const slice = cards.slice(p * perPage, (p + 1) * perPage);
     const cells: string[] = [];
     for (const c of slice) {
-      const qr = await idCardQrDataUrl(idCardQrPayload(c, school));
+      const qr = await idCardQrDataUrl(qrTokens?.get(`${c.kind}:${c.id}`) || idCardQrPayload(c));
       cells.push(`<div class="cellwrap"><div class="cut"></div>${cardHtml(c, school, qr, issueDate)}</div>`);
     }
     pages.push(`<section class="page">
