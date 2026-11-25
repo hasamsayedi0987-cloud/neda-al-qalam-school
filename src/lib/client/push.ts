@@ -33,6 +33,22 @@ function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   return out;
 }
 
+/** معرفی اشتراک جاری مرورگر به سرور (upsert بی‌ضرر — هر بار که لازم شد صدا زده می‌شود) */
+async function resendSubscription(sub: PushSubscription): Promise<boolean> {
+  const json = sub.toJSON() as { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
+  if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) return false;
+  const res = await fetch('/api/push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
+  });
+  if (res.ok) {
+    try { localStorage.setItem(PUSH_SUB_KEY, '1'); } catch { /* ignore */ }
+    return true;
+  }
+  return false;
+}
+
 /** فعال‌سازی اعلان‌ها — از کلیک کاربر (تنظیمات) یا ساکت پس از اجازهٔ قبلی */
 export async function enablePushNotifications(): Promise<{ ok: boolean; reason?: string }> {
   if (isNativeApp()) return { ok: true, reason: 'native' };
@@ -55,20 +71,8 @@ export async function enablePushNotifications(): Promise<{ ok: boolean; reason?:
         applicationServerKey: urlBase64ToUint8Array(publicKey),
       });
     }
-    const json = sub.toJSON() as { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
-    if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
-      return { ok: false, reason: 'invalid' };
-    }
-    const res = await fetch('/api/push', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
-    });
-    if (res.ok) {
-      try { localStorage.setItem(PUSH_SUB_KEY, '1'); } catch { /* ignore */ }
-      return { ok: true };
-    }
-    return { ok: false, reason: 'server' };
+    const sent = await resendSubscription(sub);
+    return sent ? { ok: true } : { ok: false, reason: 'server' };
   } catch {
     return { ok: false, reason: 'error' };
   }
@@ -105,7 +109,12 @@ export async function ensurePushAfterLogin(): Promise<void> {
     if (Notification.permission !== 'granted') return;
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
-    if (sub) return; // از قبل ثبت است
+    if (sub) {
+      // نسخهٔ ۳.۸.۳ — ترمیم پس از بازگردانی نسخهٔ پشتیبان: بازیابی، ردیف اشتراک سرور را
+      // پاک می‌کند ولی مرورگر هنوز اشتراک دارد؛ ثبت مجدد بی‌صدا پیوند را برمی‌گرداند
+      await resendSubscription(sub).catch(() => undefined);
+      return;
+    }
     await enablePushNotifications();
   } catch { /* ignore */ }
 }

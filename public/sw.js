@@ -12,7 +12,7 @@
  *    آفلاین کامل با تلاش مجدد خودکار است.
  */
 
-const VERSION = 'v19';
+const VERSION = 'v20';
 const SHELL_CACHE = 'noq-shell-' + VERSION;
 const RUNTIME_CACHE = 'noq-runtime-' + VERSION;
 const API_CACHE = 'noq-api-' + VERSION;

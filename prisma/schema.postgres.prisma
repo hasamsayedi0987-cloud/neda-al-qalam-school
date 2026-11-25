@@ -685,6 +685,10 @@ model SmsOutbox {
   to        String // شمارهٔ موبایل
   studentId String?
   refDate   String? // تاریخ مرجع پیام (مثلاً تاریخ غیبت) — مبنای جلوگیری از پیام تکراری (نسخهٔ ۳.۸.۲)
+  clientToken String? @unique // شناسهٔ یکتای هر پیام — ایدمپوتنسی صف و ضدتکرار درخواست هم‌زمان (نسخهٔ ۳.۸.۳)
+  attempts    Int     @default(0) // شمار تلاش ارسال — تلاش مجدد تا سقف ۵ بار (نسخهٔ ۳.۸.۳)
+  lockedAt    DateTime? // زمان ادعای ارسال (SENDING) — بازیابی پیام‌های گیرکرده
+  lockedBy    String?   // شناسهٔ دستهٔ ارسال — قفل اتمی ضدتکرار هم‌زمانی
   category  String   @default("NOTICE") // ATTENDANCE | FEE | EXAM | NOTICE | CUSTOM
   body      String
   status    String   @default("PENDING") // PENDING | SENT | FAILED

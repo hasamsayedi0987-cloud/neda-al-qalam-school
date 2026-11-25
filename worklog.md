@@ -1027,3 +1027,20 @@ Work Log:
 
 Stage Summary:
 - حاضری قابل اعتماد: نقش محور، ضدتکرار، با ثبت‌کننده و زمان دقیق
+
+---
+Task ID: sms-push-stage4-383
+Agent: main (Z.ai)
+Task: مرحلهٔ ۴ — پیامک و اعلان والدین: ضدتکرار، شناسهٔ یکتا، تلاش مجدد، HTTPS، ترمیم اشتراک پوش
+
+Work Log:
+- SmsOutbox: ستون‌های clientToken (@unique)، attempts، lockedAt، lockedBy (هر دو اسکیما؛ push خودکار در بیلد)
+- شناسهٔ یکتای هر پیام: ATT:{date}:{sid} / FEE:{month}:{sid} / EXAM:{today}:{sid} / NTC:{today}:{hash متن}:{sid} — create تکی + P2002 (ضدتکرار اتمی حتی با درخواست هم‌زمان)
+- پیام‌های FAILED همان دسته هنگام صف‌کردن مجدد پاک می‌شوند تا تلاش دوباره ممکن باشد
+- send-pending: قفل اتمی (PENDING→SENDING با lockedBy=batch) — دو درخواست هم‌زمان پیام دوباره نمی‌فرستند + بازیابی SENDING گیرکردهٔ ۵ دقیقه‌ای
+- retry-failed: سقف ۵ تلاش (attempts) + برگرداندن requeued/note
+- دروازهٔ SMS: فقط https:// (استثنا localhost برای آزمایش) — هم در ذخیره و هم در لحظهٔ ارسال
+- کلاینت: /api/sms به IDEMPOTENT_POSTS اضافه شد (queue-single با توکن ایدمپوتنسی)
+- ترمیم اشتراک اعلان پس از بازگردانی پشتیبان: ensurePushAfterLogin حالا اشتراک موجود مرورگر را دوباره به سرور upsert می‌کند (قبلاً if(sub) return بود و پیوند پس از restore گم می‌شد)
+- حذف اشتراک‌های مُرده (404/410) از قبل در push.ts موجود بود — تأیید شد
+- نسخهٔ ۳.۸.۳ (SW v20)

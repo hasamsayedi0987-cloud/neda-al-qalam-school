@@ -3,6 +3,19 @@ import { db } from '@/lib/db';
 import { requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
 import { round2 } from '@/lib/grading';
+import { randomUUID, createHash } from 'crypto';
+import { Prisma } from '@prisma/client';
+import { isoToday } from '@/lib/jalali';
+
+/** آدرس HTTP ساده فقط برای آزمایش روی همین دستگاه پذیرفته است */
+function isLocalHttpUrl(u: string): boolean {
+  try {
+    const h = new URL(u).hostname;
+    return h === 'localhost' || h === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
 
 /**
  * پیام‌های SMS به شماره‌های والدین — نسخهٔ ۳.۳.۰
@@ -58,7 +71,9 @@ function parseProvider(json: string | null | undefined): SmsProviderConfig | nul
   if (!json) return null;
   try {
     const obj = JSON.parse(json) as SmsProviderConfig;
-    if (!obj?.url || typeof obj.url !== 'string' || !obj.url.startsWith('http')) return null;
+    if (!obj?.url || typeof obj.url !== 'string' || !/^https?:\/\//.test(obj.url)) return null;
+    // امنیت — شمارهٔ والدین و کلید دروازه فقط روی HTTPS؛ استثنا: localhost برای آزمایش
+    if (!obj.url.startsWith('https://') && !isLocalHttpUrl(obj.url)) return null;
     return obj;
   } catch {
     return null;
@@ -79,6 +94,10 @@ async function sendViaProvider(
   body: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const method = (cfg.method || 'GET').toUpperCase();
+  // امنیت — ارتباط HTTP ناامن هرگز برای ارسال پیام والدین استفاده نمی‌شود
+  if (!cfg.url.startsWith('https://') && !isLocalHttpUrl(cfg.url)) {
+    return { ok: false, error: 'آدرس دروازه امن نیست — فقط https:// پذیرفته است' };
+  }
   const fillStr = (s: string) => s.split('{phone}').join(phone).split('{body}').join(body);
   try {
     if (method === 'GET') {
@@ -140,33 +159,43 @@ export async function POST(req: NextRequest) {
         include: { student: { include: { class: { select: { name: true } } } } },
       });
       const templates = await parseTemplates((await db.setting.findUnique({ where: { key: 'smsTemplates' } }))?.value);
-      // جلوگیری از پیام تکراری — شاگردانی که برای همین تاریخ قبلاً پیام غیبت در صف یا ارسال‌شده دارند
-      const already = await db.smsOutbox.findMany({
-        where: { category: 'ATTENDANCE', refDate: date, status: { in: ['PENDING', 'SENT'] } },
-        select: { studentId: true },
-      });
-      const alreadySent = new Set(already.map((m) => m.studentId).filter(Boolean) as string[]);
-      let queued = 0;
-      let skipped = 0;
+      const rows: Prisma.SmsOutboxCreateManyInput[] = [];
       for (const rec of absents) {
-        if (alreadySent.has(rec.studentId)) { skipped += 1; continue; }
         const phone = rec.student.guardianPhone;
         if (!phone) continue;
-        await db.smsOutbox.create({
-          data: {
-            to: phone,
-            studentId: rec.studentId,
-            category: 'ATTENDANCE',
-            refDate: date,
-            body: fill(templates.ATTENDANCE, {
-              school, name: rec.student.firstName + (rec.student.lastName ? ' ' + rec.student.lastName : ''),
-              class: rec.student.class?.name || '—', date,
-            }),
-          },
+        rows.push({
+          to: phone,
+          studentId: rec.studentId,
+          category: 'ATTENDANCE',
+          refDate: date,
+          // شناسهٔ یکتای هر پیام — هر شاگرد در هر تاریخ فقط یک پیام، حتی با درخواست هم‌زمان
+          clientToken: `ATT:${date}:${rec.studentId}`,
+          body: fill(templates.ATTENDANCE, {
+            school, name: rec.student.firstName + (rec.student.lastName ? ' ' + rec.student.lastName : ''),
+            class: rec.student.class?.name || '—', date,
+          }),
         });
-        queued += 1;
       }
-      return NextResponse.json({ queued, skipped, note: queued === 0 ? 'غایب حاضر با شمارهٔ والدین یافت نشد' : undefined });
+      // پیام‌های ناموفق همان تاریخ پاک می‌شوند تا صف‌کردن مجدد (تلاش دوباره) ممکن باشد
+      await db.smsOutbox.deleteMany({ where: { category: 'ATTENDANCE', refDate: date, status: 'FAILED' } });
+      // clientToken یکتا = ضدتکرار اتمی؛ درخواست هم‌زمان یا کلیک دوباره با P2002 مردود می‌شود
+      let queued = 0;
+      let skipped = 0;
+      for (const row of rows) {
+        try {
+          await db.smsOutbox.create({ data: row });
+          queued += 1;
+        } catch (err) {
+          // شناسهٔ یکتای پیام قبلاً ثبت شده — تکرار نمی‌سازیم
+          if ((err as { code?: string })?.code === 'P2002') { skipped += 1; continue; }
+          throw err;
+        }
+      }
+      return NextResponse.json({
+        queued,
+        skipped,
+        note: queued === 0 ? 'غایب حاضر با شمارهٔ والدین یافت نشد' : undefined,
+      });
     }
 
     // ─── صف‌کردن پیام‌های فیس باقی: به اساس فیس ماهانهٔ صنف − وصولی‌های ماه ───
@@ -182,24 +211,39 @@ export async function POST(req: NextRequest) {
       const paidBy = new Map<string, number>();
       for (const p of payments) paidBy.set(p.studentId, (paidBy.get(p.studentId) || 0) + p.amount);
       const templates = await parseTemplates((await db.setting.findUnique({ where: { key: 'smsTemplates' } }))?.value);
-      let queued = 0;
+      const feeRows: Prisma.SmsOutboxCreateManyInput[] = [];
       for (const s of students) {
         const remaining = round2((s.class?.monthlyFee || 0) - (paidBy.get(s.id) || 0));
         if (remaining <= 0 || !s.guardianPhone) continue;
-        await db.smsOutbox.create({
-          data: {
-            to: s.guardianPhone,
-            studentId: s.id,
-            category: 'FEE',
-            body: fill(templates.FEE, {
-              school, name: s.firstName + (s.lastName ? ' ' + s.lastName : ''),
-              class: s.class?.name || '—', month, amount: String(remaining),
-            }),
-          },
+        feeRows.push({
+          to: s.guardianPhone,
+          studentId: s.id,
+          category: 'FEE',
+          refDate: month,
+          clientToken: `FEE:${month}:${s.id}`,
+          body: fill(templates.FEE, {
+            school, name: s.firstName + (s.lastName ? ' ' + s.lastName : ''),
+            class: s.class?.name || '—', month, amount: String(remaining),
+          }),
         });
-        queued += 1;
       }
-      return NextResponse.json({ queued, note: queued === 0 ? 'متعلم باقی‌مانده با شمارهٔ والدین یافت نشد' : undefined });
+      await db.smsOutbox.deleteMany({ where: { category: 'FEE', status: 'FAILED', clientToken: { startsWith: `FEE:${month}:` } } });
+      let feeQueued = 0;
+      let feeSkipped = 0;
+      for (const row of feeRows) {
+        try {
+          await db.smsOutbox.create({ data: row });
+          feeQueued += 1;
+        } catch (err) {
+          if ((err as { code?: string })?.code === 'P2002') { feeSkipped += 1; continue; }
+          throw err;
+        }
+      }
+      return NextResponse.json({
+        queued: feeQueued,
+        skipped: feeSkipped,
+        note: feeQueued === 0 ? 'متعلم باقی‌مانده با شمارهٔ والدین یافت نشد' : undefined,
+      });
     }
 
     // ─── صف‌کردن اطلاع امتحانات: یک صنف یا همه ───
@@ -211,22 +255,38 @@ export async function POST(req: NextRequest) {
         include: { class: { select: { name: true } } },
       });
       const templates = await parseTemplates((await db.setting.findUnique({ where: { key: 'smsTemplates' } }))?.value);
-      let queued = 0;
+      const today = isoToday();
+      const examRows: Prisma.SmsOutboxCreateManyInput[] = [];
       for (const s of students) {
         if (!s.guardianPhone) continue;
-        await db.smsOutbox.create({
-          data: {
-            to: s.guardianPhone,
-            studentId: s.id,
-            category: 'EXAM',
-            body: fill(templates.EXAM, {
-              school, name: s.firstName + (s.lastName ? ' ' + s.lastName : ''), class: s.class?.name || '—',
-            }),
-          },
+        examRows.push({
+          to: s.guardianPhone,
+          studentId: s.id,
+          category: 'EXAM',
+          refDate: today,
+          clientToken: `EXAM:${today}:${s.id}`,
+          body: fill(templates.EXAM, {
+            school, name: s.firstName + (s.lastName ? ' ' + s.lastName : ''), class: s.class?.name || '—',
+          }),
         });
-        queued += 1;
       }
-      return NextResponse.json({ queued, note: queued === 0 ? 'متعلم با شمارهٔ والدین یافت نشد' : undefined });
+      await db.smsOutbox.deleteMany({ where: { category: 'EXAM', status: 'FAILED', clientToken: { startsWith: `EXAM:${today}:` } } });
+      let examQueued = 0;
+      let examSkipped = 0;
+      for (const row of examRows) {
+        try {
+          await db.smsOutbox.create({ data: row });
+          examQueued += 1;
+        } catch (err) {
+          if ((err as { code?: string })?.code === 'P2002') { examSkipped += 1; continue; }
+          throw err;
+        }
+      }
+      return NextResponse.json({
+        queued: examQueued,
+        skipped: examSkipped,
+        note: examQueued === 0 ? 'متعلم با شمارهٔ والدین یافت نشد' : undefined,
+      });
     }
 
     // ─── اطلاعیه عمومی به والدین ───
@@ -236,13 +296,36 @@ export async function POST(req: NextRequest) {
       const school = await getSchoolName();
       const templates = await parseTemplates((await db.setting.findUnique({ where: { key: 'smsTemplates' } }))?.value);
       const students = await db.student.findMany({ where: { status: 'ACTIVE' }, select: { id: true, guardianPhone: true } });
-      let queued = 0;
-      for (const s of students) {
-        if (!s.guardianPhone) continue;
-        await db.smsOutbox.create({ data: { to: s.guardianPhone, studentId: s.id, category: 'NOTICE', body: fill(templates.NOTICE, { school, body: text }) } });
-        queued += 1;
+      const todayN = isoToday();
+      // شناسهٔ دسته از متن اطلاعیه — کلیک دوبارهٔ همان متن در همان روز تکراری نمی‌سازد
+      const batch = createHash('sha256').update(text).digest('hex').slice(0, 10);
+      const noticeRows: Prisma.SmsOutboxCreateManyInput[] = students
+        .filter((s) => s.guardianPhone)
+        .map((s) => ({
+          to: s.guardianPhone as string,
+          studentId: s.id,
+          category: 'NOTICE',
+          refDate: todayN,
+          clientToken: `NTC:${todayN}:${batch}:${s.id}`,
+          body: fill(templates.NOTICE, { school, body: text }),
+        }));
+      await db.smsOutbox.deleteMany({ where: { category: 'NOTICE', status: 'FAILED', clientToken: { startsWith: `NTC:${todayN}:${batch}:` } } });
+      let noticeQueued = 0;
+      let noticeSkipped = 0;
+      for (const row of noticeRows) {
+        try {
+          await db.smsOutbox.create({ data: row });
+          noticeQueued += 1;
+        } catch (err) {
+          if ((err as { code?: string })?.code === 'P2002') { noticeSkipped += 1; continue; }
+          throw err;
+        }
       }
-      return NextResponse.json({ queued, note: queued === 0 ? 'متعلم با شمارهٔ والدین یافت نشد' : undefined });
+      return NextResponse.json({
+        queued: noticeQueued,
+        skipped: noticeSkipped,
+        note: noticeQueued === 0 ? 'متعلم با شمارهٔ والدین یافت نشد' : undefined,
+      });
     }
 
     // ─── پیام واحد دستوی ───
@@ -250,8 +333,18 @@ export async function POST(req: NextRequest) {
       const to = str(body.to).replace(/\s+/g, '');
       const text = str(body.body);
       if (!to || !text) throw new ApiError('شماره و متن پیام را بنویسید');
-      const created = await db.smsOutbox.create({ data: { to, studentId: str(body.studentId) || null, category: 'CUSTOM', body: text } });
-      return NextResponse.json({ id: created.id });
+      // توکن ایدمپوتنسی از کلاینت (api.ts) — تلاش مجدد پس از قطعی پیام تکراری نمی‌سازد
+      const clientToken = str(body.clientToken) || null;
+      try {
+        const created = await db.smsOutbox.create({ data: { to, studentId: str(body.studentId) || null, category: 'CUSTOM', body: text, clientToken } });
+        return NextResponse.json({ id: created.id });
+      } catch (err) {
+        if ((err as { code?: string })?.code === 'P2002' && clientToken) {
+          const existing = await db.smsOutbox.findFirst({ where: { clientToken }, select: { id: true } });
+          return NextResponse.json({ id: existing?.id || null, duplicate: true });
+        }
+        throw err;
+      }
     }
 
     // ─── ارسال صف انتظار از طریق دروازهٔ تنظیم‌شده ───
@@ -261,14 +354,34 @@ export async function POST(req: NextRequest) {
       if (!cfg) {
         throw new ApiError('دروازهٔ SMS تنظیم نشده است — در تنظیمات آدرس دروازه را وارد کنید', 400);
       }
-      const pending = await db.smsOutbox.findMany({ where: { status: 'PENDING' }, orderBy: { createdAt: 'asc' }, take: 100 });
+      // بازیابی پیام‌های گیرکرده در «در حال ارسال» (قطعی سرور بیش از ۵ دقیقه پیش)
+      await db.smsOutbox.updateMany({
+        where: { status: 'SENDING', lockedAt: { lt: new Date(Date.now() - 5 * 60_000) } },
+        data: { status: 'PENDING', lockedAt: null, lockedBy: null },
+      });
+      // قفل اتمی — دو درخواست هم‌زمان هرگز یک پیام را دوباره نمی‌فرستند:
+      // فقط پیام‌هایی که هنوز PENDING هستند به این دسته قفل می‌شوند
+      const candidates = await db.smsOutbox.findMany({ where: { status: 'PENDING' }, orderBy: { createdAt: 'asc' }, take: 100, select: { id: true } });
+      const batchId = randomUUID();
+      let pending: Array<{ id: string; to: string; body: string }> = [];
+      if (candidates.length) {
+        const claimed = await db.smsOutbox.updateMany({
+          where: { id: { in: candidates.map((c) => c.id) }, status: 'PENDING' },
+          data: { status: 'SENDING', lockedAt: new Date(), lockedBy: batchId },
+        });
+        if (claimed.count) {
+          pending = await db.smsOutbox.findMany({ where: { lockedBy: batchId }, select: { id: true, to: true, body: true } });
+        }
+      }
       let sent = 0;
       let failed = 0;
       for (const msg of pending) {
         const r = await sendViaProvider(cfg, msg.to, msg.body);
         await db.smsOutbox.update({
           where: { id: msg.id },
-          data: r.ok ? { status: 'SENT', sentAt: new Date().toISOString(), error: null } : { status: 'FAILED', error: r.error || 'نامعلوم' },
+          data: r.ok
+            ? { status: 'SENT', sentAt: new Date().toISOString(), error: null, lockedAt: null, lockedBy: null }
+            : { status: 'FAILED', attempts: { increment: 1 }, error: r.error || 'نامعلوم', lockedAt: null, lockedBy: null },
         });
         if (r.ok) sent += 1;
         else failed += 1;
@@ -277,8 +390,13 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'retry-failed') {
-      await db.smsOutbox.updateMany({ where: { status: 'FAILED' }, data: { status: 'PENDING', error: null } });
-      return NextResponse.json({ ok: true });
+      // تلاش مجدد فقط تا سقف ۵ بار — پیام‌های رسوا شده دیگر در صف برنمی‌گردند
+      const res = await db.smsOutbox.updateMany({ where: { status: 'FAILED', attempts: { lt: 5 } }, data: { status: 'PENDING', error: null } });
+      return NextResponse.json({
+        ok: true,
+        requeued: res.count,
+        note: res.count === 0 ? 'پیام ناموفقی برای تلاش مجدد نیست (یا سقف ۵ تلاش پر شده است)' : undefined,
+      });
     }
 
     if (action === 'delete') {
@@ -294,7 +412,7 @@ export async function POST(req: NextRequest) {
       const value = str(body.value);
       if (!value) throw new ApiError('مقدار تنظیم خالی است');
       if (key === 'smsProvider' && !parseProvider(value)) {
-        throw new ApiError('قالب دروازه نامعتبر است — آدرس باید با http شروع شود');
+        throw new ApiError('قالب دروازه نامعتبر است — آدرس باید با https:// شروع شود');
       }
       await db.setting.upsert({ where: { key }, create: { key, value }, update: { value } });
       return NextResponse.json({ ok: true });

@@ -1069,7 +1069,7 @@ function enqueue<T>(url: string, method: string, body: unknown, opts: { queueLab
  * همان توکن در replay صف هم استفاده می‌شود؛ سرور رکورد تکراری نمی‌سازد و
  * شناسهٔ واقعی همان رکورد اول را برمی‌گرداند (ریشهٔ پیام/پرداخت/شاگرد تکراری آفلاین).
  */
-const IDEMPOTENT_POSTS = ['/api/messages', '/api/fees', '/api/students', '/api/library'];
+const IDEMPOTENT_POSTS = ['/api/messages', '/api/fees', '/api/students', '/api/library', '/api/sms'];
 
 export async function apiSend<T = unknown>(
   url: string,
