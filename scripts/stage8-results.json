@@ -1,0 +1,463 @@
+{
+  "pass": 76,
+  "fail": 0,
+  "secs": 4,
+  "results": [
+    {
+      "ok": true,
+      "suite": "T2-لاگین",
+      "name": "ورود ADMIN (admin)",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "suite": "T2-لاگین",
+      "name": "ورود HEADTEACHER (sarallam)",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "suite": "T2-لاگین",
+      "name": "ورود TEACHER (teacher)",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "suite": "T2-لاگین",
+      "name": "ورود STAFF (staff)",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "suite": "T2-لاگین",
+      "name": "ورود LIBRARIAN (library)",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "suite": "T2-لاگین",
+      "name": "ورود STUDENT (student)",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "suite": "T2-لاگین",
+      "name": "ورود GUARDIAN (parent)",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "suite": "T2-لاگین",
+      "name": "رمز غلط رد می‌شود",
+      "detail": "status=401"
+    },
+    {
+      "ok": true,
+      "suite": "T2-لاگین",
+      "name": "محدودیت تلاش ورود (تلاش ششم → 429)",
+      "detail": "status=429"
+    },
+    {
+      "ok": true,
+      "suite": "T2-دسترسی",
+      "name": "STUDENT → /api/students = 403",
+      "detail": "status=403"
+    },
+    {
+      "ok": true,
+      "suite": "T2-دسترسی",
+      "name": "GUARDIAN → /api/fees = 403",
+      "detail": "status=403"
+    },
+    {
+      "ok": true,
+      "suite": "T2-دسترسی",
+      "name": "TEACHER → /api/expenses = 403",
+      "detail": "status=403"
+    },
+    {
+      "ok": true,
+      "suite": "T2-دسترسی",
+      "name": "TEACHER → /api/backup = 403",
+      "detail": "status=403"
+    },
+    {
+      "ok": true,
+      "suite": "T2-دسترسی",
+      "name": "HEADTEACHER → /api/backup = 403",
+      "detail": "status=403"
+    },
+    {
+      "ok": true,
+      "suite": "T2-دسترسی",
+      "name": "STAFF → /api/gate = 200",
+      "detail": "status=200"
+    },
+    {
+      "ok": true,
+      "suite": "T2-دسترسی",
+      "name": "STUDENT → /api/attendance = 400",
+      "detail": "status=400"
+    },
+    {
+      "ok": true,
+      "suite": "T2-دسترسی",
+      "name": "سرپرست فقط پروندهٔ فرزند خودش را می‌بیند",
+      "detail": "status=200 count=1"
+    },
+    {
+      "ok": true,
+      "suite": "T2-دسترسی",
+      "name": "کتابخانه‌دار → فهرست نام‌ها برای امانت کتاب",
+      "detail": "status=200"
+    },
+    {
+      "ok": true,
+      "suite": "T2-دسترسی",
+      "name": "معلم → حاضری مجاز (بدون صنف سپرده‌شده → 400)",
+      "detail": "status=400"
+    },
+    {
+      "ok": true,
+      "suite": "T3-حاضری",
+      "name": "دریافت ۲۵ شاگرد صنف اول",
+      "detail": "25"
+    },
+    {
+      "ok": true,
+      "suite": "T3-حاضری",
+      "name": "ثبت ۲۵ حاضری حاضر",
+      "detail": "saved=25 status=200"
+    },
+    {
+      "ok": true,
+      "suite": "T3-حاضری",
+      "name": "رد حاضری برای تاریخ آینده",
+      "detail": "status=400"
+    },
+    {
+      "ok": true,
+      "suite": "T3-QR",
+      "name": "صدور توکن امضاشده برای 5 کارت",
+      "detail": "issued=5"
+    },
+    {
+      "ok": true,
+      "suite": "T3-QR",
+      "name": "اسکن اول = ورود",
+      "detail": "clock=۰۹:۵۱"
+    },
+    {
+      "ok": true,
+      "suite": "T3-QR",
+      "name": "اسکن دوم = خروج",
+      "detail": "clock=۰۹:۵۲"
+    },
+    {
+      "ok": true,
+      "suite": "T3-QR",
+      "name": "اسکن سوم = ورود دوباره (چرخهٔ جدید)",
+      "detail": "clock=۰۹:۵۳"
+    },
+    {
+      "ok": true,
+      "suite": "T3-QR",
+      "name": "اسکن تکراری (کمتر از ۴۵ ثانیه) → 409",
+      "detail": "status=409"
+    },
+    {
+      "ok": true,
+      "suite": "T3-QR",
+      "name": "توکن دستکاری‌شده → 400",
+      "detail": "status=400"
+    },
+    {
+      "ok": true,
+      "suite": "T3-QR",
+      "name": "کد آشغال → 400",
+      "detail": "status=400"
+    },
+    {
+      "ok": true,
+      "suite": "T3-QR",
+      "name": "کارت لغوشده → 410",
+      "detail": "status=410"
+    },
+    {
+      "ok": true,
+      "suite": "T3-QR",
+      "name": "بازگردانی کارت → دوباره کار می‌کند",
+      "detail": "clock=۰۹:۵۴"
+    },
+    {
+      "ok": true,
+      "suite": "T3-QR",
+      "name": "سرپرست کارت شاگرد خودش",
+      "detail": "status=200"
+    },
+    {
+      "ok": true,
+      "suite": "T3-QR",
+      "name": "سرپرست کارت شاگرد دیگر → 403",
+      "detail": "status=403"
+    },
+    {
+      "ok": true,
+      "suite": "T3-QR",
+      "name": "سرپرست حق اسکن دروازه ندارد → 403",
+      "detail": "status=403"
+    },
+    {
+      "ok": true,
+      "suite": "T3-QR",
+      "name": "تاریخچهٔ دروازهٔ امروز (ورود/خروج/داخل مکتب)",
+      "detail": "ins=103 outs=81 inside=22 logs=184"
+    },
+    {
+      "ok": true,
+      "suite": "T4-اعلان",
+      "name": "اعلان غیبت برای سرپرست رسید",
+      "detail": "0→1"
+    },
+    {
+      "ok": true,
+      "suite": "T4-اعلان",
+      "name": "ثبت دوبارهٔ غیبت → اعلان تکراری ندارد",
+      "detail": "1→1"
+    },
+    {
+      "ok": true,
+      "suite": "T4-اعلان",
+      "name": "اعلان «ورود شاگرد» برای سرپرست",
+      "detail": "0→1 kind=IN"
+    },
+    {
+      "ok": true,
+      "suite": "T4-پیامک",
+      "name": "صف پیامک خروج ساخته شد (وضعیت PENDING تا ارسال دروازه)",
+      "detail": "rows=1 clientToken=یکتا"
+    },
+    {
+      "ok": true,
+      "suite": "T4-پیامک",
+      "name": "لغو ثبت خروج → پیامک در صف هم لغو شد",
+      "detail": "1→0"
+    },
+    {
+      "ok": true,
+      "suite": "T5-بکاپ",
+      "name": "خروجی پشتیبان نسخهٔ ۶ شامل تاریخچهٔ دروازه",
+      "detail": "gateLogs=1985/1985"
+    },
+    {
+      "ok": true,
+      "suite": "T5-بکاپ",
+      "name": "ساخت شاگرد نشان‌دار پیش از بازیابی",
+      "detail": "status=200"
+    },
+    {
+      "ok": true,
+      "suite": "T5-بکاپ",
+      "name": "بازیابی کامل پشتیبان",
+      "detail": "status=200"
+    },
+    {
+      "ok": true,
+      "suite": "T5-بکاپ",
+      "name": "شمارش‌ها پس از بازیابی دقیقاً برابر snapshot",
+      "detail": "{\"students\":1050,\"gateLogs\":1985,\"classes\":8,\"attendance\":25,\"sms\":0}"
+    },
+    {
+      "ok": true,
+      "suite": "T5-بکاپ",
+      "name": "شاگرد نشان‌دار پس از بازیابی حذف شده (بازگشت به لحظهٔ پشتیبان)",
+      "detail": "found=0"
+    },
+    {
+      "ok": true,
+      "suite": "T5-بکاپ",
+      "name": "پس از بازیابی: لاگین تازه و تاریخچهٔ دروازه سالم",
+      "detail": "logs=185"
+    },
+    {
+      "ok": true,
+      "suite": "T6-هم‌زمانی",
+      "name": "۲۰ اسکن هم‌زمان → دقیقاً یک ثبت، ۱۹ تکراری",
+      "detail": "ok=1 dup=19"
+    },
+    {
+      "ok": true,
+      "suite": "T6-هم‌زمانی",
+      "name": "در پایگاه داده فقط یک ثبت برای ۲۰ اسکن موازی",
+      "detail": "logs=1"
+    },
+    {
+      "ok": true,
+      "suite": "T6-هم‌زمانی",
+      "name": "replay ۱۰گانهٔ یک اسکن آفلاین → دقیقاً یک ثبت، ساعتِ اسکن حفظ شد",
+      "detail": "ok=10 logs=1"
+    },
+    {
+      "ok": true,
+      "suite": "T6-هم‌زمانی",
+      "name": "ساعت ثبت = ساعت اسکن آفلاین (نه ساعت وصل شدن)",
+      "detail": "اختلاف=0ms"
+    },
+    {
+      "ok": true,
+      "suite": "T6-هم‌زمانی",
+      "name": "ثبت موازی با شمارهٔ تکراری → دقیقاً یک ثبت واقعی",
+      "detail": "ok=1 inDb=1"
+    },
+    {
+      "ok": true,
+      "suite": "T6-هم‌زمانی",
+      "name": "۱۰ لاگین هم‌زمان موفق — قفس اشتباهی ندارد",
+      "detail": "ok=10"
+    },
+    {
+      "ok": true,
+      "suite": "T7-امنیت",
+      "name": "بدون نشست → /api/students رد می‌شود",
+      "detail": "status=401"
+    },
+    {
+      "ok": true,
+      "suite": "T7-امنیت",
+      "name": "بدون نشست → /api/attendance رد می‌شود",
+      "detail": "status=401"
+    },
+    {
+      "ok": true,
+      "suite": "T7-امنیت",
+      "name": "بدون نشست → /api/gate رد می‌شود",
+      "detail": "status=401"
+    },
+    {
+      "ok": true,
+      "suite": "T7-امنیت",
+      "name": "بدون نشست → /api/qr رد می‌شود",
+      "detail": "status=401"
+    },
+    {
+      "ok": true,
+      "suite": "T7-امنیت",
+      "name": "بدون نشست → /api/backup رد می‌شود",
+      "detail": "status=401"
+    },
+    {
+      "ok": true,
+      "suite": "T7-امنیت",
+      "name": "بدون نشست → /api/fees رد می‌شود",
+      "detail": "status=401"
+    },
+    {
+      "ok": true,
+      "suite": "T7-امنیت",
+      "name": "بدون نشست → /api/sms رد می‌شود",
+      "detail": "status=401"
+    },
+    {
+      "ok": true,
+      "suite": "T7-امنیت",
+      "name": "بدون نشست → /api/users رد می‌شود",
+      "detail": "status=401"
+    },
+    {
+      "ok": true,
+      "suite": "T7-امنیت",
+      "name": "بدون نشست → /api/backup رد می‌شود",
+      "detail": "status=401"
+    },
+    {
+      "ok": true,
+      "suite": "T7-امنیت",
+      "name": "توکن QR جعلی (امضای غلط) → 400",
+      "detail": "status=400"
+    },
+    {
+      "ok": true,
+      "suite": "T7-امنیت",
+      "name": "تزریق SQL در جستجو → پاسخ امن",
+      "detail": "status=200 results=0"
+    },
+    {
+      "ok": true,
+      "suite": "T7-امنیت",
+      "name": "رشتهٔ XSS به‌عنوان داده ذخیره می‌شود (UI با escape رندر می‌کند)",
+      "detail": "status=200"
+    },
+    {
+      "ok": true,
+      "suite": "T7-امنیت",
+      "name": "کوکی جعلی/امضای غلط → رد می‌شود",
+      "detail": "status=401"
+    },
+    {
+      "ok": true,
+      "suite": "T7-امنیت",
+      "name": "معلم نمی‌تواند صلاحیت خودش را تغییر دهد",
+      "detail": "status=403"
+    },
+    {
+      "ok": true,
+      "suite": "T8-عملکرد",
+      "name": "GET /api/classes",
+      "detail": "p50=4ms p95=8ms max=8ms"
+    },
+    {
+      "ok": true,
+      "suite": "T8-عملکرد",
+      "name": "GET /api/students (صفحهٔ ۵۰)",
+      "detail": "p50=5ms p95=6ms max=6ms"
+    },
+    {
+      "ok": true,
+      "suite": "T8-عملکرد",
+      "name": "GET /api/students (جستجو «احمد»)",
+      "detail": "p50=6ms p95=34ms max=34ms"
+    },
+    {
+      "ok": true,
+      "suite": "T8-عملکرد",
+      "name": "GET /api/students (صنف ۱۰۰تایی)",
+      "detail": "p50=6ms p95=9ms max=9ms"
+    },
+    {
+      "ok": true,
+      "suite": "T8-عملکرد",
+      "name": "GET /api/dashboard",
+      "detail": "p50=6ms p95=9ms max=9ms"
+    },
+    {
+      "ok": true,
+      "suite": "T8-عملکرد",
+      "name": "GET /api/gate (تاریخ امروز)",
+      "detail": "p50=8ms p95=12ms max=12ms"
+    },
+    {
+      "ok": true,
+      "suite": "T8-عملکرد",
+      "name": "GET /api/attendance",
+      "detail": "p50=7ms p95=7ms max=7ms"
+    },
+    {
+      "ok": true,
+      "suite": "T8-عملکرد",
+      "name": "GET /api/students?all=1 (سنگین)",
+      "detail": "p50=30ms p95=33ms max=33ms"
+    },
+    {
+      "ok": true,
+      "suite": "T8-عملکرد",
+      "name": "POST /api/attendance (۵۰ رکورد)",
+      "detail": "p50=15ms p95=25ms max=25ms"
+    },
+    {
+      "ok": true,
+      "suite": "T8-عملکرد",
+      "name": "GET /api/backup (کل دیتابیس)",
+      "detail": "47ms حجم=1555KB"
+    }
+  ]
+}

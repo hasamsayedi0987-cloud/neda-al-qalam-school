@@ -30,6 +30,9 @@ const KABUL_OFFSET_MS = 4 * 60 * 60 * 1000 + 30 * 60 * 1000;
 const DUPLICATE_WINDOW_MS = 45_000; // دو اسکن پشت‌سرهم کمتر از ۴۵ ثانیه = تکراری
 const MAX_LOGS = 300; // سقف نمایش تاریخچهٔ هر روز در پنل
 
+/** زنجیرهٔ ثبت دروازه — اسکن‌های موازی یک نمونه به‌ترتیب اجرا می‌شوند (ضد مسابقهٔ check-then-create) */
+let gateChain: Promise<unknown> = Promise.resolve();
+
 function kabulDateOf(d: Date): string {
   return new Date(d.getTime() + KABUL_OFFSET_MS).toISOString().slice(0, 10);
 }
@@ -79,8 +82,12 @@ function studentName(st: { firstName: string; lastName: string | null }): string
   return `${st.firstName} ${st.lastName || ''}`.trim();
 }
 
-function isUniqueViolation(e: unknown): boolean {
-  return typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002';
+/** تداخل نوشتن هم‌زمان در پایگاه داده — ثبت انجام نشده، به‌عنوان تکراری گزارش می‌شود */
+function isWriteConflict(e: unknown): boolean {
+  if (typeof e !== 'object' || e === null) return false;
+  const code = (e as { code?: string }).code;
+  const msg = String((e as { message?: string }).message || '');
+  return code === 'P2034' || /SQLITE_BUSY|database is locked|database table is locked/i.test(msg);
 }
 
 interface LogLike {
@@ -234,28 +241,38 @@ export async function POST(req: NextRequest) {
 
       const at = resolveAt(str(body.clientAt));
       const date = kabulDateOf(at);
-      const last = await db.gateLog.findFirst({
-        where: { studentId: st.id, date },
-        orderBy: { at: 'desc' },
-        select: { id: true, kind: true, at: true },
-      });
-      if (last && Math.abs(at.getTime() - last.at.getTime()) < DUPLICATE_WINDOW_MS) {
-        throw new ApiError('اسکن تکراری — همین چند لحظه پیش برای این شاگرد ثبت شد', 409);
-      }
-      const kind = !last || last.kind === 'OUT' ? 'IN' : 'OUT';
-
       try {
-        const log = await db.gateLog.create({
-          data: { studentId: st.id, date, kind, at, byUserId: me.id, byName: me.name, method: 'QR', clientToken },
-        });
+        // خواندن آخرین ثبت + ساخت ثبت جدید در یک تراکنشِ زنجیره‌ای — دو اسکن هم‌زمان
+        // هرگز هر دو «آخرین ثبت = خالی» را نمی‌بینند (ضدتکرار واقعی، نه فقط منطقی)
+        const run = gateChain.then(() =>
+          db.$transaction(async (tx) => {
+            const last = await tx.gateLog.findFirst({
+              where: { studentId: st.id, date },
+              orderBy: { at: 'desc' },
+              select: { id: true, kind: true, at: true },
+            });
+            if (last && Math.abs(at.getTime() - last.at.getTime()) < DUPLICATE_WINDOW_MS) {
+              throw new ApiError('اسکن تکراری — همین چند لحظه پیش برای این شاگرد ثبت شد', 409);
+            }
+            const kind = !last || last.kind === 'OUT' ? 'IN' : 'OUT';
+            return tx.gateLog.create({
+              data: { studentId: st.id, date, kind, at, byUserId: me.id, byName: me.name, method: 'QR', clientToken },
+            });
+          }),
+        );
+        gateChain = run.catch(() => { /* زنجیره با خطای یک اسکن نمی‌شکند */ });
+        const log = await run;
         await notifyGuardians(st, log);
         return NextResponse.json(gateResult(log, false, st));
       } catch (e) {
-        // دو دستگاه هم‌زمان یک اسکن را ثبت کردند — نتیجهٔ ثبت قبلی برگردانده می‌شود
-        if (clientToken && isUniqueViolation(e)) {
+        // ایدمپوتنسی کامل: اگر ثبت با همین clientToken قبلاً ساخته شده (اسکن موازیِ
+        // همان دستگاه یا replay صف)، همان نتیجهٔ اصلی برگردانده می‌شود — نه خطا
+        if (clientToken) {
           const dup = await db.gateLog.findUnique({ where: { clientToken } });
           if (dup) return NextResponse.json(gateResult(dup, true));
         }
+        // قفل هم‌زمانی پایگاه داده (SQLite BUSY / Prisma P2034) — ثبت دوباره انجام نشده
+        if (isWriteConflict(e)) throw new ApiError('اسکن هم‌زمان — چند لحظه بعد کارت را دوباره بگیرید', 409);
         throw e;
       }
     }
@@ -272,18 +289,23 @@ export async function POST(req: NextRequest) {
 
       const at = resolveAt(str(body.clientAt));
       const date = kabulDateOf(at);
-      const last = await db.gateLog.findFirst({
-        where: { studentId: st.id, date },
-        orderBy: { at: 'desc' },
-        select: { id: true, kind: true, at: true },
-      });
-      if (last && Math.abs(at.getTime() - last.at.getTime()) < DUPLICATE_WINDOW_MS) {
-        throw new ApiError('ثبت تکراری — همین چند لحظه پیش برای این شاگرد ثبت شد', 409);
-      }
-
-      const log = await db.gateLog.create({
-        data: { studentId: st.id, date, kind, at, byUserId: me.id, byName: me.name, method: 'MANUAL' },
-      });
+      const run = gateChain.then(() =>
+        db.$transaction(async (tx) => {
+          const last = await tx.gateLog.findFirst({
+            where: { studentId: st.id, date },
+            orderBy: { at: 'desc' },
+            select: { id: true, kind: true, at: true },
+          });
+          if (last && Math.abs(at.getTime() - last.at.getTime()) < DUPLICATE_WINDOW_MS) {
+            throw new ApiError('ثبت تکراری — همین چند لحظه پیش برای این شاگرد ثبت شد', 409);
+          }
+          return tx.gateLog.create({
+            data: { studentId: st.id, date, kind, at, byUserId: me.id, byName: me.name, method: 'MANUAL' },
+          });
+        }),
+      );
+      gateChain = run.catch(() => {});
+      const log = await run;
       await notifyGuardians(st, log);
       return NextResponse.json(gateResult(log, false, st));
     }

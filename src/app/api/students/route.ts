@@ -144,6 +144,9 @@ export async function GET(req: NextRequest) {
   }
 }
 
+/** زنجیرهٔ ثبت شاگرد — بررسی شمارهٔ تکراری و ساخت در ترتیب (ضد مسابقهٔ ثبت موازی — مرحلهٔ ۸) */
+let createChain: Promise<unknown> = Promise.resolve();
+
 export async function POST(req: NextRequest) {
   try {
     const me = await requireSection('students');
@@ -180,29 +183,34 @@ export async function POST(req: NextRequest) {
       rollNo = (agg._max.rollNo ?? 0) + 1;
     }
     // مرحلهٔ ۶ — شمارهٔ دانش‌آموزی تکراری در یک صنف رد می‌شود
-    await assertRollNoFree(classId, rollNo);
-    const student = await db.student.create({
-      data: {
-        firstName, lastName: lastName || null, fatherName,
-        grandFather: str(body.grandFather) || null,
-        gender: str(body.gender) === 'F' ? 'F' : 'M',
-        birthDate: str(body.birthDate) || null,
-        idNumber: str(body.idNumber) || null,
-        baseNumber: str(body.baseNumber) || null, // نمبر اساس وزارت معارف — اختیاری
-        guardianName: str(body.guardianName) || null,
-        guardianPhone: str(body.guardianPhone) || null,
-        address: str(body.address) || null,
-        photo: str(body.photo) || null,
-        idPlace: str(body.idPlace) || null,
-        fatherTongue: str(body.fatherTongue) || null,
-        motherTongue: str(body.motherTongue) || null,
-        classId,
-        rollNo,
-        enrolledYear: str(body.enrolledYear) || null,
-        status: 'ACTIVE',
-        clientToken: clientToken || null,
-      },
+    // مرحلهٔ ۸ — بررسی و ساخت در زنجیرهٔ موازی؛ دو ثبت هم‌زمان شمارهٔ تکراری نمی‌سازند
+    const run = createChain.then(async () => {
+      await assertRollNoFree(classId, rollNo);
+      return db.student.create({
+        data: {
+          firstName, lastName: lastName || null, fatherName,
+          grandFather: str(body.grandFather) || null,
+          gender: str(body.gender) === 'F' ? 'F' : 'M',
+          birthDate: str(body.birthDate) || null,
+          idNumber: str(body.idNumber) || null,
+          baseNumber: str(body.baseNumber) || null, // نمبر اساس وزارت معارف — اختیاری
+          guardianName: str(body.guardianName) || null,
+          guardianPhone: str(body.guardianPhone) || null,
+          address: str(body.address) || null,
+          photo: str(body.photo) || null,
+          idPlace: str(body.idPlace) || null,
+          fatherTongue: str(body.fatherTongue) || null,
+          motherTongue: str(body.motherTongue) || null,
+          classId,
+          rollNo,
+          enrolledYear: str(body.enrolledYear) || null,
+          status: 'ACTIVE',
+          clientToken: clientToken || null,
+        },
+      });
     });
+    createChain = run.catch(() => { /* زنجیره با خطای یک ثبت نمی‌شکند */ });
+    const student = await run;
     return NextResponse.json({ id: student.id });
   } catch (e) {
     return handleApiError(e);

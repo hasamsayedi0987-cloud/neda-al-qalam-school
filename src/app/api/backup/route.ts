@@ -27,6 +27,8 @@ export async function GET() {
       storeItems, storePurchases, storeSales,
       expenseCategories, expenses, salaryPayments,
       moneyHandovers, treasuryTransactions, smsOutbox,
+      // نسخهٔ ۶ — تاریخچهٔ دروازهٔ ورود و خروج (مرحلهٔ ۷) در پشتیبان گنجانده شد
+      gateLogs,
     ] = await Promise.all([
       db.user.findMany(),
       db.class.findMany(),
@@ -65,9 +67,10 @@ export async function GET() {
       db.moneyHandover.findMany(),
       db.treasuryTransaction.findMany(),
       db.smsOutbox.findMany(),
+      db.gateLog.findMany(),
     ]);
     const backup = {
-      version: 5,
+      version: 6,
       app: 'مکتب خصوصی نداالقلم',
       createdAt: new Date().toISOString(),
       data: {
@@ -82,6 +85,7 @@ export async function GET() {
         storeItems, storePurchases, storeSales,
         expenseCategories, expenses, salaryPayments,
         moneyHandovers, treasuryTransactions, smsOutbox,
+        gateLogs,
         // کلید امنیتی نشست هرگز پشتیبان نمی‌شود
         settings: settings.filter((s) => s.key !== 'authSecret'),
         customSections, customEntries, certificates,
@@ -139,6 +143,8 @@ export async function POST(req: NextRequest) {
       await tx.messageRecipient.deleteMany({});
       await tx.guardianLink.deleteMany({});
       await tx.auditLog.deleteMany({});
+      // نسخهٔ ۶ — پاک‌سازی تاریخچهٔ دروازه (پیش از حذف شاگردان)
+      await tx.gateLog.deleteMany({});
       // نسخهٔ ۵ — پاک‌سازی جدول‌های ترانسپورت، فروشات، خزانه، مصارفات، معاشات و SMS
       await tx.smsOutbox.deleteMany({});
       await tx.transportPayment.deleteMany({});
@@ -396,7 +402,14 @@ export async function POST(req: NextRequest) {
       }
       if (Array.isArray(data.smsOutbox)) {
         for (const s of data.smsOutbox) {
-          await tx.smsOutbox.create({ data: { id: s.id, to: s.to, studentId: s.studentId ?? null, category: s.category ?? 'NOTICE', body: s.body, status: s.status ?? 'PENDING', error: s.error ?? null, sentAt: s.sentAt ?? null } });
+          // نسخهٔ ۶ — refDate/clientToken هم بازیابی می‌شود؛ وگرنه ضدتکرار پیامک غیبت پس از بازیابی می‌شکند
+          await tx.smsOutbox.create({ data: { id: s.id, to: s.to, studentId: s.studentId ?? null, refDate: s.refDate ?? null, clientToken: s.clientToken ?? null, attempts: s.attempts ?? 0, category: s.category ?? 'NOTICE', body: s.body, status: s.status ?? 'PENDING', error: s.error ?? null, sentAt: s.sentAt ?? null } });
+        }
+      }
+      // نسخهٔ ۶ — تاریخچهٔ دروازهٔ ورود و خروج
+      if (Array.isArray(data.gateLogs)) {
+        for (const g of data.gateLogs) {
+          await tx.gateLog.create({ data: { id: g.id, studentId: g.studentId, date: g.date, kind: g.kind, at: new Date(g.at), byUserId: g.byUserId ?? null, byName: g.byName ?? null, method: g.method ?? 'QR', clientToken: g.clientToken ?? null, createdAt: g.createdAt ? new Date(g.createdAt) : undefined } });
         }
       }
       // بخش‌های دلخواه + ثبت‌ها (قبلاً در پشتیبان نبودند = گم می‌شدند!)
