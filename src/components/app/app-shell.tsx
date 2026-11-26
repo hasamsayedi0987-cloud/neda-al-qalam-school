@@ -27,6 +27,7 @@ import {
   FileSpreadsheet, UserCheck, Award, LayoutGrid, AlertTriangle, Loader2,
   Sun, Moon, Monitor, Wallet, MessageSquare, X,
   Bus, ShoppingCart, Landmark, ReceiptText, MessageCircleMore, IdCard,
+  DoorOpen,
 } from 'lucide-react';
 
 /* ─── بارگذاری تنبل ویوها: هر بخش فقط هنگام باز شدن دانلود می‌شود (بستهٔ اولیه سبک‌تر) ─── */
@@ -67,6 +68,8 @@ const TreasuryView = dynamic(() => import('./treasury-view').then((m) => m.Treas
 const ExpensesView = dynamic(() => import('./expenses-view').then((m) => m.ExpensesView), { loading: () => <ViewSkeleton /> });
 const SmsView = dynamic(() => import('./sms-view').then((m) => m.SmsView), { loading: () => <ViewSkeleton /> });
 const IdCardsView = dynamic(() => import('./id-cards-view').then((m) => m.IdCardsView), { loading: () => <ViewSkeleton /> });
+// نسخهٔ ۳.۱۰.۰ — دروازهٔ ورود و خروج با اسکن QR کارت
+const GateView = dynamic(() => import('./gate-view').then((m) => m.GateView), { loading: () => <ViewSkeleton /> });
 
 export interface NavItem {
   key: string;
@@ -83,6 +86,7 @@ const SECTION_ICONS: Record<string, React.ComponentType<{ className?: string }>>
   classes: School,
   subjects: BookOpen,
   attendance: CalendarCheck,
+  gate: DoorOpen,
   activities: ClipboardCheck,
   grades: ClipboardList,
   finance: Wallet,
@@ -798,6 +802,7 @@ export function AppShell({ user, onLogout }: { user: SessionUser; onLogout: () =
           {view === 'classes' && <ClassesView user={user} />}
           {view === 'subjects' && <SubjectsView user={user} />}
           {view === 'attendance' && <AttendanceView user={user} />}
+          {view === 'gate' && <GateView user={user} />}
           {view === 'activities' && <ActivitiesView user={user} />}
           {view === 'grades' && <GradesView user={user} />}
           {view === 'finance' && <FeesView user={user} />}

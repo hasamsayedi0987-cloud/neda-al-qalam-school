@@ -19,30 +19,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireUser, requireRole, requireSection, issueQrToken, verifyQrToken, ApiError } from '@/lib/auth';
 import { handleApiError, str } from '@/lib/api-helpers';
+import { isRevoked, readRevocations, writeRevocations } from '@/lib/qr-revoke';
 
-const REVOCATION_KEY = 'qrRevocations';
 const MAX_ITEMS = 500;
-
-type Revocations = Record<string, string>; // personId → زمان لغو (ISO)
-
-async function readRevocations(): Promise<Revocations> {
-  const row = await db.setting.findUnique({ where: { key: REVOCATION_KEY } });
-  if (!row?.value) return {};
-  try {
-    const parsed = JSON.parse(row.value) as unknown;
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Revocations) : {};
-  } catch {
-    return {};
-  }
-}
-
-async function writeRevocations(map: Revocations): Promise<void> {
-  await db.setting.upsert({
-    where: { key: REVOCATION_KEY },
-    update: { value: JSON.stringify(map) },
-    create: { key: REVOCATION_KEY, value: JSON.stringify(map) },
-  });
-}
 
 export async function GET(req: NextRequest) {
   try {
@@ -52,10 +31,8 @@ export async function GET(req: NextRequest) {
     const data = await verifyQrToken(token);
     if (!data) throw new ApiError('کد QR نامعتبر است', 400);
 
-    // لغو — توکن‌های صادرشده پیش از زمان لغو پذیرفته نمی‌شوند
-    const revs = await readRevocations();
-    const revokedAt = revs[data.id];
-    if (revokedAt && Math.floor(new Date(revokedAt).getTime() / 1000) >= data.iat) {
+    // لغو — توکن‌های صادرشده پیش از زمان لغو پذیرفته نمی‌شوند (منبع مشترک با /api/gate)
+    if (await isRevoked(data.id, data.iat)) {
       throw new ApiError('این کد QR توسط ادارهٔ مکتب لغو شده است', 410);
     }
 

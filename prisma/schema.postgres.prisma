@@ -166,6 +166,7 @@ model Student {
   transportEnrollments TransportEnrollment[]
   storeSales   StoreSale[]
   smsMessages  SmsOutbox[]
+  gateLogs     GateLog[]
 }
 
 // ═══════════════ حاضری ═══════════════
@@ -450,6 +451,27 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   @@index([createdAt])
+}
+
+
+// ═══════════════ دروازهٔ ورود و خروج با QR کارت — نسخهٔ ۳.۱۰.۰ (مرحلهٔ ۷) ═══════════════
+
+model GateLog {
+  id          String   @id @default(cuid())
+  studentId   String
+  date        String   // تاریخ کابل YYYY-MM-DD — روزِ ثبت
+  kind        String   // IN | OUT
+  at          DateTime // ساعت دقیق اسکن
+  byUserId    String?  // ثبت‌کنندهٔ اسکن (نگهبان/مدیر)
+  byName      String?  // نام نمایشی ثبت‌کننده
+  method      String   @default("QR") // QR | MANUAL
+  clientToken String?  @unique // شناسهٔ یکتای هر اسکن — ضدتکرار اسکن دوباره و صف آفلاین
+  createdAt   DateTime @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([date])
+  @@index([studentId, date])
 }
 
 // ═══════════════ تنظیمات (کلید-مقدار) ═══════════════

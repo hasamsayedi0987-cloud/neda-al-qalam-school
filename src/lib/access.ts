@@ -49,6 +49,12 @@ export const SECTIONS: Record<string, SectionDef> = {
     roles: ['ADMIN', 'HEADTEACHER', 'TEACHER', 'STUDENT', 'GUARDIAN', 'STAFF'],
     manageable: true,
   },
+  gate: {
+    label: 'دروازهٔ ورود و خروج (QR)',
+    roles: ['ADMIN', 'HEADTEACHER', 'STAFF'],
+    manageable: true,
+    hint: 'اسکن QR کارت هویت در دروازه — ثبت ورود/خروج با ساعت دقیق، اعلان والدین، تاریخچهٔ رفت‌وآمد و لغو کارت گم‌شده',
+  },
   activities: {
     label: 'فعالیت شاگردان',
     roles: ['ADMIN', 'HEADTEACHER', 'TEACHER', 'STUDENT', 'GUARDIAN'],
