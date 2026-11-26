@@ -62,17 +62,60 @@ async function fileToCompactDataUrl(file: File, max = 300): Promise<string> {
   return canvas.toDataURL('image/jpeg', 0.82);
 }
 
+const PAGE_SIZE = 50; // صفحه‌بندی فهرست شاگردان — مرحلهٔ ۶
+
+/* ─── مرحلهٔ ۶ — عکس تنبل آواتار ───
+ * فهرست شاگردان دیگر عکس حمل نمی‌کند؛ فقط وقتی ردیف در دید می‌آید، عکس همان
+ * یک شاگرد از /api/students/photo بارگیری می‌شود — با ۱۰۰۰+ شاگرد هیچ‌گاه
+ * همهٔ تصاویر یک‌جا دانلود نمی‌شوند. */
+function StudentAvatar({ id, name }: { id: string; name: string }) {
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [tried, setTried] = useState(false);
+  const ref = useRef<HTMLSpanElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || tried) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((en) => en.isIntersecting)) {
+          io.disconnect();
+          setTried(true);
+          apiGet<{ photo: string | null }>(`/api/students/photo?id=${id}`)
+            .then((d) => setPhoto(d.photo))
+            .catch(() => {});
+        }
+      },
+      { rootMargin: '160px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [id, tried]);
+  if (photo) {
+    return <img src={photo} alt="" className="h-8 w-8 rounded-full object-cover border shrink-0" />;
+  }
+  return (
+    <span ref={ref} className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
+      {name.slice(0, 1)}
+    </span>
+  );
+}
+
 export function StudentsView({ user }: { user: SessionUser }) {
-  const [students, setStudents] = useState<StudentInfo[]>([]);
+  // مرحلهٔ ۶ — فهرست صفحه‌بندی‌شدهٔ سمت سرور: فقط ۵۰ رکورد سبک در هر صفحه
+  const [rows, setRows] = useState<StudentInfo[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [classes, setClasses] = useState<ClassInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedQ, setDebouncedQ] = useState('');
   const [classFilter, setClassFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('ACTIVE');
   const [genderFilter, setGenderFilter] = useState('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [permStudents, setPermStudents] = useState(true); // مجوز ثبت/ویرایش شاگردان برای معلم
+  const [photoCleared, setPhotoCleared] = useState(false); // حذف صریح عکس در ویرایش — مرحلهٔ ۶
   // پروفایل شاگرد
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -94,22 +137,73 @@ export function StudentsView({ user }: { user: SessionUser }) {
   const isAdmin = user.role === 'ADMIN';
   const canEdit = ['ADMIN', 'HEADTEACHER'].includes(user.role) || (isTeacher && permStudents);
 
-  const load = useCallback(async () => {
+  /** پارامترهای مشترک فیلتر — بین فهرست، خروجی و شمارش ارتقا */
+  const filterParams = useCallback(() => {
+    const p = new URLSearchParams();
+    if (classFilter !== 'all') p.set('classId', classFilter);
+    if (statusFilter !== 'all') p.set('status', statusFilter);
+    if (genderFilter !== 'all') p.set('gender', genderFilter);
+    if (debouncedQ) p.set('q', debouncedQ);
+    return p;
+  }, [classFilter, statusFilter, genderFilter, debouncedQ]);
+
+  // مرحلهٔ ۶ — فیلترها در سمت سرور اعمال می‌شود (جستجو و صفحه‌بندی بهینه)
+  const load = useCallback(async (goPage = 1) => {
     setLoading(true);
+    const p = filterParams();
+    p.set('page', String(goPage));
+    p.set('pageSize', String(PAGE_SIZE));
     try {
-      const [s, c] = await Promise.all([
-        apiGet<{ students: StudentInfo[] }>('/api/students'),
-        apiGet<{ classes: ClassInfo[] }>('/api/classes'),
-      ]);
-      setStudents(s.students);
-      setClasses(c.classes);
+      const d = await apiGet<{ students: StudentInfo[]; total: number }>(`/api/students?${p.toString()}`);
+      if (d.students.length === 0 && goPage > 1 && (d.total || 0) > 0) {
+        // پس از حذف، صفحهٔ جاری ممکن است خالی شده باشد — همان‌جا صفحهٔ ۱ را می‌گیریم
+        const p1 = filterParams();
+        p1.set('page', '1');
+        p1.set('pageSize', String(PAGE_SIZE));
+        const d1 = await apiGet<{ students: StudentInfo[]; total: number }>(`/api/students?${p1.toString()}`);
+        setRows(d1.students);
+        setTotal(d1.total || d1.students.length);
+        setPage(1);
+      } else {
+        setRows(d.students);
+        setTotal(d.total || d.students.length);
+        setPage(goPage);
+      }
     } catch (e) {
-      toast({ title: 'خطا', description: e instanceof Error ? e.message : 'بارگذاری ناموفق', variant: 'destructive' });
+      // آفلاین — از فهرست کامل کش‌شده، با فیلتر و صفحه‌بندی محلی استفاده می‌شود
+      try {
+        const d = await apiGet<{ students: StudentInfo[] }>('/api/students');
+        const list = d.students.filter((s) => {
+          if (classFilter !== 'all' && s.classId !== classFilter) return false;
+          if (statusFilter !== 'all' && (s.status || 'ACTIVE') !== statusFilter) return false;
+          if (genderFilter !== 'all' && s.gender !== genderFilter) return false;
+          if (debouncedQ && ![s.firstName, s.lastName, s.fatherName, s.idNumber].some((f) => (f || '').includes(debouncedQ))) return false;
+          return true;
+        });
+        const start = (goPage - 1) * PAGE_SIZE;
+        setRows(list.slice(start, start + PAGE_SIZE));
+        setTotal(list.length);
+        setPage(goPage);
+      } catch {
+        toast({ title: 'خطا', description: e instanceof Error ? e.message : 'بارگذاری ناموفق', variant: 'destructive' });
+      }
     }
     setLoading(false);
-  }, [toast]);
+  }, [classFilter, statusFilter, genderFilter, debouncedQ, filterParams, toast]);
 
-  useEffect(() => { queueMicrotask(load); }, [load]);
+  // صنف‌ها یک‌بار بارگیری می‌شود
+  useEffect(() => {
+    apiGet<{ classes: ClassInfo[] }>('/api/classes').then((c) => setClasses(c.classes)).catch(() => {});
+  }, []);
+
+  // فهرست با هر تغییر فیلتر از سرور بارگیری می‌شود (صفحهٔ ۱)
+  useEffect(() => { queueMicrotask(() => load(1)); }, [load]);
+
+  // جستجوی تایپی — با وقفهٔ ۳۵۰ میلی‌ثانیه‌ای تا برای هر حرف درخواست نزنیم
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(search.trim()), 350);
+    return () => clearTimeout(t);
+  }, [search]);
 
   // مجوزهای معلمان از تنظیمات — کلیدهایی که مدیر کنترل می‌کند
   useEffect(() => {
@@ -119,30 +213,39 @@ export function StudentsView({ user }: { user: SessionUser }) {
       .catch(() => {});
   }, [user.role]);
 
-  const filtered = useMemo(() => {
-    let list = students;
-    if (classFilter !== 'all') list = list.filter((s) => s.classId === classFilter);
-    if (statusFilter !== 'all') list = list.filter((s) => (s.status || 'ACTIVE') === statusFilter);
-    if (genderFilter !== 'all') list = list.filter((s) => s.gender === genderFilter);
-    if (search.trim()) {
-      const q = search.trim();
-      list = list.filter((s) =>
-        [s.firstName, s.lastName, s.fatherName, s.idNumber].some((f) => f?.includes(q)),
-      );
+  /** فیلتر پیشرفته: وضعیت تحصیلی و جنسیت + خروجی اکسل/PDF از «همهٔ» نتیجهٔ فیلترشده
+   *  مرحلهٔ ۶ — خروجی با یک درخواست سبک (بدون عکس) از سرور گرفته می‌شود، نه از ردیف‌های صفحهٔ جاری */
+  const exportStudents = async (mode: 'excel' | 'pdf') => {
+    const p = filterParams();
+    p.set('all', '1');
+    let list: StudentInfo[] = [];
+    try {
+      const d = await apiGet<{ students: StudentInfo[] }>(`/api/students?${p.toString()}`);
+      list = d.students;
+    } catch {
+      // آفلاین — از فهرست کامل کش‌شده با فیلتر محلی
+      try {
+        const d = await apiGet<{ students: StudentInfo[] }>('/api/students');
+        list = d.students.filter((s) => {
+          if (classFilter !== 'all' && s.classId !== classFilter) return false;
+          if (statusFilter !== 'all' && (s.status || 'ACTIVE') !== statusFilter) return false;
+          if (genderFilter !== 'all' && s.gender !== genderFilter) return false;
+          if (debouncedQ && ![s.firstName, s.lastName, s.fatherName, s.idNumber].some((f) => (f || '').includes(debouncedQ))) return false;
+          return true;
+        });
+      } catch {
+        toast({ title: 'خطا', description: 'آماده‌سازی خروجی ناموفق بود', variant: 'destructive' });
+        return;
+      }
     }
-    return list;
-  }, [students, classFilter, statusFilter, genderFilter, search]);
-
-  /** فیلتر پیشرفته: وضعیت تحصیلی و جنسیت + خروجی اکسل/PDF از لیست فیلترشده */
-  const exportStudents = (mode: 'excel' | 'pdf') => {
-    const rows = filtered.map((s, i) => {
-      const cls = classes.find((c) => c.id === s.classId)?.name || '—';
+    const rowsOut = list.map((s, i) => {
+      const cls = classes.find((c) => c.id === s.classId)?.name || s.className || '—';
       const status = s.status === 'GRADUATED' ? 'فراغت' : s.status === 'LEFT' ? 'ترک تحصیل' : 'فعال';
       const gender = s.gender === 'F' ? 'اناث' : 'ذکور';
       return `<tr><td>${toPersianDigits(i + 1)}</td><td>${fullName(s)}</td><td>${s.fatherName}</td><td>${s.grandFather || '—'}</td><td>${cls}</td><td>${gender}</td><td>${status}</td><td>${s.guardianPhone || '—'}</td></tr>`;
     });
-    const title = `فهرست شاگردان (${toPersianDigits(filtered.length)} نفر)`;
-    const table = `<table><thead><tr><th>شماره</th><th>اسم</th><th>ولد</th><th>ولدیت</th><th>صنف</th><th>جنسیت</th><th>وضعیت</th><th>تماس سرپرست</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
+    const title = `فهرست شاگردان (${toPersianDigits(list.length)} نفر)`;
+    const table = `<table><thead><tr><th>شماره</th><th>اسم</th><th>ولد</th><th>ولدیت</th><th>صنف</th><th>جنسیت</th><th>وضعیت</th><th>تماس سرپرست</th></tr></thead><tbody>${rowsOut.join('')}</tbody></table>`;
     if (mode === 'excel') exportExcel(title, table, `شاگردان-${fileStamp()}`);
     else printDocument(title, `<div class="doc-title">${title}</div>${table}`);
   };
@@ -226,10 +329,11 @@ export function StudentsView({ user }: { user: SessionUser }) {
 
   const openNew = () => {
     setForm({ ...EMPTY_FORM });
+    setPhotoCleared(false);
     setDialogOpen(true);
   };
 
-  const openEdit = (s: StudentInfo) => {
+  const fillFormFrom = (s: StudentInfo) => {
     setForm({
       id: s.id, firstName: s.firstName, lastName: s.lastName || '', fatherName: s.fatherName,
       grandFather: s.grandFather || '', gender: s.gender, birthDate: s.birthDate || '',
@@ -239,7 +343,21 @@ export function StudentsView({ user }: { user: SessionUser }) {
       address: s.address || '', classId: s.classId || '', rollNo: s.rollNo != null ? String(s.rollNo) : '',
       enrolledYear: s.enrolledYear || '', status: s.status, photo: s.photo || '',
     });
+    setPhotoCleared(false);
     setDialogOpen(true);
+  };
+
+  // مرحلهٔ ۶ — فهرست بدون عکس است؛ پروندهٔ کامل (با عکس) پیش از باز شدن فرم گرفته
+  // می‌شود تا ذخیرهٔ سریع، عکس موجود را نابود نکند. آفلاین: از ردیف کش‌شده استفاده می‌شود.
+  const openEdit = async (s: StudentInfo) => {
+    try {
+      const d = await apiGet<{ student: StudentInfo }>(`/api/students?id=${s.id}`);
+      if (d.student?.id === s.id) {
+        fillFormFrom(d.student);
+        return;
+      }
+    } catch { /* آفلاین */ }
+    fillFormFrom(s);
   };
 
   const openProfile = async (s: StudentInfo) => {
@@ -262,10 +380,12 @@ export function StudentsView({ user }: { user: SessionUser }) {
       toast({ title: 'خطا', description: 'اسم و نام پدر ضروری است', variant: 'destructive' });
       return;
     }
-    const res = await apiSend('/api/students', form.id ? 'PATCH' : 'POST', {
-      ...form,
-      rollNo: form.rollNo ? Number(form.rollNo) : undefined,
-    }, { queueLabel: 'ثبت شاگرد' });
+    // مرحلهٔ ۶ — عکس فقط وقتی واقعاً انتخاب/بارگیری شده ارسال می‌شود؛ حذف عکس
+    // با پرچم صریح photoClear — تا ویرایش سبک/آفلاین عکس موجود را پاک نکند
+    const payload: Record<string, unknown> = { ...form, rollNo: form.rollNo ? Number(form.rollNo) : undefined };
+    if (!form.photo) delete payload.photo;
+    if (form.id && photoCleared) payload.photoClear = true;
+    const res = await apiSend('/api/students', form.id ? 'PATCH' : 'POST', payload, { queueLabel: 'ثبت شاگرد' });
     if (res.error) {
       toast({ title: 'خطا', description: res.error, variant: 'destructive' });
       return;
@@ -276,7 +396,7 @@ export function StudentsView({ user }: { user: SessionUser }) {
     });
     setDialogOpen(false);
     // آفلاین هم بارگذاری می‌شود — تغییر از کش محلی (با رونویسی) فوراً نمایش داده می‌شود
-    load();
+    load(page); // مرحلهٔ ۶ — در همین صفحه می‌مانیم
   };
 
   const remove = async (s: StudentInfo) => {
@@ -287,13 +407,14 @@ export function StudentsView({ user }: { user: SessionUser }) {
       return;
     }
     toast({ title: 'حذف شد', description: res.queued ? 'در حافظهٔ گوشی حذف شد — پس از اتصال همگام می‌شود' : undefined });
-    load();
+    load(page); // مرحلهٔ ۶ — در همین صفحه می‌مانیم
   };
 
   const onPickPhoto = async (file: File) => {
     try {
       const dataUrl = await fileToCompactDataUrl(file);
       setForm((f) => ({ ...f, photo: dataUrl }));
+      setPhotoCleared(false);
     } catch {
       toast({ title: 'خطا', description: 'خواندن عکس ناموفق بود', variant: 'destructive' });
     }
@@ -347,7 +468,7 @@ export function StudentsView({ user }: { user: SessionUser }) {
       description: `${toPersianDigits(saved)} شاگرد ثبت شد${failed ? ` — ${toPersianDigits(failed)} ناموفق` : ''}${apiQueuedHint()}`,
       duration: failed ? 6000 : 2500,
     });
-    load();
+    load(page); // مرحلهٔ ۶ — در همین صفحه می‌مانیم
   };
 
   const apiQueuedHint = () => '';
@@ -360,7 +481,12 @@ export function StudentsView({ user }: { user: SessionUser }) {
     }
     const from = classes.find((c) => c.id === promoteFrom);
     const to = classes.find((c) => c.id === promoteTo);
-    const count = students.filter((s) => s.classId === promoteFrom && s.status === 'ACTIVE').length;
+    // مرحلهٔ ۶ — شمارش از سرور (فهرست دیگر همهٔ شاگردان را در حافظه ندارد)
+    let count = 0;
+    try {
+      const c = await apiGet<{ total: number }>(`/api/students?classId=${encodeURIComponent(promoteFrom)}&status=ACTIVE&page=1&pageSize=10`);
+      count = c.total || 0;
+    } catch { /* شمارش ناموفق — با شمارهٔ صفر تأیید گرفته می‌شود */ }
     if (!confirm(`انتقال ${toPersianDigits(count)} شاگرد فعال از «${from?.name}» به «${to?.name}» — مطمئن هستید؟`)) return;
     setPromoting(true);
     const res = await apiSend<{ moved: number }>('/api/students/promote', 'POST', { action: 'move', fromClassId: promoteFrom, toClassId: promoteTo });
@@ -371,10 +497,11 @@ export function StudentsView({ user }: { user: SessionUser }) {
     }
     toast({ title: 'انتقال انجام شد', description: `${toPersianDigits(res.data?.moved ?? 0)} شاگرد منتقل شد` });
     setPromoteOpen(false);
-    load();
+    load(page); // مرحلهٔ ۶ — در همین صفحه می‌مانیم
   };
 
-  if (loading) return <LoadingBlock rows={6} />;
+  // مرحلهٔ ۶ — فقط بار نخست پردهٔ کامل؛ صفحه‌بندی‌های بعدی درجای به‌روزرسانی می‌شوند
+  if (loading && rows.length === 0) return <LoadingBlock rows={6} />;
 
   return (
     <div>
@@ -472,10 +599,10 @@ export function StudentsView({ user }: { user: SessionUser }) {
             <SelectItem value="F">اناث</SelectItem>
           </SelectContent>
         </Select>
-        <Button variant="outline" size="sm" className="gap-1" onClick={() => exportStudents('excel')} disabled={filtered.length === 0}>
+        <Button variant="outline" size="sm" className="gap-1" onClick={() => exportStudents('excel')} disabled={total === 0}>
           <FileDown className="h-4 w-4" /> اکسل
         </Button>
-        <Button variant="outline" size="sm" className="gap-1" onClick={() => exportStudents('pdf')} disabled={filtered.length === 0}>
+        <Button variant="outline" size="sm" className="gap-1" onClick={() => exportStudents('pdf')} disabled={total === 0}>
           <Printer className="h-4 w-4" /> PDF
         </Button>
         {(classFilter !== 'all' || search || statusFilter !== 'ACTIVE' || genderFilter !== 'all') && (
@@ -487,7 +614,7 @@ export function StudentsView({ user }: { user: SessionUser }) {
 
       <Card>
         <CardContent className="p-0">
-          {filtered.length === 0 ? (
+          {rows.length === 0 ? (
             <EmptyState message="هیچ شاگردی یافت نشد. با دکمهٔ «ثبت شاگرد جدید» اولین شاگرد را اضافه کنید." icon={Users} />
           ) : (
             <div className="overflow-x-auto nice-scroll max-h-[65vh] overflow-y-auto">
@@ -506,7 +633,7 @@ export function StudentsView({ user }: { user: SessionUser }) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((s, i) => (
+                  {rows.map((s, i) => (
                     <TableRow key={s.id} className="hover:bg-accent/40 transition-colors">
                       <TableCell className="text-muted-foreground">{toPersianDigits(s.rollNo ?? i + 1)}</TableCell>
                       <TableCell>
@@ -515,14 +642,7 @@ export function StudentsView({ user }: { user: SessionUser }) {
                           className="flex items-center gap-2.5 font-medium hover:text-primary transition-colors text-right"
                           title="مشاهدهٔ پروفایل شاگرد"
                         >
-                          {s.photo ? (
-                             
-                            <img src={s.photo} alt="" className="h-8 w-8 rounded-full object-cover border shrink-0" />
-                          ) : (
-                            <span className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
-                              {s.firstName.slice(0, 1)}
-                            </span>
-                          )}
+                          <StudentAvatar id={s.id} name={s.firstName} />
                           <span className="underline-offset-4 hover:underline">{s.firstName} {s.lastName || ''}</span>
                         </button>
                       </TableCell>
@@ -567,6 +687,22 @@ export function StudentsView({ user }: { user: SessionUser }) {
               </Table>
             </div>
           )}
+          {/* مرحلهٔ ۶ — نوار صفحه‌بندی */}
+          {rows.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-3">
+              <p className="text-xs text-muted-foreground">
+                مجموع {toPersianDigits(total)} شاگرد — صفحهٔ {toPersianDigits(page)} از {toPersianDigits(Math.max(1, Math.ceil(total / PAGE_SIZE)))}
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => load(page - 1)}>
+                  صفحهٔ قبلی
+                </Button>
+                <Button variant="outline" size="sm" disabled={page >= Math.ceil(total / PAGE_SIZE) || loading} onClick={() => load(page + 1)}>
+                  صفحهٔ بعدی
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -597,7 +733,7 @@ export function StudentsView({ user }: { user: SessionUser }) {
                 <Upload className="h-4 w-4" /> {form.photo ? 'تغییر عکس' : 'انتخاب عکس'}
               </Button>
               {form.photo && (
-                <Button type="button" variant="ghost" size="sm" className="text-rose-600 dark:text-rose-400" onClick={() => setForm({ ...form, photo: '' })}>
+                <Button type="button" variant="ghost" size="sm" className="text-rose-600 dark:text-rose-400" onClick={() => { setForm({ ...form, photo: '' }); setPhotoCleared(true); }}>
                   حذف عکس
                 </Button>
               )}
