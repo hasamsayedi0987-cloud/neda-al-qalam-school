@@ -4,14 +4,63 @@ import { requireUser, requireRole, requireSection, ApiError } from '@/lib/auth';
 import { handleApiError, optNum, str } from '@/lib/api-helpers';
 import { teacherClassIds, getTeacherPerms, studentInTeacherScope } from '@/lib/teacher-scope';
 
+/* ─── مرحلهٔ ۶ — سرعت برای ۱۰۰۰+ شاگرد ───
+ * ۱) عکس شاگرد هرگز در فهرست ارسال نمی‌شود (dataURL چند ده کیلوبایتی بزرگ‌ترین
+ *    عامل کندی بود) — فقط با /api/students/photo?id=… به‌صورت تنبل بارگیری می‌شود.
+ * ۲) فهرست صفحه‌بندی‌شده است (page/pageSize) و بر اساس صنف/وضعیت/جنسیت/جستجو
+ *    در همان سمت سرور فیلتر می‌شود — موبایل دیگر ۱۰۰۰ پرونده را یک‌جا نمی‌گیرد.
+ * ۳) شمارهٔ تکراری در یک صنف (شماره در جدول) در ثبت، ویرایش و ارتقا رد می‌شود. */
+
+// فهرست سبک — همهٔ ستون‌ها به‌جز عکس (عکس فقط با endpoint اختصاصی)
+const LIST_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  fatherName: true,
+  grandFather: true,
+  gender: true,
+  birthDate: true,
+  idNumber: true,
+  baseNumber: true,
+  idPlace: true,
+  fatherTongue: true,
+  motherTongue: true,
+  guardianName: true,
+  guardianPhone: true,
+  address: true,
+  classId: true,
+  rollNo: true,
+  status: true,
+  enrolledYear: true,
+  class: { select: { name: true } },
+};
+
+/** جلوگیری از شمارهٔ دانش‌آموزی تکراری در یک صنف */
+async function assertRollNoFree(classId: string | null, rollNo: number | null, excludeId?: string) {
+  if (!classId || rollNo == null) return;
+  const dup = await db.student.findFirst({
+    where: { classId, rollNo, ...(excludeId ? { NOT: { id: excludeId } } : {}) },
+    select: { id: true, firstName: true, lastName: true },
+  });
+  if (dup) {
+    const nm = `${dup.firstName}${dup.lastName ? ' ' + dup.lastName : ''}`;
+    throw new ApiError(
+      `شمارهٔ «${rollNo}» در این صنف قبلاً برای «${nm}» ثبت شده است — شمارهٔ دیگری وارد کنید یا خالی بگذارید تا خودکار تعیین شود`,
+    );
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const me = await requireSection('students', ['LIBRARIAN', 'STUDENT', 'GUARDIAN']);
     const sp = req.nextUrl.searchParams;
-    const classId = sp.get('classId');
-    const search = sp.get('q');
+    const classId = sp.get('classId') || '';
+    const search = (sp.get('q') || '').trim();
+    const status = sp.get('status') || '';
+    const gender = sp.get('gender') || '';
+    const singleId = sp.get('id') || '';
 
-    // شاگرد/سرپرست فقط اطلاعات خودش را می‌بیند
+    // شاگرد/سرپرست فقط اطلاعات خودش را می‌بیند (با عکس — یک رکورد است)
     if (me.role === 'STUDENT' || me.role === 'GUARDIAN') {
       if (!me.studentId) throw new ApiError('حساب شما به هیچ شاگردی پیوند ندارد', 403);
       const s = await db.student.findUnique({
@@ -23,28 +72,72 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // دریافت یک شاگردِ کامل (با عکس) — برای ویرایش و چاپ اسناد
+    if (singleId) {
+      if (me.role === 'TEACHER' && !(await studentInTeacherScope(me.teacherId || '', singleId))) {
+        throw new ApiError('این شاگرد در صنف‌های تحت تدریس شما نیست', 403);
+      }
+      const s = await db.student.findUnique({
+        where: { id: singleId },
+        include: { class: { select: { name: true } } },
+      });
+      if (!s) throw new ApiError('شاگرد یافت نشد', 404);
+      return NextResponse.json({ student: { ...s, className: s.class?.name || null } });
+    }
+
     const where: Record<string, unknown> = {};
     // معلم فقط شاگردان صنف‌های تحت اختیار خود (تدریس یا نگرانی) را می‌بیند
     if (me.role === 'TEACHER') {
       const scope = await teacherClassIds(me.teacherId || '');
       where.classId = scope.length > 0 ? { in: scope } : '__none__';
     } else if (classId) {
+      // بارگذاری بر اساس صنف — به‌جای گرفتن همهٔ مکتب یک‌جا
       where.classId = classId;
     }
+    if (status && ['ACTIVE', 'LEFT', 'GRADUATED'].includes(status)) where.status = status;
+    if (gender === 'M' || gender === 'F') where.gender = gender;
     if (search) {
       where.OR = [
         { firstName: { contains: search } },
         { lastName: { contains: search } },
         { fatherName: { contains: search } },
+        { idNumber: { contains: search } },
       ];
     }
-    const students = await db.student.findMany({
-      where,
-      orderBy: [{ classId: 'asc' }, { rollNo: 'asc' }, { createdAt: 'asc' }],
-      include: { class: { select: { name: true } } },
-    });
+
+    const orderBy = [{ classId: 'asc' as const }, { rollNo: 'asc' as const }, { createdAt: 'asc' as const }];
+
+    // صفحه‌بندی — پیش‌فرض ۵۰ رکورد، سقف ۱۰۰؛ با all=1 همهٔ نتیجهٔ فیلترشده (بدون عکس) برای خروجی اکسل/PDF
+    let skip: number | undefined;
+    let take: number | undefined;
+    let page = 1;
+    let pageSize = 50;
+    const wantsAll = sp.get('all') === '1';
+    if (!wantsAll) {
+      const pRaw = parseInt(sp.get('page') || '1', 10);
+      const sRaw = parseInt(sp.get('pageSize') || '50', 10);
+      page = Number.isFinite(pRaw) && pRaw > 0 ? pRaw : 1;
+      pageSize = Number.isFinite(sRaw) ? Math.min(100, Math.max(10, sRaw)) : 50;
+      skip = (page - 1) * pageSize;
+      take = pageSize;
+    }
+
+    const [students, total] = await Promise.all([
+      db.student.findMany({
+        where,
+        orderBy,
+        select: LIST_SELECT,
+        skip,
+        take,
+      }),
+      db.student.count({ where }),
+    ]);
+
     return NextResponse.json({
       students: students.map((s) => ({ ...s, className: s.class?.name || null })),
+      total,
+      page,
+      pageSize,
     });
   } catch (e) {
     return handleApiError(e);
@@ -86,6 +179,8 @@ export async function POST(req: NextRequest) {
       const agg = await db.student.aggregate({ where: { classId }, _max: { rollNo: true } });
       rollNo = (agg._max.rollNo ?? 0) + 1;
     }
+    // مرحلهٔ ۶ — شمارهٔ دانش‌آموزی تکراری در یک صنف رد می‌شود
+    await assertRollNoFree(classId, rollNo);
     const student = await db.student.create({
       data: {
         firstName, lastName: lastName || null, fatherName,
@@ -146,9 +241,23 @@ export async function PATCH(req: NextRequest) {
       data.classId = newClassId;
     }
     if (body.rollNo !== undefined) data.rollNo = optNum(body.rollNo);
-    if (body.photo !== undefined) data.photo = str(body.photo) || null;
+    // مرحلهٔ ۶ — عکس فقط با مقدار واقعی به‌روزرسانی می‌شود؛ حذف عکس تنها با پرچم
+    // صریح photoClear انجام می‌شود تا ویرایش بدون عکس (فهرست سبک/آفلاین) عکس را پاک نکند
+    if (body.photo !== undefined && str(body.photo)) data.photo = str(body.photo);
+    if (body.photoClear === true) data.photo = null;
     if (body.status !== undefined && ['ACTIVE', 'LEFT', 'GRADUATED'].includes(str(body.status))) {
       data.status = str(body.status);
+    }
+    // مرحلهٔ ۶ — با تغییر صنف یا شماره، تکراری‌بودن شماره در صنفِ نهایی بررسی می‌شود
+    if (data.classId !== undefined || data.rollNo !== undefined) {
+      const existing = await db.student.findUnique({
+        where: { id },
+        select: { classId: true, rollNo: true },
+      });
+      if (!existing) throw new ApiError('شاگرد یافت نشد', 404);
+      const effClass = data.classId !== undefined ? (data.classId as string | null) : existing.classId;
+      const effRoll = data.rollNo !== undefined ? (data.rollNo as number | null) : existing.rollNo;
+      await assertRollNoFree(effClass, effRoll, id);
     }
     await db.student.update({ where: { id }, data });
     return NextResponse.json({ ok: true });
