@@ -142,9 +142,12 @@ export async function fetchIdCardTokens(cards: IdCardData[]): Promise<Map<string
 
 /** امنیت — فقط dataURL تصویر معتبر وارد قالب چاپ می‌شود (ضد تزریق در src) */
 const IMG_DATA_RE = /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+/** لوگوی باندل‌شدهٔ مکتب در public/ — مسیر محلی یا مطلقِ هم‌ریشه مجاز است */
+const LOCAL_IMG_RE = /^(?:https?:\/\/[^/]+)?\/logo\.(png|svg)$/;
 function safeImg(v: string | null | undefined, max = 600_000): string {
   if (!v) return '';
   const s = v.trim();
+  if (LOCAL_IMG_RE.test(s)) return s;
   return s.length <= max && IMG_DATA_RE.test(s) ? s : '';
 }
 

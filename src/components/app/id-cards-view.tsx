@@ -46,14 +46,13 @@ export function IdCardsView() {
       apiGet<{ teachers: TeacherInfo[] }>('/api/teachers').catch(() => ({ teachers: [] as TeacherInfo[] })),
     ]).then(([st, cl, sd, tc]) => {
       if (!alive) return;
-      const origin = typeof window !== 'undefined' ? window.location.origin : '';
       /* آدرس فارسی: ولسوالی، ولایت، افغانستان — و نام انگلیسی مکتب */
       const cityFa = [st.settings.district, st.settings.province].filter(Boolean).join('، ') || 'کابل';
       const cityEn = st.settings.province === 'کابل' || !st.settings.province ? 'Kabul' : st.settings.province;
       setSchool({
         name: st.settings.schoolName || 'مکتب خصوصی نداالقلم',
         nameEn: 'NEDA-UL-QALAM PRIVATE SCHOOL',
-        logo: st.settings.schoolLogo || `${origin}/logo.png`,
+        logo: st.settings.schoolLogo || '/logo.png',
         address: `${cityFa}، افغانستان`,
         addressEn: `${cityEn}, Afghanistan`,
         phone: st.settings.schoolPhone || '',
