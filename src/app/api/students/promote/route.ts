@@ -24,10 +24,35 @@ export async function POST(req: NextRequest) {
         db.class.findUnique({ where: { id: toClassId } }),
       ]);
       if (!from || !to) throw new ApiError('صنف یافت نشد', 404);
+      // شناسهٔ شاگردانِ قبلاً موجودِ صنف مقصد — پیش از انتقال ثبت می‌شود
+      const preExisting = await db.student.findMany({
+        where: { classId: toClassId, status: 'ACTIVE' },
+        select: { id: true },
+      });
+      const preIds = new Set(preExisting.map((r) => r.id));
+      const preAgg = await db.student.aggregate({
+        where: { classId: toClassId, status: 'ACTIVE' },
+        _max: { rollNo: true },
+      });
       const moved = await db.student.updateMany({
         where: { classId: fromClassId, status: 'ACTIVE' },
         data: { classId: toClassId },
       });
+      // مرحلهٔ ۶ — جلوگیری از شمارهٔ دانش‌آموزی تکراری در صنف مقصد:
+      // شاگردان منتقله پس از بزرگ‌ترین شمارهٔ موجود صنف مقصد، به ترتیب شمارهٔ
+      // قبلی شان از نو شماره‌گذاری می‌شوند (اگر صنف مقصد خالی باشد، شماره‌ها ۱ تا N می‌ماند).
+      if (moved.count > 0) {
+        const movedStudents = await db.student.findMany({
+          where: { classId: toClassId, status: 'ACTIVE', id: { notIn: [...preIds] } },
+          orderBy: [{ rollNo: 'asc' }, { createdAt: 'asc' }],
+          select: { id: true },
+        });
+        let next = (preAgg._max.rollNo ?? 0);
+        for (const s of movedStudents) {
+          next += 1;
+          await db.student.update({ where: { id: s.id }, data: { rollNo: next } });
+        }
+      }
       return NextResponse.json({ ok: true, moved: moved.count, from: from.name, to: to.name });
     }
 
