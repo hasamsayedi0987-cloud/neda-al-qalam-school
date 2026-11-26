@@ -33,6 +33,8 @@ export function IdCardsView() {
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // مرحلهٔ ۶ — عکس فقط صنف انتخاب‌شده و فقط برای ساخت کارت بارگیری می‌شود، نه همهٔ مکتب
+  const [photoMap, setPhotoMap] = useState<Record<string, string>>({});
 
   /* بارگذاری تنظیمات، صنف‌ها، شاگردان و کارمندان */
   useEffect(() => {
@@ -72,6 +74,34 @@ export function IdCardsView() {
     [students, classId],
   );
 
+  /* مرحلهٔ ۶ — عکس‌های شاگردانِ «فقط صنف انتخاب‌شده» تنبل بارگیری می‌شود */
+  useEffect(() => {
+    if (kind !== 'students' || !classId) {
+      setPhotoMap({});
+      return;
+    }
+    let alive = true;
+    const targets = students.filter((s) => s.classId === classId && s.status === 'ACTIVE');
+    Promise.all(
+      targets.map(async (s): Promise<readonly [string, string]> => {
+        try {
+          const d = await apiGet<{ photo: string | null }>(`/api/students/photo?id=${s.id}`);
+          return [s.id, d.photo || ''] as const;
+        } catch {
+          return [s.id, ''] as const;
+        }
+      }),
+    ).then((pairs) => {
+      if (!alive) return;
+      const m: Record<string, string> = {};
+      for (const [k, v] of pairs) if (v) m[k] = v;
+      setPhotoMap(m);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [kind, classId, students]);
+
   /* کارمندان فعال */
   const activeTeachers = useMemo(() => teachers.filter((t) => t.active), [teachers]);
 
@@ -106,13 +136,13 @@ export function IdCardsView() {
           className: s.className || classes.find((c) => c.id === classId)?.name || '',
           rollNo: s.rollNo,
           baseNumber: s.baseNumber,
-          photo: s.photo,
+          photo: photoMap[s.id] || null,
         }, school.academicYear));
     }
     return activeTeachers
       .filter((t) => selected.has(t.id))
       .map((t) => staffToCard({ id: t.id, name: t.name, father: t.fatherName, position: t.position }));
-  }, [kind, classStudents, activeTeachers, selected, classes, classId]);
+  }, [kind, classStudents, activeTeachers, selected, classes, classId, photoMap]);
 
   /** لغو/بازگردانی توکن QR کارت‌های انتخاب‌شده — کدهای چاپ‌شدهٔ قبلی بی‌اعتبار می‌شوند */
   const revokeQr = async (restore: boolean) => {
